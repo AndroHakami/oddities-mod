@@ -1,0 +1,36 @@
+{
+ "item.odd.ruby": "Ruby",
+ "item.odd.raw_ruby": "Raw Ruby",
+ "item.odd.tomato": "Tomato",
+ "item.odd.coal_briquette": "Coal Briquette",
+ "item.odd.metal_detector": "Metal Detector",
+ "item.odd.ruby_staff": "Blossom Staff",
+ "item.odd.ghost_hand": "",
+ "block.odd.ruby_block": "Block of Ruby",
+ "block.odd.raw_ruby_block": "Block of Raw Ruby",
+ "block.odd.sound_block": "Sound Block",
+
+
+ "tooltip.odd.metal_detector.tooltip": "Finds Valueables underground!",
+
+ "itemgroup.ruby": "Ruby Tutorial Group",
+
+ "sounds.odd.metal_detector_found_ore": "Metal Detector Jingle",
+ "odd.sound_block_break": "Sound Break",
+ "odd.crappy_block_break": "Sound Break",
+ "odd.sound_block_place": "Sound place",
+ "odd.crappy_block_place": "Sound place",
+ "odd.sound_block_step": "Sound step",
+ "odd.crappy_block_step": "Sound step",
+ "odd.sound_block_fall": "Sound fall",
+ "odd.crappy_block_fall": "Sound fall",
+ "odd.sound_block_hit": "Sound hit",
+ "odd.crappy_block_hit": "Sound hit",
+ "category.odd.abilities": "Oddities Mod",
+ "block.odd.grandanvil": "Grand Anvil",
+
+ "enchantment.odd.italian_stompers": "Italian Stompers",
+ "enchantment.odd.lucky_day": "Lucky Day",
+
+ "container.odd.grand_anvil": "Grand Anvil"
+}

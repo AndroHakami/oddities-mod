@@ -1,0 +1,14 @@
+{
+  "blend": {
+    "func": "add",
+    "srcrgb": "one",
+    "dstrgb": "zero"
+  },
+  "vertex": "minecraft:shaders/core/post.vsh",
+  "fragment": "odd:shaders/core/umbra_gray.fsh",
+  "samplers": [
+    { "name": "DiffuseSampler" }
+  ],
+  "attributes": [],
+  "uniforms": []
+}

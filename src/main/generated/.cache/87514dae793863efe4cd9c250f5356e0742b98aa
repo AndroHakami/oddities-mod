@@ -1,0 +1,14 @@
+// 1.20.1	2025-08-13T12:24:57.2285089	Oddities/Model Definitions
+2bc0f4f207869b9469158b3e55bfbfcf66822cd3 assets\odd\models\item\ruby.json
+79af4286fa7aa9a8ed38629c1402bebedf4d74ab assets\odd\models\item\metal_detector.json
+8e11b4ab1ef484dbd513dc2d2097505539cfd139 assets\odd\blockstates\raw_ruby_block.json
+6cbe861224795ac4e859cc1d40f3e0864f098a31 assets\odd\models\item\coal_briquette.json
+993103888057e6e42c0af20aef87dd77117b8c11 assets\odd\models\item\tomato.json
+9fb841b9bba1949f4ccbf09a4ac02bee26c8e834 assets\odd\models\block\crappy_block.json
+6c143831d69aa0589984a0397142ccbebe01094d assets\odd\models\block\sound_block.json
+38d6666179736a2381a9c8116dda789d253fd77d assets\odd\blockstates\sound_block.json
+af836ed5ab1f5463e0481af50e8d1e2be91c5679 assets\odd\models\item\raw_ruby.json
+908e9a9ce4b746461e7d2e86e171c2f71321041f assets\odd\models\block\raw_ruby_block.json
+783b7dd0ff02b8875f989022a119f12a4d343e82 assets\odd\models\block\ruby_block.json
+d441e71dacd759c0c22e9d6d2f8d9f7b7322823a assets\odd\blockstates\crappy_block.json
+21a02890afee685a11d08b07f0d1745e58cd2ed4 assets\odd\blockstates\ruby_block.json

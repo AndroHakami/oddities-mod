@@ -1,0 +1,11 @@
+{
+  "type": "odd:grand_anvil_forging",
+  "gear_kind": "leggings",
+  "material": { "item": "minecraft:emerald" },
+  "difficulty": 5,
+  "result": {
+    "type": "enchant",
+    "id": "odd:lucky_day",
+    "level": 1
+  }
+}

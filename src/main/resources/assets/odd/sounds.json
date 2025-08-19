@@ -1,0 +1,76 @@
+{
+  "metal_detector_found_ore": {
+    "subtitle": "sounds.odd.metal_detector_found_ore",
+    "sounds": [
+      "odd:metal_detector_found_ore"
+    ]
+  },
+  "creepy_pull": {
+    "subtitle": "odd.creepy_pull",
+    "sounds": [
+      "odd:creepy_pull"
+    ]
+  },
+  "italian_stompers_jump": {
+    "subtitle": "odd.italian_stompers_jump",
+    "sounds": [
+      "odd:italian_stompers_jump"
+    ]
+  },
+  "forger_hit": {
+  "subtitle": "odd.forger_hit",
+  "sounds": [
+    "odd:forger_hit"
+  ]
+},
+
+"sound_block_break": {
+"subtitle": "odd.sound_block_break",
+"sounds": [
+"odd:sound_block_break"
+]
+},
+"sound_block_step": {
+"subtitle": "odd.sound_block_step",
+"sounds": [
+"odd:sound_block_step"
+]
+},
+"sound_block_place": {
+"subtitle": "odd.sound_block_place",
+"sounds": [
+"odd:sound_block_place"
+]
+},
+"sound_block_hit": {
+"subtitle": "odd.sound_block_hit",
+"sounds": [
+"odd:sound_block_hit"
+]
+},
+"sound_block_fall": {
+"subtitle": "odd.sound_block_fall",
+"sounds": [
+"odd:sound_block_fall"
+]
+},
+  "snowgrave_teleport": {
+    "subtitle": "snowgrave_teleport",
+    "sounds": [
+      "odd:snowgrave_teleport"
+    ]
+},
+
+  "crappy_block_place": {
+    "subtitle": "crappy_block_place",
+    "sounds": [
+      { "name": "odd:crappy_block_place_1", "weight": 1 },
+      { "name": "odd:crappy_block_place_2", "weight": 1 }
+    ]
+  },
+  "crappy_block_fall": {
+    "subtitle": "crappy_block_fall",
+    "sounds": [
+      "odd:crappy_block_fall"
+    ]
+  }}

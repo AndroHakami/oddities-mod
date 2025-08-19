@@ -1,0 +1,35 @@
+{
+  "emotes": [
+    {
+      "name": "fire_blast_cast_fp",
+      "length": 0.6,
+      "loop": false,
+      "bones": {
+        "right_arm": [
+          { "time": 0.00, "rotation": [-10,  4,  3] },
+          { "time": 0.25, "rotation": [-34, 10,  8] },
+          { "time": 0.45, "rotation": [-58, 14, 10] },
+          { "time": 0.60, "rotation": [-12,  3,  2] }
+        ],
+        "left_arm": [
+          { "time": 0.00, "rotation": [ -6, -2, -2] },
+          { "time": 0.25, "rotation": [-12, -6, -4] },
+          { "time": 0.45, "rotation": [-16, -8, -6] },
+          { "time": 0.60, "rotation": [  0,  0,  0] }
+        ],
+        "body": [
+          { "time": 0.00, "rotation": [ -2, 0, 0] },
+          { "time": 0.25, "rotation": [ -4, 0, 0] },
+          { "time": 0.45, "rotation": [ -5, 0, 0] },
+          { "time": 0.60, "rotation": [  0, 0, 0] }
+        ],
+        "head": [
+          { "time": 0.00, "rotation": [  0, 0, 0] },
+          { "time": 0.25, "rotation": [ -2, 0, 0] },
+          { "time": 0.45, "rotation": [ -2, 0, 0] },
+          { "time": 0.60, "rotation": [  0, 0, 0] }
+        ]
+      }
+    }
+  ]
+}

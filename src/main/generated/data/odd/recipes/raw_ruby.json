@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "R": {
+      "item": "odd:ruby"
+    },
+    "S": {
+      "item": "minecraft:stone"
+    }
+  },
+  "pattern": [
+    "SSS",
+    "SRS",
+    "SSS"
+  ],
+  "result": {
+    "item": "odd:raw_ruby"
+  },
+  "show_notification": true
+}

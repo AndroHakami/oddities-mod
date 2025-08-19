@@ -1,0 +1,13 @@
+{
+  "replace": false,
+  "values": [
+    "odd:ruby_block",
+    "#minecraft:gold_ores",
+    "#minecraft:iron_ores",
+    "#minecraft:diamond_ores",
+    "#minecraft:emerald_ores",
+    "#minecraft:lapis_ores",
+    "#minecraft:redstone_ores",
+    "#minecraft:coal_ores"
+  ]
+}

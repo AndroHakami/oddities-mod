@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "odd:ruby_block",
+    "odd:raw_ruby_block",
+    "odd:sound_block"
+  ]
+}

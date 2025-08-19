@@ -1,0 +1,17 @@
+{
+  "targets": [
+    "swap"
+  ],
+  "passes": [
+    {
+      "name": "blit",
+      "intarget": "minecraft:main",
+      "outtarget": "swap"
+    },
+    {
+      "name": "desaturate",
+      "intarget": "swap",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

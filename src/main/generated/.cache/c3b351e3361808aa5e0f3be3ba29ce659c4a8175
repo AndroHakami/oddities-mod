@@ -1,0 +1,4 @@
+// 1.20.1	2025-08-13T12:24:57.2295098	Oddities/Tags for minecraft:block
+19a33e1429b52623fbaa556f01cacb71f9d5a538 data\minecraft\tags\blocks\mineable\pickaxe.json
+44c2cd88c9fca362af51fd9e9adc6efb75028012 data\minecraft\tags\blocks\needs_iron_tool.json
+557f34b7d807a0e7b887495ce02f7fe0989913c6 data\odd\tags\blocks\metal_detector_detectable_blocks.json

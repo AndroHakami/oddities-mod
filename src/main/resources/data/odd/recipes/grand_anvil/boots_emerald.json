@@ -1,0 +1,11 @@
+{
+  "type": "odd:grand_anvil_forging",
+  "gear_kind": "boots",
+  "material": { "item": "minecraft:emerald" },
+  "difficulty": 7,
+  "result": {
+    "type": "enchant",
+    "id": "odd:italian_stompers",
+    "level": 1
+  }
+}
