@@ -3,7 +3,8 @@
 	"package": "net.seep.odd.mixin",
 	"compatibilityLevel": "JAVA_17",
 	"mixins": [
-		"ExampleMixin"
+		"ExampleMixin",
+		"ItemEntityMixin"
 	],
 	"client": [
 		"ItemRendererAccessor",

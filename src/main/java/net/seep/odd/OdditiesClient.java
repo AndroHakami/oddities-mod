@@ -18,6 +18,7 @@ import net.minecraft.world.World;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralClientState;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
+import net.seep.odd.abilities.net.MistyNet;
 import net.seep.odd.abilities.net.PowerNetworking;
 import net.seep.odd.abilities.net.UmbraNet;
 import net.seep.odd.block.ModBlocks;
@@ -25,6 +26,7 @@ import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
+import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.item.ghost.client.GhostHandModel;
 import net.seep.odd.item.ghost.client.GhostHandRenderer;
 import software.bernie.geckolib.GeckoLib;
@@ -134,6 +136,12 @@ public class OdditiesClient implements ClientModInitializer {
                     if (client.player != null) client.setCameraEntity(client.player);
                     PossessionClientController.setPossessing(false);
                 }));
+        // Misty Veil
+        net.seep.odd.abilities.client.MistyClientController.register();
+        EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
+        MistyNet.initClient();
+
+
 
         net.seep.odd.Oddities.LOGGER.info("OdditiesClient initialized (keys + HUD/packets ready).");
     }

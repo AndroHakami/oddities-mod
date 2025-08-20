@@ -19,10 +19,7 @@ import net.seep.odd.abilities.PowerCommands;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.client.AbilityHudOverlay;
 import net.seep.odd.abilities.client.ClientCooldowns;
-import net.seep.odd.abilities.net.AbilityKeyPacket;
-import net.seep.odd.abilities.net.PowerNetworking;
-import net.seep.odd.abilities.net.PossessionControlPacket;
-import net.seep.odd.abilities.net.UmbraNet;
+import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
 
@@ -154,6 +151,22 @@ public class Oddities implements ModInitializer {
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
 				(player instanceof ServerPlayerEntity sp && PossessionManager.INSTANCE.isPossessing(sp))
 						? ActionResult.FAIL : ActionResult.PASS);
+
+
+		// Misty Veil Stuff
+		// Register the power (once)
+		net.seep.odd.abilities.power.Powers.register(new net.seep.odd.abilities.power.MistyVeilPower());
+
+// Register MistyNet server receiver (once)
+		MistyNet.init();
+
+
+// Tick Misty Veil alongside your other powers
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			for (var p : server.getPlayerManager().getPlayerList()) {
+				net.seep.odd.abilities.power.MistyVeilPower.serverTick(p);
+			}
+		});
 
 		// ---- sync current power to client on join ----
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

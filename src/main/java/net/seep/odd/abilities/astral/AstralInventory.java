@@ -202,14 +202,15 @@ if (ASRALContains(p)) {
     }
 
 
+
     /** Called by CreepyEntity when the body is damaged/killed. Forces exit via normal toggle path. */
     public static void onCreepyBroken(ServerWorld world, java.util.UUID owner) {
         if (world == null || owner == null) return;
         ServerPlayerEntity p = world.getServer().getPlayerManager().getPlayer(owner);
         if (p == null) return;
-        if (!ASRALContains(p)) return;
-        // Use the central toggle path so teleport & cleanup stay unified
-        forceToggleExit(p);
+
+        // Bypass secondary cooldown gating and stop Astral directly on the power.
+        net.seep.odd.abilities.power.UmbraSoulPower.forceStopAstral(p);
     }
     /* ---------- Networking: HUD start/stop ---------- */
     private static void sendHudStart(ServerPlayerEntity p, GlobalPos anchor, int maxTicks) {

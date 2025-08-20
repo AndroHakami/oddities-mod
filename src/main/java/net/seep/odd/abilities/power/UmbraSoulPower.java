@@ -227,6 +227,14 @@ public final class UmbraSoulPower implements Power {
 
     /* ===================== SERVER TICK ===================== */
 
+    public static void forceStopAstral(ServerPlayerEntity p) {
+        State s = S(p);
+        if (s.astralActive) {
+            // snapBack = true to return to anchor, matches normal toggle stop path
+            stopAstral(p, s, true);
+        }
+    }
+
     public static void serverTick(ServerPlayerEntity p) {
         State s = S(p);
 
