@@ -1,8 +1,13 @@
+// net/seep/odd/entity/misty/MistyBubbleEntity.java
 package net.seep.odd.entity.misty;
 
+import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnGroup;
+import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.server.world.ServerWorld;
@@ -20,120 +25,111 @@ import java.util.UUID;
 
 import net.seep.odd.entity.ModEntities;
 
-/**
- * Visual-only GeckoLib bubble that rides the target and despawns after 'lifeMax' ticks.
- * No collision, no physics, server-spawned -> client-rendered.
- */
 public class MistyBubbleEntity extends Entity implements GeoEntity {
 
-    // 0 = feet, 0.25 = legs, 0.45 = core/hips, 0.5 = center
-    private static final double ANCHOR_Y_FACTOR = 0.45;
+    public static EntityType<MistyBubbleEntity> buildType() {
+        return FabricEntityTypeBuilder
+                .<MistyBubbleEntity>create(SpawnGroup.MISC, MistyBubbleEntity::new)
+                .dimensions(net.minecraft.entity.EntityDimensions.fixed(0f, 0f))
+                .trackRangeChunks(8)
+                .trackedUpdateRate(1)
+                .build();
+    }
 
-    // ===== state =====
+    // === synced (read by renderer) ===
+    private static final TrackedData<Integer> TARGET_ID =
+            DataTracker.registerData(MistyBubbleEntity.class, TrackedDataHandlerRegistry.INTEGER);
+    private static final TrackedData<Float> Y_OFFSET =
+            DataTracker.registerData(MistyBubbleEntity.class, TrackedDataHandlerRegistry.FLOAT);
+
+    // === server state ===
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private int life;
-    private int lifeMax = 20 * 20; // default 20s
-    @Nullable private UUID targetUuid; // for resilience across chunk reloads
+    private int lifeMax = 20 * 20;
+    @Nullable private UUID targetUuid;
+    private double yOffset = 0.05;
 
     public MistyBubbleEntity(EntityType<? extends MistyBubbleEntity> type, World world) {
         super(type, world);
         this.noClip = true;
         this.setNoGravity(true);
+        this.setSilent(true);
+        this.setInvulnerable(true);
     }
 
-    /** Convenience ctor used by the power; uses the registered type just like Creepy. */
     public MistyBubbleEntity(ServerWorld world, UUID target, int lifeMax) {
-        this(ModEntities.MISTY_BUBBLE, world); // <-- use registry field, not a local TYPE
+        this(ModEntities.MISTY_BUBBLE, world);
         this.lifeMax = Math.max(1, lifeMax);
         this.targetUuid = target;
-        this.setInvulnerable(true);
-        this.setSilent(true);
-        this.noClip = true;
-        this.setNoGravity(true);
+        this.yOffset = 0.05;
+        Entity host = world.getEntity(target);
+        if (host != null) {
+            this.getDataTracker().set(TARGET_ID, host.getId());
+            this.getDataTracker().set(Y_OFFSET, (float)this.yOffset);
+        }
     }
 
-    // spawn packet (vanilla)
-    @Override
-    public EntitySpawnS2CPacket createSpawnPacket() {
-        return new EntitySpawnS2CPacket(this);
+    public MistyBubbleEntity(ServerWorld world, UUID target, int lifeMax, double yOffset) {
+        this(world, target, lifeMax);
+        this.yOffset = yOffset;
+        this.getDataTracker().set(Y_OFFSET, (float)this.yOffset);
     }
 
-    // always visible
+    @Override protected void initDataTracker() {
+        this.getDataTracker().startTracking(TARGET_ID, 0);
+        this.getDataTracker().startTracking(Y_OFFSET, 0.05f);
+    }
+
+    @Override public EntitySpawnS2CPacket createSpawnPacket() { return new EntitySpawnS2CPacket(this); }
     @Override public boolean shouldRender(double distance) { return true; }
-
-    // no collision/pushing
     @Override public boolean isCollidable() { return false; }
     @Override protected void pushOutOfBlocks(double x, double y, double z) {}
-    @Override protected void initDataTracker() {}
 
     @Override
     public void tick() {
         super.tick();
-        if (getWorld().isClient) return;
+        if (getWorld().isClient) return; // let renderer handle smooth follow on client
 
-        // Despawn when time’s up or target vanished
-        if (++life >= lifeMax) {
-            discard();
-            return;
-        }
-
-        // Make sure we’re still riding/attached to the target
-        if (getFirstPassenger() != null) {
-            // If something rode us by mistake, ignore (we ride the target, not vice versa)
-            removeAllPassengers();
-        }
+        if (++life >= lifeMax) { discard(); return; }
 
         Entity host = null;
-        if (this.hasVehicle()) {
-            host = this.getVehicle();
-        } else if (targetUuid != null && getWorld() instanceof ServerWorld sw) {
+        if (targetUuid != null && getWorld() instanceof ServerWorld sw) {
             host = sw.getEntity(targetUuid);
-            if (host != null) this.startRiding(host, true);
+            if (host != null && this.getDataTracker().get(TARGET_ID) != host.getId()) {
+                this.getDataTracker().set(TARGET_ID, host.getId());
+                this.getDataTracker().set(Y_OFFSET, (float)this.yOffset);
+            }
         }
+        if (host == null || !host.isAlive()) { discard(); return; }
 
-        if (host == null || !host.isAlive()) {
-            discard();
-            return;
-        }
-
-        // Anchor around torso/legs instead of head
-        double anchorY = host.getY() + host.getHeight() * ANCHOR_Y_FACTOR;
-        this.setPos(host.getX(), anchorY, host.getZ());
+        // server anchor at feet (authoritative)
+        this.setPos(host.getX(), host.getY() + this.yOffset, host.getZ());
         this.setYaw(host.getYaw());
         this.setPitch(0);
     }
 
-    // ====== GeckoLib animator ======
+    // === GeckoLib ===
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("idle");
-
-    @Override
-    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(
-                this,
-                "idle",
-                0,                                  // transition length (ticks)
-                state -> {
-                    state.setAndContinue(IDLE);     // play "idle" forever
-                    return PlayState.CONTINUE;
-                }
-        ));
+    @Override public void registerControllers(AnimatableManager.ControllerRegistrar c) {
+        c.add(new AnimationController<>(this, "idle", 0, s -> { s.setAndContinue(IDLE); return PlayState.CONTINUE; }));
     }
+    @Override public AnimatableInstanceCache getAnimatableInstanceCache() { return cache; }
 
-    @Override
-    public AnimatableInstanceCache getAnimatableInstanceCache() { return cache; }
-
-    // ====== NBT (persistence across chunk unloads) ======
-    @Override
-    protected void readCustomDataFromNbt(NbtCompound nbt) {
+    // === NBT ===
+    @Override protected void readCustomDataFromNbt(NbtCompound nbt) {
         if (nbt.containsUuid("Target")) targetUuid = nbt.getUuid("Target");
         life = nbt.getInt("Life");
         lifeMax = nbt.getInt("LifeMax");
+        if (nbt.contains("YOffset")) yOffset = nbt.getDouble("YOffset");
     }
-
-    @Override
-    protected void writeCustomDataToNbt(NbtCompound nbt) {
+    @Override protected void writeCustomDataToNbt(NbtCompound nbt) {
         if (targetUuid != null) nbt.putUuid("Target", targetUuid);
         nbt.putInt("Life", life);
         nbt.putInt("LifeMax", lifeMax);
+        nbt.putDouble("YOffset", yOffset);
     }
+
+    // === getters used by renderer ===
+    public int getTrackedTargetId() { return this.getDataTracker().get(TARGET_ID); }
+    public float getTrackedYOffset() { return this.getDataTracker().get(Y_OFFSET); }
 }

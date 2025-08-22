@@ -11,6 +11,12 @@
       "odd:creepy_pull"
     ]
   },
+  "creepy_push": {
+    "subtitle": "odd.creepy_push",
+    "sounds": [
+      "odd:creepy_push"
+    ]
+  },
   "italian_stompers_jump": {
     "subtitle": "odd.italian_stompers_jump",
     "sounds": [

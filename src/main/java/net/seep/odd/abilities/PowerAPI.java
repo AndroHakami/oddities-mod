@@ -50,6 +50,37 @@ public final class PowerAPI {
         cds.setLastUse(player.getUuid(), cdKey, now);
         net.seep.odd.abilities.net.PowerNetworking.sendCooldown(player, "secondary", cd);
     }
+    public static void activateThird(ServerPlayerEntity player) {
+        String id = get(player);
+        if (id == null || id.isEmpty()) {
+            player.sendMessage(Text.literal("You have no power assigned."), true);
+            return;
+        }
+        Power power = Powers.get(id);
+        if (power == null) {
+            player.sendMessage(Text.literal("Unknown power: " + id), true);
+            return;
+        }
+
+        long now = player.getWorld().getTime();
+        long cd = Math.max(0L, power.thirdCooldownTicks());
+
+        // store secondary cooldown under a distinct key
+        String cdKey = id + "#third";
+        CooldownState cds = CooldownState.get(player.getServer());
+        long last = cds.getLastUse(player.getUuid(), cdKey);
+        long elapsed = now - last;
+
+        if (elapsed < cd) {
+            long remaining = cd - elapsed;
+            player.sendMessage(Text.literal(String.format("Third cooling: %.1fs", remaining / 20.0)), true);
+            return;
+        }
+
+        power.activateThird(player);
+        cds.setLastUse(player.getUuid(), cdKey, now);
+        net.seep.odd.abilities.net.PowerNetworking.sendCooldown(player, "third", cd);
+    }
 
 
     public static String get(ServerPlayerEntity player) {

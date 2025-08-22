@@ -11,7 +11,13 @@ import net.minecraft.entity.Entity;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
-
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.seep.odd.abilities.tamer.TamerLeveling;
+import net.seep.odd.abilities.tamer.TamerServerHooks;
+import net.seep.odd.abilities.tamer.TamerSummons;
+import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
+import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
+import net.seep.odd.entity.ModEntities;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.world.World;
@@ -20,6 +26,7 @@ import net.seep.odd.abilities.client.hud.AstralClientState;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.net.MistyNet;
 import net.seep.odd.abilities.net.PowerNetworking;
+import net.seep.odd.abilities.net.TamerNet;
 import net.seep.odd.abilities.net.UmbraNet;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
@@ -30,6 +37,9 @@ import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.item.ghost.client.GhostHandModel;
 import net.seep.odd.item.ghost.client.GhostHandRenderer;
 import software.bernie.geckolib.GeckoLib;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
+import net.seep.odd.entity.ModEntities;
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
@@ -140,6 +150,15 @@ public class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.client.MistyClientController.register();
         EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
         MistyNet.initClient();
+
+        // Tamer
+        TamerNet.initClient();
+        TamerLeveling.ensureInit();
+
+
+        // Tamer Moves
+        EntityRendererRegistry.register(ModEntities.EMERALD_SHURIKEN, EmeraldShurikenRenderer::new);
+        EntityRendererRegistry.register(ModEntities.VILLAGER_EVO1, VillagerEvo1Renderer::new);
 
 
 

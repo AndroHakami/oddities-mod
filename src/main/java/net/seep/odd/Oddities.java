@@ -23,6 +23,7 @@ import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
 
+import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
@@ -63,6 +64,8 @@ public class Oddities implements ModInitializer {
 		Powers.register(new Blockade());
 		Powers.register(new UmbraSoulPower());
 		Powers.register(new ForgerPower());
+		Powers.register(new MistyVeilPower());
+		Powers.register(new TamerPower());
 		ClientCooldowns.registerTicker();
 
 		// Umbra Soul
@@ -155,7 +158,7 @@ public class Oddities implements ModInitializer {
 
 		// Misty Veil Stuff
 		// Register the power (once)
-		net.seep.odd.abilities.power.Powers.register(new net.seep.odd.abilities.power.MistyVeilPower());
+
 
 // Register MistyNet server receiver (once)
 		MistyNet.init();
@@ -167,6 +170,10 @@ public class Oddities implements ModInitializer {
 				net.seep.odd.abilities.power.MistyVeilPower.serverTick(p);
 			}
 		});
+
+		// Tamer
+		TamerNet.initCommon();
+		TamerLeveling.ensureInit();
 
 		// ---- sync current power to client on join ----
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {

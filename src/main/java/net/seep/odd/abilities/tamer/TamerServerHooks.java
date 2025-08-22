@@ -1,0 +1,70 @@
+package net.seep.odd.abilities.tamer;
+
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.registry.Registries;
+import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.text.Text;
+import net.minecraft.util.math.Vec3d;
+
+public final class TamerServerHooks {
+    private TamerServerHooks() {}
+
+    public static void handleRename(ServerPlayerEntity player, int index, String name) {
+        if (!(player.getWorld() instanceof ServerWorld sw)) return;
+        TamerState st = TamerState.get(sw);
+        st.renameMember(player.getUuid(), index, name);
+        st.markDirty();
+        net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, st.partyOf(player.getUuid()));
+    }
+
+    /** Wheel selection → despawn current, spawn selected, apply level scaling, install AI, track active. */
+    public static void handleSummonSelect(ServerPlayerEntity player, int index) {
+        if (!(player.getWorld() instanceof ServerWorld sw)) return;
+        // ensure leveling hooks are installed
+        TamerLeveling.ensureInit();
+
+        TamerState st = TamerState.get(sw);
+        var party = st.partyOf(player.getUuid());
+        if (index < 0 || index >= party.size()) return;
+
+        // Despawn existing active
+        var active = st.getActive(player.getUuid());
+        if (active != null) {
+            Entity old = sw.getEntity(active.entity);
+            if (old != null) old.discard();
+            st.clearActive(player.getUuid());
+        }
+
+        // Spawn new companion
+        PartyMember pm = party.get(index);
+        EntityType<?> type = Registries.ENTITY_TYPE.get(pm.entityTypeId);
+        Entity spawned = type.create(sw);
+        if (!(spawned instanceof LivingEntity le)) {
+            if (spawned != null) spawned.discard();
+            return;
+        }
+
+        Vec3d spawn = player.getPos()
+                .add(player.getRotationVec(1.0f).multiply(1.8))
+                .add(0, 0.1, 0);
+        le.refreshPositionAndAngles(spawn.x, spawn.y, spawn.z, player.getYaw(), 0);
+
+        // If it's a mob: apply level scaling and install our friendly AI
+        if (le instanceof net.minecraft.entity.mob.MobEntity mob) {
+            // scale attributes/health by saved level
+            TamerLeveling.applyLevelTo(mob, pm.level);
+            // install our goals (follow/defend/attack-hostiles)
+            TamerAI.install(mob, player);
+        }
+
+        le.setCustomName(Text.literal(pm.displayName() + "  Lv." + pm.level));
+        le.setCustomNameVisible(true);
+
+        sw.spawnEntity(le);
+        st.setActive(player.getUuid(), index, le.getUuid());
+        st.markDirty();
+    }
+}

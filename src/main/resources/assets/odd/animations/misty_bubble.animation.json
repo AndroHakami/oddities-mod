@@ -3,22 +3,46 @@
 	"animations": {
 		"idle": {
 			"loop": true,
-			"animation_length": 10.08,
+			"animation_length": 20,
 			"bones": {
 				"bone": {
 					"rotation": {
 						"0.0": {
 							"vector": [0, 0, 0]
 						},
-						"10.08": {
-							"vector": [0, 360, 0]
+						"20.0": {
+							"vector": [0, 720, 0]
 						}
 					},
 					"position": {
 						"vector": [0, 0, 0]
 					},
 					"scale": {
-						"vector": [2, 2, 2]
+						"0.0": {
+							"vector": [0.1, 0.1, 0.1]
+						},
+						"0.28": {
+							"vector": [2.4, 2.4, 2.4],
+							"easing": "bezier",
+							"left": [0, 0, 0],
+							"left_time": [-0.1, -0.1, -0.1],
+							"right": [0, 0, 0],
+							"right_time": [0.1, 0.1, 0.1]
+						},
+						"0.52": {
+							"vector": [2, 2, 2],
+							"easing": "bezier",
+							"left": [0, 0, 0],
+							"left_time": [-0.1, -0.1, -0.1],
+							"right": [0, 0, 0],
+							"right_time": [0.1, 0.1, 0.1]
+						},
+						"19.84": {
+							"vector": [2, 2, 2]
+						},
+						"20.0": {
+							"vector": [0.1, 0.1, 0.1]
+						}
 					}
 				}
 			}

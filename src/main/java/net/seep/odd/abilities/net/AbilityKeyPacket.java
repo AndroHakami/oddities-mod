@@ -30,7 +30,7 @@ public class AbilityKeyPacket {
         switch (slot) {
             case "primary"   -> PowerAPI.activate(player);
             case "secondary" -> PowerAPI.activateSecondary(player);
-            case "third"     -> player.sendMessage(Text.literal("Third ability not implemented yet."), false);
+            case "third"     -> PowerAPI.activateThird(player);
             case "fourth"    -> player.sendMessage(Text.literal("Fourth ability not implemented yet."), false);
             case "overview"  -> player.sendMessage(Text.literal("Ability overview screen (WIP)."), false);
         }

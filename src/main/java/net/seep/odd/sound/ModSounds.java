@@ -19,6 +19,7 @@ public class ModSounds {
     public static final SoundEvent FORGER_HIT = registerSoundEvent("forger_hit");
     public static final SoundEvent ITALIAN_STOMPERS_JUMP = registerSoundEvent("italian_stompers_jump");
     public static final SoundEvent CREEPY_PULL = registerSoundEvent("creepy_pull");
+    public static final SoundEvent CREEPY_PUSH = registerSoundEvent("creepy_push");
     public static final SoundEvent CRAPPY_BLOCK_PLACE = registerSoundEvent("crappy_block_place");
     public static final SoundEvent CRAPPY_BLOCK_FALL = registerSoundEvent("crappy_block_fall");
     public static final SoundEvent CRAPPY_BLOCK_BREAK = registerSoundEvent("crappy_block_break");

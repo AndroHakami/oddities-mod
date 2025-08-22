@@ -20,6 +20,7 @@ public class ModItems {
     public static final Item METAL_DETECTOR = registerItem("metal_detector", new MetalDetectorItem(new FabricItemSettings().maxDamage(64)));
     public static final Item RUBY_STAFF = registerItem("ruby_staff", new Item(new FabricItemSettings().maxCount(1)));
     public static final Item GHOST_HAND = registerItem("ghost_hand", new GhostHandItem(new FabricItemSettings().maxCount(1)));
+    public static final Item EMERALD_SHURIKEN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "emerald_shuriken"), new Item(new Item.Settings()));
 
     private static void addItemsToIngredientItemGroup(FabricItemGroupEntries entries) {
         entries.add(RUBY);

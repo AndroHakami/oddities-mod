@@ -1,20 +1,22 @@
 {
-	"required": true,
-	"package": "net.seep.odd.mixin",
-	"compatibilityLevel": "JAVA_17",
-	"mixins": [
-		"ExampleMixin",
-		"ItemEntityMixin"
-	],
-	"client": [
-		"ItemRendererAccessor",
-		"GameRendererAccessor",
-		"ModelLoaderMixin"
-	],
-	"injectors": {
-		"defaultRequire": 1
-	},
-	"overwrites": {
-		"requireAnnotations": true
+  "required": true,
+  "package": "net.seep.odd.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "ExampleMixin",
+    "ItemEntityMixin",
+    "MobEntityAccessor",
+    "MobEntityTamerDataMixin"
+  ],
+  "client": [
+    "GameRendererAccessor",
+    "ItemRendererAccessor",
+    "ModelLoaderMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
 	}
 }

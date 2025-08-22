@@ -15,6 +15,7 @@ import net.minecraft.world.World;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
+import net.seep.odd.item.ghost.client.GhostPushLoopSound;
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
 import software.bernie.geckolib.animatable.client.RenderProvider;
@@ -60,6 +61,7 @@ public final class GhostHandItem extends Item implements GeoItem {
             if (p != null && p.getWorld().isClient) {
                 boolean holdingThis = p.getMainHandStack().isOf(this) || p.getOffHandStack().isOf(this);
                 if (holdingThis) {
+                    // push (LMB) has priority over pull (RMB)
                     pushing = isAttackKeyDown();
                     if (!pushing) {
                         pulling = isUseKeyDown();
@@ -67,12 +69,17 @@ public final class GhostHandItem extends Item implements GeoItem {
                 }
             }
 
-            // start/stop looped pull sound on the client in sync with the animation
+            // start/stop looped sounds on the client in sync with the animation
             if (p != null && p.getWorld().isClient) {
-                if (pulling) {
+                if (pushing) {
+                    ensurePushLoopPlaying(p);
+                    stopPullLoop();  // never play both
+                } else if (pulling) {
                     ensurePullLoopPlaying(p);
+                    stopPushLoop();  // never play both
                 } else {
                     stopPullLoop();
+                    stopPushLoop();
                 }
             }
 
@@ -165,20 +172,21 @@ public final class GhostHandItem extends Item implements GeoItem {
         return mc != null ? mc.player : null;
     }
 
-    /* ---------- Pull loop sound control (client) ---------- */
+    /* ---------- Loop sound control (client) ---------- */
 
     @Environment(EnvType.CLIENT)
     private static GhostPullLoopSound pullLoop;
+
+    @Environment(EnvType.CLIENT)
+    private static GhostPushLoopSound pushLoop;
 
     @Environment(EnvType.CLIENT)
     private static void ensurePullLoopPlaying(PlayerEntity p) {
         var mc = net.minecraft.client.MinecraftClient.getInstance();
         if (mc == null) return;
 
-        // if nothing playing (or the old one marked done), start it
         if (pullLoop == null || pullLoop.isDone()) {
             pullLoop = new GhostPullLoopSound(p, () -> {
-                // keep playing only while RMB is held AND this item is still in hand
                 boolean holdingThis = p.getMainHandStack().getItem() instanceof GhostHandItem
                         || p.getOffHandStack().getItem() instanceof GhostHandItem;
                 return holdingThis && isUseKeyDown();
@@ -194,6 +202,31 @@ public final class GhostHandItem extends Item implements GeoItem {
         if (pullLoop != null) {
             mc.getSoundManager().stop(pullLoop);
             pullLoop = null;
+        }
+    }
+
+    @Environment(EnvType.CLIENT)
+    private static void ensurePushLoopPlaying(PlayerEntity p) {
+        var mc = net.minecraft.client.MinecraftClient.getInstance();
+        if (mc == null) return;
+
+        if (pushLoop == null || pushLoop.isDone()) {
+            pushLoop = new GhostPushLoopSound(p, () -> {
+                boolean holdingThis = p.getMainHandStack().getItem() instanceof GhostHandItem
+                        || p.getOffHandStack().getItem() instanceof GhostHandItem;
+                return holdingThis && isAttackKeyDown();
+            });
+            mc.getSoundManager().play(pushLoop);
+        }
+    }
+
+    @Environment(EnvType.CLIENT)
+    private static void stopPushLoop() {
+        var mc = net.minecraft.client.MinecraftClient.getInstance();
+        if (mc == null) return;
+        if (pushLoop != null) {
+            mc.getSoundManager().stop(pushLoop);
+            pushLoop = null;
         }
     }
 }

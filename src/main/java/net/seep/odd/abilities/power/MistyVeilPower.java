@@ -12,6 +12,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -30,6 +31,30 @@ public final class MistyVeilPower implements Power {
     // Primary is toggle (no cooldown). Secondary keeps 30s CD.
     @Override public long cooldownTicks()          { return 0; }
     @Override public long secondaryCooldownTicks() { return 30L * 20L; }
+    @Override
+    public Identifier iconTexture(String slot) {
+        return switch (slot) {
+            case "primary"   -> new Identifier("odd", "textures/gui/abilities/mist_steps.png");
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/mist_bubble.png"); // set this texture
+            default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
+        };
+    }
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Condense a mist to glide through the air by holding space mid-air [Press abiltiy button to toggle ON/OFF]";
+            case "secondary" -> "Condense a swifty and regenerative bubble on an ally, protecting them from the dangerous prey for 20 seconds";
+            case "overview" -> "Mist Veil passively protects you by hiding you from dangerous entities, glide with mist steps or protect someone else with your Mist bubble!";
+            default -> "Snow-caster brings ice-cold abilities to the fight: explosives and teleports at your fingertips.";
+        };
+    }
+    @Override
+    public String longDescription() {
+        return """
+           Mist Veil passively protects you by hiding you from dangerous entities.
+           Glide with mist steps or protect someone else with your Mist bubble!
+           """;
+    }
 
     /* ===================== FEEL CONFIG ===================== */
     // Vertical-only “low-grav” (momentum-preserving)
@@ -135,7 +160,6 @@ public final class MistyVeilPower implements Power {
             var bubble = new net.seep.odd.entity.misty.MistyBubbleEntity(sw, le.getUuid(), BUBBLE_TIME);
             bubble.refreshPositionAndAngles(le.getX(), le.getY(), le.getZ(), 0, 0);
             sw.spawnEntity(bubble);
-            bubble.startRiding(le, true);
         }
 
         le.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, BUBBLE_REGEN_LVL, true, true, true));
@@ -313,7 +337,7 @@ public final class MistyVeilPower implements Power {
                 }
                 if ((left % 10) == 0) {
                     le.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 12, BUBBLE_REGEN_LVL, true, true, true));
-                    le.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 12, 0, true, true, true));
+                    le.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 12, 1, true, true, true));
                 }
                 if (!(ent instanceof ServerPlayerEntity)) {
                     Box b = ent.getBoundingBox().expand(32);

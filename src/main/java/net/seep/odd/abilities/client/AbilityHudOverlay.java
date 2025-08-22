@@ -34,8 +34,8 @@ public final class AbilityHudOverlay {
         int h = ctx.getScaledWindowHeight();
 
         // Layout
-        final int size = 22;        // ~30% smaller than 32px
-        final int pad = 10;         // gap between icons
+        final int size = 20;        // ~30% smaller than 32px
+        final int pad = 20;         // gap between icons
         final int labelGap = 8;     // space below icon for key text
 
         // Hotbar metrics (vanilla)
@@ -44,7 +44,7 @@ public final class AbilityHudOverlay {
 
         // Anchor just to the right of the hotbar
         int hotbarRight = (w / 2) + (HOTBAR_WIDTH / 2);
-        int gapX = 6; // distance from hotbar
+        int gapX = 8; // distance from hotbar
         int totalWidth = slots.size() * size + (slots.size() - 1) * pad;
 
         int x0 = hotbarRight + gapX;
@@ -70,13 +70,13 @@ public final class AbilityHudOverlay {
         var p = Powers.get(powerId);
         if (p == null) return;
 
-        final int ICON_SRC = 32; // your PNGs are 32x32
+        final int ICON_SRC = 28; // your PNGs are 32x32
         Identifier icon = p.iconTexture(slot);
 
         int totalCd = switch (slot) {
             case "primary"   -> (int) p.cooldownTicks();
             case "secondary" -> (int) p.secondaryCooldownTicks();
-            case "third"     -> (p instanceof AbilityHudOverlay.HasThirdCooldown ht) ? (int) ht.thirdCooldownTicks() : 0;
+            case "third"     -> (int) p.thirdCooldownTicks();
             case "fourth"    -> (p instanceof AbilityHudOverlay.HasFourthCooldown hf) ? (int) hf.fourthCooldownTicks() : 0;
             default -> 0;
         };
