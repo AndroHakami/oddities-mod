@@ -1,17 +1,16 @@
+// net/seep/odd/abilities/tamer/PartyMember.java
 package net.seep.odd.abilities.tamer;
 
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 
-/** Single captured creature in a party. */
 public final class PartyMember {
     public Identifier entityTypeId;
-    public String nickname;   // editable
-    public int level;         // 1..99
-    public int exp;           // total exp
-    public String[] moves;    // move ids from TamerMoves
+    public String nickname;
+    public int level;      // 1..99
+    public int exp;        // total exp
+    public String[] moves; // move ids from TamerMoves
 
     public static final int MAX_LEVEL = 99;
 
@@ -23,20 +22,19 @@ public final class PartyMember {
         this.moves = moves;
     }
 
-    /** Build a fresh PartyMember from a captured mob. */
     public static PartyMember fromCapture(Identifier typeId, LivingEntity source) {
-        // Runtime access (safe): OK because this only runs when you actually capture.
-        String baseName = Registries.ENTITY_TYPE.get(typeId).getName().getString();
+        // Use current custom name if present; otherwise derive a simple display from the raw id
+        String baseName = typeId.getPath().replace('_', ' ');
         String display = source.hasCustomName() ? source.getCustomName().getString() : capitalize(baseName);
-        int startLvl = 5; // tweak as you like
+        int startLvl = 5; // starter level
         String[] starter = TamerMoves.starterMovesFor(typeId);
         return new PartyMember(typeId, display, startLvl, 0, starter);
     }
 
     public String displayName() {
-        return nickname != null && !nickname.isEmpty()
+        return (nickname != null && !nickname.isEmpty())
                 ? nickname
-                : Registries.ENTITY_TYPE.get(entityTypeId).getName().getString();
+                : capitalize(entityTypeId.getPath().replace('_', ' '));
     }
 
     public void gainExp(int amount) {

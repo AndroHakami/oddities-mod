@@ -1,4 +1,3 @@
-// net/seep/odd/abilities/tamer/TamerMoves.java
 package net.seep.odd.abilities.tamer;
 
 import net.minecraft.util.Identifier;
@@ -6,18 +5,32 @@ import net.minecraft.util.Identifier;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Minimal move registry (IDs + display names; no registry calls in static init). */
+/** Minimal move registry (IDs + display names for now). */
 public final class TamerMoves {
     private TamerMoves() {}
 
-    /** moveId -> display name */
+    /** moveId -> display name (and later: power, cooldown, effect, etc.) */
     public static final Map<String, String> MOVES = new HashMap<>();
 
-    /** entityTypeId (as string) -> starter moves (2-3) */
-    private static final Map<String, String[]> STARTERS = new HashMap<>();
+    /** entityTypeId (Identifier) -> starter moves (2–3). */
+    private static final Map<Identifier, String[]> STARTERS = new HashMap<>();
 
+    // ---------- helpers (no registry access here) ----------
+    private static void define(String id, String display) { MOVES.put(id, display); }
+
+    private static Identifier id(String s) {
+        // allow "minecraft:zombie" or just "zombie"
+        int c = s.indexOf(':');
+        return (c >= 0) ? new Identifier(s) : new Identifier("minecraft", s);
+    }
+
+    private static void mapStarters(String entityId, String... moveIds) {
+        STARTERS.put(id(entityId), moveIds);
+    }
+
+    // ---------- static bootstrap (SAFE: only Identifiers & Strings) ----------
     static {
-        // === Define some generic moves ===
+        // moves
         define("tackle",        "Tackle");
         define("quick_dash",    "Quick Dash");
         define("howl",          "Howl");
@@ -29,29 +42,21 @@ public final class TamerMoves {
         define("infect_bite",   "Infected Bite");
         define("spark_pop",     "Spark Pop");
 
-        // === Map common mobs to starters (by raw ID strings, no registry access here) ===
-        mapId("minecraft:zombie",      "tackle", "rot_grasp", "infect_bite");
-        mapId("minecraft:skeleton",    "bone_arrow", "power_shot");
-        mapId("minecraft:spider",      "venom_sting", "web_shot", "quick_dash");
-        mapId("minecraft:creeper",     "spark_pop", "tackle");
-        mapId("minecraft:enderman",    "quick_dash", "howl");
+        // vanilla starters — ONLY identifiers here, no registry access
+        mapStarters("minecraft:zombie",      "tackle", "rot_grasp", "infect_bite");
+        mapStarters("minecraft:skeleton",    "bone_arrow", "power_shot");
+        mapStarters("minecraft:spider",      "venom_sting", "web_shot", "quick_dash");
+        mapStarters("minecraft:creeper",     "spark_pop", "tackle");
+        mapStarters("minecraft:enderman",    "quick_dash", "howl");
 
-        // You can add more like:
-        // mapId("minecraft:villager", "tackle", "quick_dash");
+        // you can add your own with full ids, e.g.:
+        // mapStarters("odd:villager_evo", "tackle");
     }
 
-    private static void define(String id, String display) {
-        MOVES.put(id, display);
-    }
-
-    private static void mapId(String entityTypeIdString, String... moveIds) {
-        STARTERS.put(entityTypeIdString, moveIds);
-    }
-
-    /** Safe at runtime; returns a clone. Falls back to a generic set. */
+    /** Returns a copy so callers can modify their array safely. */
     public static String[] starterMovesFor(Identifier typeId) {
-        String[] arr = STARTERS.get(typeId.toString());
+        String[] arr = STARTERS.get(typeId);
         if (arr != null && arr.length > 0) return arr.clone();
-        return new String[] { "tackle", "quick_dash" };
+        return new String[] { "tackle", "quick_dash" }; // fallback
     }
 }

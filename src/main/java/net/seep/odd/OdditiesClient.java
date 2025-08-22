@@ -112,7 +112,7 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.CREEPY, CreepyRenderer::new);
         EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
         EntityRendererRegistry.register(ModEntities.EMERALD_SHURIKEN, EmeraldShurikenRenderer::new);
-        EntityRendererRegistry.register(ModEntities.VILLAGER_EVO1, VillagerEvo1Renderer::new);
+        EntityRendererRegistry.register(ModEntities.VILLAGER_EVO, VillagerEvo1Renderer::new);
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }

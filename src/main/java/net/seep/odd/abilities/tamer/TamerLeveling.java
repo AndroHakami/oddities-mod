@@ -1,166 +1,123 @@
+// net/seep/odd/abilities/tamer/TamerLeveling.java
 package net.seep.odd.abilities.tamer;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributes;
+import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
-import net.seep.odd.entity.ModEntities;
+import net.minecraft.util.Identifier;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.Registry;
 
-import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Central leveling: kill → XP, thresholds → level up, level → attribute scaling, evo gate. */
+/**
+ * Awards XP to the active companion when it lands killing blows and
+ * evolves Villager companions into 'odd:villager_evo' at level 7.
+ */
 public final class TamerLeveling {
     private TamerLeveling() {}
 
-    // one-time event registration
-    private static final AtomicBoolean INIT = new AtomicBoolean(false);
-    public static void ensureInit() {
-        if (!INIT.compareAndSet(false, true)) return;
+    // vanilla villager + your renamed evo id
+    private static final Identifier VILLAGER_ID      = new Identifier("minecraft", "villager");
+    private static final Identifier VILLAGER_EVO_ID  = new Identifier("odd",       "villager_evo");
+    private static final int        VILLAGER_EVO_LVL = 7;
 
-        // Award XP when something dies, if the attacker is a currently-active pet
+    /** Call once from Oddities.onInitialize(). */
+    public static void initCommon() {
         ServerLivingEntityEvents.AFTER_DEATH.register((victim, source) -> {
-            Entity attacker = source.getAttacker();
             if (!(victim.getWorld() instanceof ServerWorld sw)) return;
-            if (attacker == null) return;
 
-            UUID killerId = attacker.getUuid();
+            // who actually killed the victim?
+            Entity rawAttacker = source.getAttacker();
+            if (!(rawAttacker instanceof LivingEntity attacker)) return;
 
+            // find the owner whose ACTIVE pet == attacker
+            ServerPlayerEntity owner = findOwnerOfActive(sw, attacker.getUuid());
+            if (owner == null) return;
+
+            // check the owner's active slot & party member
             TamerState st = TamerState.get(sw);
-            UUID ownerId = st.findOwnerOfActiveEntity(killerId);
-            if (ownerId == null) return;
+            var active = st.getActive(owner.getUuid());
+            if (active == null || !active.entity.equals(attacker.getUuid())) return;
 
-            // Which slot is active?
-            TamerState.Active active = st.getActive(ownerId);
-            if (active == null) return;
-
-            List<PartyMember> party = st.partyOf(ownerId);
+            var party = st.partyOf(owner.getUuid());
             if (active.index < 0 || active.index >= party.size()) return;
             PartyMember pm = party.get(active.index);
 
-            int gain = TamerXp.xpForKill(victim);
-            int beforeLevel = pm.level;
-
-            // Increment XP; PartyMember is expected to store xp + level
-            pm.exp += gain;
-            // Level up while XP exceeds threshold
-            while (pm.level < PartyMember.MAX_LEVEL &&
-                    pm.exp >= TamerXp.totalExpForLevel(pm.level + 1)) {
-                pm.level++;
-            }
-
-            // Feedback + persist
+            // grant XP
+            int gained = expForKill(victim);
+            pm.gainExp(gained);
             st.markDirty();
-            ServerPlayerEntity owner = sw.getServer().getPlayerManager().getPlayer(ownerId);
-            if (owner != null) {
-                if (pm.level > beforeLevel) {
-                    owner.sendMessage(Text.literal(pm.displayName() + " leveled up to " + pm.level + "!"), true);
-                } else {
-                    owner.sendMessage(Text.literal("+" + gain + " XP to " + pm.displayName()), true);
-                }
-            }
 
-            // Apply live scaling and evolution if the active mob is still around
-            Entity e = sw.getEntity(active.entity);
-            if (e instanceof MobEntity mob && mob.isAlive()) {
-                applyLevelTo(mob, pm.level);
-                maybeEvolveActive(sw, owner, st, active.index, pm, mob);
-            }
+            // handle evolution(s)
+            maybeEvolveVillager(sw, owner, attacker, pm, active.index);
         });
     }
 
-    /** Init baseline on capture if you want (optional; safe to call). */
-    public static void onCaptured(MobEntity mob, ServerPlayerEntity owner) {
+    /* ---------------------- helpers ---------------------- */
 
-        // no-op for now; PartyMember created with base level/xp elsewhere
+    /** Simple owner lookup without touching private maps. */
+    private static ServerPlayerEntity findOwnerOfActive(ServerWorld sw, UUID activeEntityId) {
+        TamerState st = TamerState.get(sw);
+        for (ServerPlayerEntity p : sw.getServer().getPlayerManager().getPlayerList()) {
+            var a = st.getActive(p.getUuid());
+            if (a != null && a.entity.equals(activeEntityId)) return p;
+        }
+        return null;
     }
 
-    /** Scale health/attack a bit by level. Idempotent-ish (reapplies base+bonus). */
-    public static void applyLevelTo(MobEntity mob, int level) {
-        level = Math.max(1, Math.min(PartyMember.MAX_LEVEL, level));
-
-        // Attack: base + 0.3 per level
-        var atk = mob.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
-        if (atk != null) {
-            double base = Math.max(2.0, atk.getBaseValue());
-            atk.setBaseValue(base + 0.30 * (level - 1));
-        }
-
-        // Health: base + 1.5 per level
-        var hp = mob.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
-        if (hp != null) {
-            double base = Math.max(10.0, hp.getBaseValue());
-            double scaled = base + 1.50 * (level - 1);
-            hp.setBaseValue(scaled);
-            // heal up to new max
-            mob.setHealth((float) scaled);
-        }
-
-        // Slight movement boost for low-levels so they keep up
-        var spd = mob.getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
-        if (spd != null) {
-            double base = Math.max(0.23, spd.getBaseValue());
-            double bonus = Math.min(0.10, 0.003 * (level - 1)); // cap +0.10
-            spd.setBaseValue(base + bonus);
-        }
+    /** very rough XP curve: based on max health, bonus if hostile. */
+    private static int expForKill(LivingEntity victim) {
+        float base = Math.max(1f, victim.getMaxHealth());
+        if (victim instanceof HostileEntity) base *= 1.5f;
+        return Math.round(base);
     }
 
-    /** Check the villager -> villager_evo1 gate (level >= 7). Replace entity + update party entry. */
-    private static void maybeEvolveActive(ServerWorld sw,
-                                          ServerPlayerEntity owner,
-                                          TamerState st,
-                                          int partyIndex,
-                                          PartyMember pm,
-                                          MobEntity currentMob) {
-        if (owner == null) return;
+    /** Villager -> odd:villager_evo at level 7 using convertTo(). */
+    private static void maybeEvolveVillager(ServerWorld sw,
+                                            ServerPlayerEntity owner,
+                                            LivingEntity attacker,
+                                            PartyMember pm,
+                                            int partyIndex) {
+        if (!pm.entityTypeId.equals(VILLAGER_ID)) return;
+        if (pm.level < VILLAGER_EVO_LVL) return;
+        if (!(attacker instanceof MobEntity mob)) return;
 
-        // Only gate: vanilla villager id → evolve to your custom entity when level >= 7
-        IdentifierIds ids = IdentifierIds.of(pm.entityTypeId);
-        IdentifierIds villager = IdentifierIds.of(Registries.ENTITY_TYPE.getId(EntityType.VILLAGER));
-        if (!ids.equals(villager)) return;
-        if (pm.level < 7) return;
+        // resolve target type from the dynamic registry (no static Registries touch)
+        Registry<EntityType<?>> reg = sw.getRegistryManager().get(RegistryKeys.ENTITY_TYPE);
+        EntityType<?> raw = reg.get(VILLAGER_EVO_ID);
+        if (raw == null) {
+            owner.sendMessage(Text.literal("Evolution type missing: " + VILLAGER_EVO_ID), true);
+            return;
+        }
 
-        // Update party entry type to evo1
-        pm.entityTypeId = ModEntities.VILLAGER_EVO1_ID;
-        st.markDirty();
+        @SuppressWarnings("unchecked")
+        EntityType<? extends MobEntity> evoType = (EntityType<? extends MobEntity>) (EntityType<?>) raw;
 
-        // Convert the live entity if possible (safer than despawn+spawn)
-        MobEntity evolved = currentMob.convertTo(ModEntities.VILLAGER_EVO1, true);
+        // convert in-place (keeps equipment)
+        MobEntity evolved = mob.convertTo(evoType, true);
         if (evolved == null) {
-            // fallback: spawn a fresh one near the old spot
-            evolved = ModEntities.VILLAGER_EVO1.create(sw);
-            if (evolved != null) {
-                evolved.refreshPositionAndAngles(currentMob.getX(), currentMob.getY(), currentMob.getZ(), currentMob.getYaw(), 0);
-                sw.spawnEntity(evolved);
-                currentMob.discard();
-            } else {
-                return; // couldn't evolve; bail quietly
-            }
+            owner.sendMessage(Text.literal("Evolution failed (convert). Try re-summoning."), true);
+            return;
         }
 
-        // Reinstall AI/level scaling/name
-        TamerAI.install(evolved, owner);
-        applyLevelTo(evolved, pm.level);
+        // keep friendly AI + label
         evolved.setCustomName(Text.literal(pm.displayName() + "  Lv." + pm.level));
         evolved.setCustomNameVisible(true);
+        TamerAI.install(evolved, owner);
 
-        // Track new active UUID
+        // update active reference + stored species
+        TamerState st = TamerState.get(sw);
         st.setActive(owner.getUuid(), partyIndex, evolved.getUuid());
+        pm.entityTypeId = VILLAGER_EVO_ID;
         st.markDirty();
 
-        owner.sendMessage(Text.literal(pm.displayName() + " evolved!"), true);
-    }
-
-    /** Tiny helper to compare identifiers without dragging full Identifier in the public API. */
-    private record IdentifierIds(String id) {
-        static IdentifierIds of(net.minecraft.util.Identifier i) { return new IdentifierIds(i == null ? "" : i.toString()); }
-        @Override public boolean equals(Object o) { return o instanceof IdentifierIds other && id.equals(other.id); }
+        owner.sendMessage(Text.literal("✨ " + pm.displayName() + " evolved!"), true);
     }
 }

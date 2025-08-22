@@ -26,6 +26,7 @@ import net.seep.odd.abilities.power.Powers;
 import net.seep.odd.abilities.power.TamerPower;
 import net.seep.odd.abilities.power.UmbraSoulPower;
 
+import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
@@ -113,7 +114,14 @@ public final class Oddities implements ModInitializer {
 		// Net channels (server/common)
 		UmbraNet.registerServerAstral();
 		MistyNet.init();       // server receivers
+
+		// TaMER
 		net.seep.odd.abilities.net.TamerNet.initCommon();
+		net.seep.odd.abilities.tamer.TamerLeveling.initCommon();
+		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
+
+
 
 		// ---- Restrict interaction while possessing ----
 		AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) ->

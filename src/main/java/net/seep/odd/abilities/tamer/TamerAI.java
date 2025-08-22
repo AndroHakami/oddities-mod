@@ -27,30 +27,49 @@ public final class TamerAI {
         mob.setPersistent();
         mob.setTarget(null);
 
+        // If mob HAS an attack attribute, gently bump tiny values so it can do some damage.
         var atk = mob.getAttributeInstance(EntityAttributes.GENERIC_ATTACK_DAMAGE);
-        if (atk != null && atk.getBaseValue() < 2.0) atk.setBaseValue(2.0);
+        if (atk != null && atk.getBaseValue() < 2.0) {
+            atk.setBaseValue(2.0);
+        }
+        boolean hasAttackAttribute = (atk != null);
 
+        // Access selectors via accessor
         var goals   = ((MobEntityAccessor)(Object)mob).odd$getGoalSelector();
         var targets = ((MobEntityAccessor)(Object)mob).odd$getTargetSelector();
 
+        // wipe existing goals
         mob.clearGoals(g -> true);
         for (var e : new java.util.ArrayList<>(targets.getGoals())) {
             targets.remove(e.getGoal());
         }
 
+        // -------- Action goals --------
         goals.add(0, new SwimGoal(mob));
+
         if (mob instanceof PathAwareEntity paw) {
-            goals.add(2, new MeleeAttackGoal(paw, 1.25, true));
+            // Use vanilla melee only if the attribute exists; otherwise use a safe fixed-damage melee
+            if (hasAttackAttribute) {
+                goals.add(2, new MeleeAttackGoal(paw, 1.25, true));
+            } else {
+                goals.add(2, new FixedDamageMeleeGoal(paw, 1.20, 3.0f, 18)); // speed, damage, cooldownTicks
+            }
+
             goals.add(3, new FollowOwnerGoalGeneric(mob, owner.getUuid(), FOLLOW_SPEED, FOLLOW_MIN, FOLLOW_MAX));
             goals.add(6, new WanderAroundFarGoal(paw, 1.0));
         }
+
         goals.add(7, new LookAtEntityGoal(mob, ServerPlayerEntity.class, 10.0f));
         goals.add(8, new LookAroundGoal(mob));
 
+        // -------- Target goals --------
         targets.add(1, new RetaliateIfHurtGoal(mob));
         targets.add(2, new ProtectOwnerTargetGoal(mob, owner.getUuid()));
     }
 
+    /* ================= helper goals ================= */
+
+    /** Follow the owner with simple distance banding. */
     static final class FollowOwnerGoalGeneric extends Goal {
         private final MobEntity mob;
         private final UUID ownerId;
@@ -98,6 +117,7 @@ public final class TamerAI {
         }
     }
 
+    /** Simple "revenge" that sets target to whoever last hurt the mob. */
     static final class RetaliateIfHurtGoal extends Goal {
         private final MobEntity mob;
         private LivingEntity lastAttacker;
@@ -122,6 +142,7 @@ public final class TamerAI {
         }
     }
 
+    /** Protect the owner: pick a hostile near/attacking the owner and keep it targeted. */
     static final class ProtectOwnerTargetGoal extends Goal {
         private final MobEntity mob;
         private final UUID ownerId;
@@ -171,11 +192,59 @@ public final class TamerAI {
             double bestScore = Double.MAX_VALUE;
 
             for (HostileEntity h : mob.getWorld().getEntitiesByClass(HostileEntity.class, area, HostileEntity::isAlive)) {
-                if (h.getTarget() == owner) return h;
+                if (h.getTarget() == owner) return h; // priority
                 double s = h.squaredDistanceTo(owner);
                 if (s < bestScore) { bestScore = s; best = h; }
             }
             return best;
+        }
+    }
+
+    /**
+     * Melee that does NOT rely on GENERIC_ATTACK_DAMAGE (for villagers & other passives).
+     * Deals a fixed amount and has a simple cooldown.
+     */
+    static final class FixedDamageMeleeGoal extends Goal {
+        private final PathAwareEntity mob;
+        private final double speed;
+        private final float damage;
+        private final int cooldownTicks;
+        private int cooldown;
+
+        FixedDamageMeleeGoal(PathAwareEntity mob, double speed, float damage, int cooldownTicks) {
+            this.mob = mob;
+            this.speed = speed;
+            this.damage = damage;
+            this.cooldownTicks = cooldownTicks;
+            this.setControls(EnumSet.of(Control.MOVE, Control.LOOK));
+        }
+
+        @Override public boolean canStart() {
+            var t = mob.getTarget();
+            return t != null && t.isAlive();
+        }
+
+        @Override public boolean shouldContinue() {
+            var t = mob.getTarget();
+            return t != null && t.isAlive();
+        }
+
+        @Override public void start() { cooldown = 0; }
+
+        @Override public void tick() {
+            var target = mob.getTarget();
+            if (target == null) return;
+
+            mob.getLookControl().lookAt(target, 30.0f, 30.0f);
+            mob.getNavigation().startMovingTo(target, speed);
+
+            // rough reach check similar to MobEntity
+            double reachSq = (mob.getWidth() * 2.0F) * (mob.getWidth() * 2.0F) + target.getWidth();
+
+            if (--cooldown <= 0 && mob.squaredDistanceTo(target) <= reachSq && mob.getVisibilityCache().canSee(target)) {
+                target.damage(mob.getDamageSources().mobAttack(mob), damage);
+                cooldown = cooldownTicks;
+            }
         }
     }
 }
