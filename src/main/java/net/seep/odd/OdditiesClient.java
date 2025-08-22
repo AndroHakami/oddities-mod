@@ -4,130 +4,69 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.entity.Entity;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.seep.odd.abilities.tamer.TamerLeveling;
-import net.seep.odd.abilities.tamer.TamerServerHooks;
-import net.seep.odd.abilities.tamer.TamerSummons;
-import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
-import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
-import net.seep.odd.entity.ModEntities;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
+
 import net.seep.odd.abilities.client.*;
-import net.seep.odd.abilities.client.hud.AstralClientState;
-import net.seep.odd.abilities.client.hud.AstralHudOverlay;
-import net.seep.odd.abilities.net.MistyNet;
-import net.seep.odd.abilities.net.PowerNetworking;
-import net.seep.odd.abilities.net.TamerNet;
-import net.seep.odd.abilities.net.UmbraNet;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
+
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
-import net.seep.odd.item.ghost.client.GhostHandModel;
-import net.seep.odd.item.ghost.client.GhostHandRenderer;
-import software.bernie.geckolib.GeckoLib;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
-import net.seep.odd.entity.ModEntities;
+
+import net.seep.odd.abilities.client.hud.AstralClientState;
+import net.seep.odd.abilities.client.hud.AstralHudOverlay;
+
+import net.seep.odd.abilities.net.PowerNetworking;
+import net.seep.odd.abilities.net.TamerNet;
+import net.seep.odd.abilities.net.MistyNet;
+import net.seep.odd.abilities.net.UmbraNet;
+
+
+import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
+import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
 
-
-public class OdditiesClient implements ClientModInitializer {
+public final class OdditiesClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
-        // power id sync -> client holder
+        // ---- Power sync + cooldowns (client) ----
         ClientPowerNetworking.registerReceiver(ClientPowerHolder::set, PowerNetworking.SYNC);
-
-
-        // keys (ONCE)
-        AbilityKeybinds.register();
-
-        // HUD overlay (uncomment if the class exists in your project)
-       AbilityHudOverlay.register();
-
-        // Cooldown Reg
         ClientCooldowns.registerTicker();
         ClientPowerNetworking.registerCooldownReceiver();
 
-        // ANIMATION SHIT BELOW
+        // ---- Keybinds + HUDs (client) ----
+        AbilityKeybinds.register();
+        AbilityHudOverlay.register();
+        AstralHudOverlay.register();
+        ShadowFormOverlay.register();
 
-
-
-
-
-
-        // Forger Power Stuff
+        // ---- Forger screens (client) ----
         HandledScreens.register(ModScreens.GRAND_ANVIL, GrandAnvilScreen::new);
         BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.GRAND_ANVIL, RenderLayer.getCutout());
 
-        //Forger Color overlay
-        GeckoLib.initialize();
-
-
-
-
-
-
-
-
-
-
-
-
-
-        // Crappy Block Effect
+        // Extra block visuals
         BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.CRAPPY_BLOCK, RenderLayer.getTranslucent());
 
-
-        // umbra client bits + possession input sender
-        net.seep.odd.abilities.client.ShadowFormOverlay.register();
-
+        // ---- Umbra (client) ----
         UmbraNet.registerClient();
-
-
         PossessionClientController.register();
+        AstralClientController.register();
 
-        // umbra astral
-        net.seep.odd.abilities.client.AstralClientController.register();
-
-        EntityRendererRegistry.register(ModEntities.CREEPY, CreepyRenderer::new);
-
-        ClientPlayNetworking.registerGlobalReceiver(HUD_START_ID, (client, handler, buf, responseSender) -> {
-            Identifier dimId = buf.readIdentifier();
-            BlockPos pos     = buf.readBlockPos();
-            int maxTicks     = buf.readVarInt();
-
-            client.execute(() -> {
-                RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, dimId);
-                AstralClientState.start(GlobalPos.create(key, pos), maxTicks, MinecraftClient.getInstance());
-            });
-        });
-
-        ClientPlayNetworking.registerGlobalReceiver(HUD_STOP_ID, (client, handler, buf, responseSender) ->
-                client.execute(AstralClientState::stop)
-        );
-
-        AstralHudOverlay.register();;
-
-
-
-
-
-
-        // possession camera control
+        // Camera swap for possession
         ClientPlayNetworking.registerGlobalReceiver(new Identifier("odd","possess_start"),
                 (client, h, buf, rs) -> {
                     int targetId = buf.readVarInt();
@@ -140,28 +79,41 @@ public class OdditiesClient implements ClientModInitializer {
                         PossessionClientController.setPossessing(true);
                     });
                 });
-
         ClientPlayNetworking.registerGlobalReceiver(new Identifier("odd","possess_stop"),
-                (client, h, buf, rs) -> client.execute(() -> {
-                    if (client.player != null) client.setCameraEntity(client.player);
-                    PossessionClientController.setPossessing(false);
-                }));
-        // Misty Veil
+                (client, h, buf, rs) ->
+                        client.execute(() -> {
+                            if (client.player != null) client.setCameraEntity(client.player);
+                            PossessionClientController.setPossessing(false);
+                        })
+        );
+
+        // Astral HUD start/stop packets
+        ClientPlayNetworking.registerGlobalReceiver(HUD_START_ID, (client, handler, buf, responseSender) -> {
+            Identifier dimId = buf.readIdentifier();
+            BlockPos pos     = buf.readBlockPos();
+            int maxTicks     = buf.readVarInt();
+            client.execute(() -> {
+                RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, dimId);
+                AstralClientState.start(GlobalPos.create(key, pos), maxTicks, MinecraftClient.getInstance());
+            });
+        });
+        ClientPlayNetworking.registerGlobalReceiver(HUD_STOP_ID, (client, handler, buf, responseSender) ->
+                client.execute(AstralClientState::stop)
+        );
+
+        // ---- Misty (client) ----
         net.seep.odd.abilities.client.MistyClientController.register();
-        EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
         MistyNet.initClient();
 
-        // Tamer
+        // ---- Tamer (client) ----
         TamerNet.initClient();
-        TamerLeveling.ensureInit();
 
-
-        // Tamer Moves
+        // ---- Entity renderers ----
+        EntityRendererRegistry.register(ModEntities.CREEPY, CreepyRenderer::new);
+        EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
         EntityRendererRegistry.register(ModEntities.EMERALD_SHURIKEN, EmeraldShurikenRenderer::new);
         EntityRendererRegistry.register(ModEntities.VILLAGER_EVO1, VillagerEvo1Renderer::new);
 
-
-
-        net.seep.odd.Oddities.LOGGER.info("OdditiesClient initialized (keys + HUD/packets ready).");
+        Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }
 }

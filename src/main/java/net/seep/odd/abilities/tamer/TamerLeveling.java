@@ -78,6 +78,7 @@ public final class TamerLeveling {
 
     /** Init baseline on capture if you want (optional; safe to call). */
     public static void onCaptured(MobEntity mob, ServerPlayerEntity owner) {
+
         // no-op for now; PartyMember created with base level/xp elsewhere
     }
 
