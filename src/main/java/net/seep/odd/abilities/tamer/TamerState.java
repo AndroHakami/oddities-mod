@@ -95,6 +95,16 @@ public final class TamerState extends PersistentState {
         if (index < 0 || index >= list.size()) return;
         list.get(index).nickname = newName == null ? "" : newName;
     }
+    // Add inside net/seep/odd/abilities/tamer/TamerState.java
+    /** Iterate actives map without exposing it publicly (used by leveling). */
+    java.util.Set<java.util.Map.Entry<java.util.UUID, Active>> activesEntrySet() {
+        return actives.entrySet();
+    }
+    public java.util.Set<java.util.UUID> owners() {
+        // read-only view is fine; we only iterate it
+        return java.util.Collections.unmodifiableSet(parties.keySet());
+    }
+
 
     public Active getActive(UUID owner) { return actives.get(owner); }
     public void setActive(UUID owner, int index, UUID entity) { actives.put(owner, new Active(index, entity)); }

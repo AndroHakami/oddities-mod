@@ -1,4 +1,3 @@
-// net/seep/odd/abilities/tamer/entity/VillagerEvoEntity.java
 package net.seep.odd.abilities.tamer.entity;
 
 import net.minecraft.entity.EntityType;
@@ -16,10 +15,22 @@ import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
+/**
+ * Villager Evo base entity. It exposes a public triggerAttackAnimation(int)
+ * used by HeadButterBehavior to sync GeckoLib's "attack" clip.
+ *
+ * NOTE: Species-specific move logic comes from SpeciesGoals/behaviors;
+ * this class only provides animations + some locomotion helpers.
+ */
 public class VillagerEvoEntity extends PathAwareEntity implements GeoEntity {
 
-    // ✅ No static EntityType here. It is registered in ModEntities.register().
+    // No static EntityType here; registered in ModEntities.register()
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
+
+    // attack animation state controlled by behaviors (e.g., HeadButterBehavior)
+    private int attackAnimTicks = 0;    // remaining ticks of the attack animation
+    @SuppressWarnings("FieldCanBeLocal")
+    private int attackAnimTotal = 0;    // total duration for the current play
 
     public VillagerEvoEntity(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
@@ -35,22 +46,26 @@ public class VillagerEvoEntity extends PathAwareEntity implements GeoEntity {
 
     @Override
     protected void initGoals() {
+        // Only generic look goals here; species moves are injected by SpeciesGoals via TamerAI
         this.goalSelector.add(0, new SwimGoal(this));
-        // Slow, heavy melee; TamerAI will handle owner-protect/targets
-        this.goalSelector.add(2, new MeleeAttackGoal(this, 1.05, true));
         this.goalSelector.add(7, new LookAtEntityGoal(this, ServerPlayerEntity.class, 10.0f));
         this.goalSelector.add(8, new LookAroundGoal(this));
     }
 
     // GeckoLib animations
-    private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("idle");
-    private static final RawAnimation WALK = RawAnimation.begin().thenLoop("walk");
+    private static final RawAnimation IDLE   = RawAnimation.begin().thenLoop("idle");
+    private static final RawAnimation WALK   = RawAnimation.begin().thenLoop("walk");
+    private static final RawAnimation ATTACK = RawAnimation.begin().then("attack", Animation.LoopType.PLAY_ONCE);
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "main", 0, state -> {
-            boolean moving = this.getVelocity().horizontalLengthSquared() > 1e-4;
-            state.setAndContinue(moving ? WALK : IDLE);
+            if (attackAnimTicks > 0) {
+                state.setAndContinue(ATTACK);
+            } else {
+                boolean moving = this.getVelocity().horizontalLengthSquared() > 1e-4;
+                state.setAndContinue(moving ? WALK : IDLE);
+            }
             return PlayState.CONTINUE;
         }));
     }
@@ -58,5 +73,19 @@ public class VillagerEvoEntity extends PathAwareEntity implements GeoEntity {
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
         return cache;
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.getWorld().isClient && attackAnimTicks > 0) {
+            attackAnimTicks--;
+        }
+    }
+
+    /** Called by behaviors to play the "attack" clip for a fixed number of ticks. */
+    public void triggerAttackAnimation(int ticks) {
+        this.attackAnimTotal = ticks;
+        this.attackAnimTicks = ticks;
     }
 }

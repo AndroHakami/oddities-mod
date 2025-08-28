@@ -21,6 +21,26 @@ public final class TamerServerHooks {
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, st.partyOf(player.getUuid()));
     }
 
+    /** Remove a party member (and despawn if active). */
+    public static void handleKick(ServerPlayerEntity player, int index) {
+        if (!(player.getWorld() instanceof ServerWorld sw)) return;
+        TamerState st = TamerState.get(sw);
+        var list = st.partyOf(player.getUuid());
+        if (index < 0 || index >= list.size()) return;
+
+        // if the active is this index, despawn it first
+        var a = st.getActive(player.getUuid());
+        if (a != null && a.index == index) {
+            Entity old = sw.getEntity(a.entity);
+            if (old != null) old.discard();
+            st.clearActive(player.getUuid());
+        }
+
+        list.remove(index);
+        st.markDirty();
+        net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, list);
+    }
+
     public static void handleSummonSelect(ServerPlayerEntity player, int index) {
         if (!(player.getWorld() instanceof ServerWorld sw)) return;
         TamerState st = TamerState.get(sw);
@@ -35,9 +55,8 @@ public final class TamerServerHooks {
             st.clearActive(player.getUuid());
         }
 
-        // Spawn new companion
         PartyMember pm = party.get(index);
-        EntityType<?> type = Registries.ENTITY_TYPE.get(pm.entityTypeId); // runtime access only
+        EntityType<?> type = Registries.ENTITY_TYPE.get(pm.entityTypeId); // runtime access
         Entity spawned = type.create(sw);
         if (!(spawned instanceof LivingEntity le)) {
             if (spawned != null) spawned.discard();
@@ -50,10 +69,11 @@ public final class TamerServerHooks {
         le.refreshPositionAndAngles(spawn.x, spawn.y, spawn.z, player.getYaw(), 0);
 
         if (le instanceof net.minecraft.entity.mob.MobEntity mob) {
-            TamerAI.install(mob, player); // only uses goal selectors, no registries
+            TamerAI.install(mob, player);
         }
 
-        le.setCustomName(Text.literal(pm.displayName() + "  Lv." + pm.level));
+        // ✅ Clean nametag (no level text)
+        le.setCustomName(Text.literal(pm.displayName()));
         le.setCustomNameVisible(true);
 
         sw.spawnEntity(le);

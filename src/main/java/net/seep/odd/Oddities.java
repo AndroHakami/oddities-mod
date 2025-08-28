@@ -116,8 +116,9 @@ public final class Oddities implements ModInitializer {
 		MistyNet.init();       // server receivers
 
 		// TaMER
+		net.seep.odd.abilities.tamer.ai.SpeciesProfiles.init();
 		net.seep.odd.abilities.net.TamerNet.initCommon();
-		net.seep.odd.abilities.tamer.TamerLeveling.initCommon();
+		TamerLeveling.register();
 		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
 

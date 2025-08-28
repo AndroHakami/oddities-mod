@@ -17,6 +17,7 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
 
 import net.seep.odd.abilities.client.*;
+import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
@@ -107,6 +108,8 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // ---- Tamer (client) ----
         TamerNet.initClient();
+        TamerLeveling.register();
+        net.seep.odd.abilities.tamer.client.TamerHudOverlay.register();
 
         // ---- Entity renderers ----
         EntityRendererRegistry.register(ModEntities.CREEPY, CreepyRenderer::new);
