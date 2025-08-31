@@ -20,6 +20,29 @@ public final class TamerServerHooks {
         st.markDirty();
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, st.partyOf(player.getUuid()));
     }
+    public static void handleCapture(ServerPlayerEntity owner, LivingEntity target) {
+        if (!(owner.getWorld() instanceof ServerWorld sw)) return;
+
+        var st = TamerState.get(sw);
+        if (st.partyOf(owner.getUuid()).size() >= TamerState.MAX_PARTY) {
+            owner.sendMessage(net.minecraft.text.Text.literal("Party is full!"), true);
+            return;
+        }
+
+        var typeId = Registries.ENTITY_TYPE.getId(target.getType());
+        PartyMember pm = PartyMember.fromCapture(typeId, target);
+        st.addMember(owner.getUuid(), pm);
+        st.markDirty();
+
+        owner.sendMessage(net.minecraft.text.Text.literal("Captured " + pm.displayName() + "!"), true);
+
+        // Despawn target last
+        target.discard();
+
+        // Optionally open/refresh the party UI
+        net.seep.odd.abilities.net.TamerNet.sendOpenParty(owner, st.partyOf(owner.getUuid()));
+    }
+
 
     /** Remove a party member (and despawn if active). */
     public static void handleKick(ServerPlayerEntity player, int index) {

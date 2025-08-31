@@ -1,18 +1,25 @@
+// net/seep/odd/abilities/tamer/ai/SpeciesProfiles.java
 package net.seep.odd.abilities.tamer.ai;
 
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ai.goal.GoalSelector;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.mob.MobEntity;
-import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
-import net.seep.odd.abilities.tamer.ai.behavior.*;
+
+import net.seep.odd.abilities.tamer.ai.behavior.ChargeTackleBehavior;
+import net.seep.odd.abilities.tamer.ai.behavior.CompanionBehavior;
+import net.seep.odd.abilities.tamer.ai.behavior.HeadButterBehavior;
+import net.seep.odd.abilities.tamer.ai.behavior.MeleeFixedDamageBehavior;
+import net.seep.odd.abilities.tamer.ai.behavior.MeleeVanillaBehavior;
+import net.seep.odd.abilities.tamer.ai.behavior.RangeShurikenBehavior; // <-- your class name (no “d”)
 import net.seep.odd.entity.ModEntities;
 
 import java.util.*;
 
+/** Species → behaviors mapping. Call init() once during mod init. */
 public final class SpeciesProfiles {
     private SpeciesProfiles() {}
 
@@ -21,27 +28,27 @@ public final class SpeciesProfiles {
 
     /** Call once in your mod init (after your content reg is done). */
     public static void init() {
-        // Villager: ranged shuriken kiting
-        register(EntityType.VILLAGER,
-                new RangeShurikenBehavior(1.25, 4.0, 9.0, 18, 3.5));
-        register(net.minecraft.entity.EntityType.SHEEP,
-                new ChargeTackleBehavior(20, 1.35, 6.0f, 1.2, 150));
-        register(net.minecraft.entity.EntityType.SHEEP,
-                new MeleeFixedDamageBehavior(10,10, 10));
-        register(net.minecraft.entity.EntityType.COW,
-                new ChargeTackleBehavior(20, 1.25, 7.0f, 1.4, 70));
-        register(EntityType.GOAT,
-                new ChargeTackleBehavior(20, 3.25, 4.0f, 4, 30));
-        register(ModEntities.VILLAGER_EVO, new HeadButterBehavior());
+        // Villager: ranged shuriken kiting/orbiting
 
-        register(net.minecraft.entity.EntityType.CHICKEN,
+
+        // Sheep
+        register(EntityType.SHEEP,
+                new ChargeTackleBehavior(20, 1.35, 6.0f, 1.2, 150));
+        register(EntityType.SHEEP,
+                new MeleeFixedDamageBehavior(10, 10, 10));
+
+        // Cow
+        register(EntityType.COW,
+                new ChargeTackleBehavior(20, 1.25, 7.0f, 1.4, 70));
+
+        // Goat
+        register(EntityType.GOAT,
+                new ChargeTackleBehavior(20, 3.25, 4.0f, 4.0, 30));
+
+        // Chicken
+        register(EntityType.CHICKEN,
                 new ChargeTackleBehavior(20, 1.55, 4.0f, 0.9, 50));
     }
-
-        // You can add more:
-        // register(EntityType.SPIDER, new MeleeVanillaBehavior(1.2, true));
-        // register(ModEntities.VILLAGER_EVO, new MeleeVanillaBehavior(1.05, true));
-
 
     public static void register(EntityType<?> type, CompanionBehavior... behaviors) {
         Identifier id = Registries.ENTITY_TYPE.getId(type);
@@ -49,7 +56,8 @@ public final class SpeciesProfiles {
     }
 
     /** Apply species profile; if none present, choose a sensible melee default. */
-    public static void applySpeciesCombat(MobEntity mob, ServerPlayerEntity owner, GoalSelector goals, GoalSelector targets) {
+    public static void applySpeciesCombat(MobEntity mob, ServerPlayerEntity owner,
+                                          GoalSelector goals, GoalSelector targets) {
         Identifier id = Registries.ENTITY_TYPE.getId(mob.getType());
         List<CompanionBehavior> list = MAP.get(id);
         if (list != null && !list.isEmpty()) {

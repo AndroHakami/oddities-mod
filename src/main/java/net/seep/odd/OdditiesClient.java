@@ -8,8 +8,11 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.FlyingItemEntity;
 import net.minecraft.util.Identifier;
+
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.registry.RegistryKey;
@@ -18,6 +21,7 @@ import net.minecraft.world.World;
 
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.tamer.TamerLeveling;
+import net.seep.odd.abilities.tamer.client.TameBallRenderer;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
@@ -116,6 +120,8 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
         EntityRendererRegistry.register(ModEntities.EMERALD_SHURIKEN, EmeraldShurikenRenderer::new);
         EntityRendererRegistry.register(ModEntities.VILLAGER_EVO, VillagerEvo1Renderer::new);
+        EntityRendererRegistry.register(ModEntities.TAME_BALL, TameBallRenderer::new);
+        EntityRendererRegistry.register(ModEntities.TAME_BALL, net.seep.odd.abilities.tamer.client.TameBallRenderer::new);
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }

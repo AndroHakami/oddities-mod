@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GGG",
+    "GRG",
+    "GGG"
+  ],
+  "key": {
+    "G": { "item": "minecraft:gold_ingot" },
+    "R": { "item": "minecraft:redstone" }
+  },
+  "result": { "item": "odd:tame_ball", "count": 3 }
+}
