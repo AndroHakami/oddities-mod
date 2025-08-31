@@ -87,7 +87,7 @@ public final class TamerLeveling {
                 int exp   = pm.exp;
                 int next  = Math.max(0, TamerXp.totalExpForLevel(level + 1) - exp);
 
-                Identifier icon = new Identifier("odd", "textures/gui/party/icons/" + pm.entityTypeId.getPath() + ".png");
+                Identifier icon = new Identifier("odd", "textures/gui/tamer/icons/" + pm.entityTypeId.getPath() + ".png");
                 TamerNet.sendHud(p, pm.displayName(), icon, hp, maxHp, level, exp, next);
             }
         });

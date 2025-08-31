@@ -8,6 +8,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.math.Vec3d;
 
 public final class TamerServerHooks {
@@ -18,31 +19,43 @@ public final class TamerServerHooks {
         TamerState st = TamerState.get(sw);
         st.renameMember(player.getUuid(), index, name);
         st.markDirty();
+        // still refresh the wheel/party UI when you explicitly rename
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, st.partyOf(player.getUuid()));
     }
+
+    /**
+     * Called after a successful capture (from TameBallEntity).
+     * Adds to party, despawns the target, and shows a concise popup message.
+     * DOES NOT auto-open the party manager anymore.
+     */
     public static void handleCapture(ServerPlayerEntity owner, LivingEntity target) {
         if (!(owner.getWorld() instanceof ServerWorld sw)) return;
 
-        var st = TamerState.get(sw);
+        TamerState st = TamerState.get(sw);
         if (st.partyOf(owner.getUuid()).size() >= TamerState.MAX_PARTY) {
-            owner.sendMessage(net.minecraft.text.Text.literal("Party is full!"), true);
+            owner.sendMessage(Text.literal("Party is full!").formatted(Formatting.RED), true);
             return;
         }
 
+        // Build the party member from the target
         var typeId = Registries.ENTITY_TYPE.getId(target.getType());
         PartyMember pm = PartyMember.fromCapture(typeId, target);
+
+        // Add & persist
         st.addMember(owner.getUuid(), pm);
         st.markDirty();
 
-        owner.sendMessage(net.minecraft.text.Text.literal("Captured " + pm.displayName() + "!"), true);
+        // Toast-like overlay (hotbar) + keep the big toast sound handled client-side in the ball logic
+        owner.sendMessage(Text.literal("★ Captured ").formatted(Formatting.GOLD)
+                .append(Text.literal(pm.displayName()).formatted(Formatting.YELLOW))
+                .append(Text.literal("!").formatted(Formatting.GOLD)), true);
 
-        // Despawn target last
+        // Remove the world entity last
         target.discard();
 
-        // Optionally open/refresh the party UI
-        net.seep.odd.abilities.net.TamerNet.sendOpenParty(owner, st.partyOf(owner.getUuid()));
+        // ⛔ No auto UI open here anymore:
+        // net.seep.odd.abilities.net.TamerNet.sendOpenParty(owner, st.partyOf(owner.getUuid()));
     }
-
 
     /** Remove a party member (and despawn if active). */
     public static void handleKick(ServerPlayerEntity player, int index) {
@@ -51,7 +64,7 @@ public final class TamerServerHooks {
         var list = st.partyOf(player.getUuid());
         if (index < 0 || index >= list.size()) return;
 
-        // if the active is this index, despawn it first
+        // Despawn if this was the active one
         var a = st.getActive(player.getUuid());
         if (a != null && a.index == index) {
             Entity old = sw.getEntity(a.entity);
@@ -61,9 +74,11 @@ public final class TamerServerHooks {
 
         list.remove(index);
         st.markDirty();
+        // Kicking is a deliberate party management action -> keep UI refresh
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, list);
     }
 
+    /** Summon the selected party member next to the player with friendly AI installed. */
     public static void handleSummonSelect(ServerPlayerEntity player, int index) {
         if (!(player.getWorld() instanceof ServerWorld sw)) return;
         TamerState st = TamerState.get(sw);
@@ -78,8 +93,9 @@ public final class TamerServerHooks {
             st.clearActive(player.getUuid());
         }
 
+        // Spawn the new companion
         PartyMember pm = party.get(index);
-        EntityType<?> type = Registries.ENTITY_TYPE.get(pm.entityTypeId); // runtime access
+        EntityType<?> type = Registries.ENTITY_TYPE.get(pm.entityTypeId);
         Entity spawned = type.create(sw);
         if (!(spawned instanceof LivingEntity le)) {
             if (spawned != null) spawned.discard();
@@ -92,10 +108,11 @@ public final class TamerServerHooks {
         le.refreshPositionAndAngles(spawn.x, spawn.y, spawn.z, player.getYaw(), 0);
 
         if (le instanceof net.minecraft.entity.mob.MobEntity mob) {
+            // Base follow/protect + species-specific combat behaviors are installed here
             TamerAI.install(mob, player);
         }
 
-        // ✅ Clean nametag (no level text)
+        // Clean nametag (no level text on the entity)
         le.setCustomName(Text.literal(pm.displayName()));
         le.setCustomNameVisible(true);
 

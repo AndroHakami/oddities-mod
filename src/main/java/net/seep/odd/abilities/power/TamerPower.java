@@ -10,6 +10,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
@@ -29,6 +30,15 @@ public final class TamerPower implements Power {
 
     @Override public long cooldownTicks()          { return 0; }
     @Override public long secondaryCooldownTicks() { return 0; }
+    @Override
+    public Identifier iconTexture(String slot) {
+        return switch (slot) {
+            case "primary"   -> new Identifier("odd", "textures/gui/abilities/tamer_command.png");
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/tamer_party.png"); // set this texture
+            case "third" -> new Identifier("odd", "textures/gui/abilities/tamer_summon.png"); // set this texture
+            default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
+        };
+    }
 
     /* ===================== PRIMARY: Capture target ===================== */
     @Override

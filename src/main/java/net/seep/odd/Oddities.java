@@ -98,6 +98,7 @@ public final class Oddities implements ModInitializer {
 		net.seep.odd.abilities.astral.AstralGuards.register();
 		AstralInventory.init(ModItems.GHOST_HAND);
 
+
 		// Umbra (server tick)
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (var p : server.getPlayerManager().getPlayerList()) {

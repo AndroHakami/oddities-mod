@@ -9,6 +9,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.tamer.item.TameBallItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
 import net.seep.odd.item.ghost.GhostHandItem;
 

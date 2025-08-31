@@ -13,8 +13,8 @@
         0
       ],
       "translation": [
+        0.25,
         1,
-        -0.25,
         0.25
       ],
       "scale": [
@@ -24,10 +24,10 @@
       ]
     },
     "thirdperson_lefthand": {
-      "translation": [
-        0,
-        -0.5,
-        0
+      "rotation": [
+        166.15,
+        -9.54,
+        176.08
       ],
       "scale": [
         0.5,
@@ -37,14 +37,14 @@
     },
     "firstperson_righthand": {
       "rotation": [
-        -22,
-        169,
-        -2
+        167.35,
+        10.65,
+        173.62
       ],
       "translation": [
-        2,
-        0.25,
-        -3.25
+        0,
+        -0.75,
+        -0.25
       ],
       "scale": [
         0.7,
@@ -54,14 +54,14 @@
     },
     "firstperson_lefthand": {
       "rotation": [
-        -27,
-        140,
+        5,
+        150,
         1
       ],
       "translation": [
+        -1,
         0.5,
-        1.25,
-        -0.75
+        0.75
       ],
       "scale": [
         0.7,
@@ -72,19 +72,19 @@
     "ground": {
       "translation": [
         0,
-        -3.25,
+        -3.5,
         0
       ]
     },
     "gui": {
       "rotation": [
-        0,
-        180,
-        0
+        -7,
+        -164,
+        1
       ],
       "translation": [
         0,
-        -5.75,
+        -5.5,
         0
       ],
       "scale": [
@@ -93,15 +93,27 @@
         1.5
       ]
     },
-    "fixed": {
+    "head": {
       "translation": [
         0,
-        -4.5,
+        6,
+        0
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        3.25,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        -4,
         0
       ]
     }
   },
   "textures": {
-    "particle": "odd:entity/tame_ball"
+    "particle": "odd:item/tame_ball"
   }
 }

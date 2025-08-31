@@ -52,7 +52,7 @@ public class TameBallItem extends Item {
         ball.setVelocity(dir.x * speed, dir.y * speed, dir.z * speed, 1.0f, inacc);
         world.spawnEntity(ball);
 
-        world.playSound(null, sp.getBlockPos(), SoundEvents.ITEM_TRIDENT_THROW, SoundCategory.PLAYERS, 0.6f, 1.2f);
+        world.playSound(null, sp.getBlockPos(), SoundEvents.ENTITY_ENDER_PEARL_THROW, SoundCategory.PLAYERS, 0.6f, 0.6f);
 
         if (!sp.getAbilities().creativeMode) {
             stack.decrement(1);
