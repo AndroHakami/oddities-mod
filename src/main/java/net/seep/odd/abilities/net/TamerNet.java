@@ -1,66 +1,90 @@
 package net.seep.odd.abilities.net;
 
-import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
-import net.seep.odd.Oddities;
+
 import net.seep.odd.abilities.tamer.PartyMember;
-
-
-
+import net.seep.odd.abilities.tamer.client.TamerScreens;
 
 import java.util.List;
 
+/** All Tamer networking (client ↔ server). */
 public final class TamerNet {
     private TamerNet() {}
 
-    public static final Identifier OPEN_PARTY_S2C     = new Identifier(Oddities.MOD_ID, "tamer_open_party");
-    public static final Identifier RENAME_C2S         = new Identifier(Oddities.MOD_ID, "tamer_rename");
-    public static final Identifier OPEN_WHEEL_S2C     = new Identifier(Oddities.MOD_ID, "tamer_open_wheel");
-    public static final Identifier SUMMON_SELECT_C2S  = new Identifier(Oddities.MOD_ID, "tamer_summon_select");
-    public static final net.minecraft.util.Identifier HUD_SYNC  = new net.minecraft.util.Identifier("odd","tamer_hud_sync");
-    public static final net.minecraft.util.Identifier PARTY_KICK = new net.minecraft.util.Identifier("odd","tamer_party_kick");
+    /* -------------------- Channels -------------------- */
 
+    // Server → Client
+    public static final Identifier OPEN_PARTY_S2C = new Identifier("odd", "tamer_open_party");
+    public static final Identifier OPEN_WHEEL_S2C = new Identifier("odd", "tamer_open_wheel");
+    public static final Identifier HUD_SYNC       = new Identifier("odd", "tamer_hud_sync");
 
+    // Client → Server
+    public static final Identifier PARTY_RENAME   = new Identifier("odd", "tamer_party_rename");
+    public static final Identifier PARTY_KICK     = new Identifier("odd", "tamer_party_kick");
+    public static final Identifier SUMMON_SELECT  = new Identifier("odd", "tamer_summon_select");
+    public static final Identifier PARTY_HEAL     = new Identifier("odd", "tamer_party_heal");
 
-    /* ===== Common (server) ===== */
+    /* -------------------- Init -------------------- */
+
+    /** Call once from your *common* init. */
     public static void initCommon() {
-        ServerPlayNetworking.registerGlobalReceiver(RENAME_C2S, (server, player, handler, buf, resp) -> {
-            int index   = buf.readVarInt();
-            String name = buf.readString(64);
-            server.execute(() ->
-                    net.seep.odd.abilities.tamer.TamerServerHooks.handleRename(player, index, name)
-            );
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(SUMMON_SELECT_C2S, (server, player, handler, buf, resp) -> {
-            int index = buf.readVarInt();
-            server.execute(() ->
-                    net.seep.odd.abilities.tamer.TamerServerHooks.handleSummonSelect(player, index)
-            );
-        });
+        registerRenameServer();
         registerKickServer();
+        registerSummonServer();
+        registerHealServer();
     }
 
-    public static void sendOpenParty(ServerPlayerEntity player, List<PartyMember> party) {
-        PacketByteBuf out = new PacketByteBuf(Unpooled.buffer());
-        NbtCompound root  = new NbtCompound();
-        NbtList arr       = new NbtList();
-        for (PartyMember m : party) arr.add(m.toNbt());
-        root.put("party", arr);
-        out.writeNbt(root);
-        ServerPlayNetworking.send(player, OPEN_PARTY_S2C, out);
+    /** Call once from your *client* init. */
+    public static void initClient() {
+        registerOpenPartyClient();
+        registerOpenWheelClient();
+        registerHudClient();
     }
-    public static void sendHud(net.minecraft.server.network.ServerPlayerEntity p,
-                               String displayName, net.minecraft.util.Identifier iconTex,
-                               float hp, float maxHp, int level, int exp, int next) {
-        var buf = PacketByteBufs.create();
+
+    /* -------------------- Client → Server senders -------------------- */
+
+    public static void sendRename(int index, String newName) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(index);
+        buf.writeString(newName == null ? "" : newName);
+        ClientPlayNetworking.send(PARTY_RENAME, buf);
+    }
+
+    public static void sendKickRequest(int index) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(index);
+        ClientPlayNetworking.send(PARTY_KICK, buf);
+    }
+
+    public static void sendSummonSelect(int index) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(index);
+        ClientPlayNetworking.send(SUMMON_SELECT, buf);
+    }
+
+    public static void sendHeal(int index) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(index);
+        ClientPlayNetworking.send(PARTY_HEAL, buf);
+    }
+
+    /* -------------------- Server → Client senders -------------------- */
+
+    /** Top-right HUD sync (name/icon/hp/xp). */
+    public static void sendHud(ServerPlayerEntity p,
+                               String displayName,
+                               Identifier iconTex,
+                               float hp, float maxHp,
+                               int level, int exp, int next) {
+        PacketByteBuf buf = PacketByteBufs.create();
         buf.writeString(displayName);
         buf.writeIdentifier(iconTex);
         buf.writeFloat(hp);
@@ -68,81 +92,99 @@ public final class TamerNet {
         buf.writeVarInt(level);
         buf.writeVarInt(exp);
         buf.writeVarInt(next);
-        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p, HUD_SYNC, buf);
+        ServerPlayNetworking.send(p, HUD_SYNC, buf);
     }
 
-    // --- Client receiver (call in initClient()) ---
-    private static void registerHudClient() {
-        ClientPlayNetworking.registerGlobalReceiver(HUD_SYNC, (client, handler, buf, rs) -> {
-            String display = buf.readString();
-            Identifier icon = buf.readIdentifier();
-            float hp = buf.readFloat();
-            float maxHp = buf.readFloat();
-            int level = buf.readVarInt();
-            int exp   = buf.readVarInt();
-            int next  = buf.readVarInt();
-
-            client.execute(() ->
-                    net.seep.odd.abilities.tamer.client.TamerHudState.update(display, icon, hp, maxHp, level, exp, next)
-            );
-        });
+    /** Open/refresh the Party Manager with a party snapshot. */
+    public static void sendOpenParty(ServerPlayerEntity player, List<PartyMember> party) {
+        PacketByteBuf out = PacketByteBufs.create();
+        NbtCompound root = new NbtCompound();
+        NbtList arr = new NbtList();
+        for (PartyMember m : party) arr.add(m.toNbt());
+        root.put("party", arr);
+        out.writeNbt(root);
+        ServerPlayNetworking.send(player, OPEN_PARTY_S2C, out);
     }
 
-    // --- Client -> Server: kick party member (index) ---
-    public static void sendKickRequest(int index) {
-        var buf = PacketByteBufs.create();
-        buf.writeVarInt(index);
-        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(PARTY_KICK, buf);
-    }
-
-    // --- Server receiver (call in initCommon()) ---
-    private static void registerKickServer() {
-        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.registerGlobalReceiver(PARTY_KICK,
-                (server, player, handler, buf, responseSender) -> {
-                    int idx = buf.readVarInt();
-                    server.execute(() -> net.seep.odd.abilities.tamer.TamerServerHooks.handleKick(player, idx));
-                });
-    }
-
+    /** Open/refresh the radial wheel chooser. */
     public static void sendOpenWheel(ServerPlayerEntity player, List<PartyMember> party) {
-        PacketByteBuf out = new PacketByteBuf(Unpooled.buffer());
-        NbtCompound root  = new NbtCompound();
-        NbtList arr       = new NbtList();
+        PacketByteBuf out = PacketByteBufs.create();
+        NbtCompound root = new NbtCompound();
+        NbtList arr = new NbtList();
         for (PartyMember m : party) arr.add(m.toNbt());
         root.put("party", arr);
         out.writeNbt(root);
         ServerPlayNetworking.send(player, OPEN_WHEEL_S2C, out);
     }
 
-    /* ===== Client ===== */
-    public static void initClient() {
-        ClientPlayNetworking.registerGlobalReceiver(OPEN_PARTY_S2C, (client, handler, buf, resp) -> {
-            NbtCompound root = buf.readNbt(); if (root == null) return;
-            client.execute(() ->
-                    net.seep.odd.abilities.tamer.client.TamerScreens.openPartyScreen(root)
-            );
-        });
+    /* -------------------- Server receivers -------------------- */
 
-        ClientPlayNetworking.registerGlobalReceiver(OPEN_WHEEL_S2C, (client, handler, buf, resp) -> {
-            NbtCompound root = buf.readNbt(); if (root == null) return;
-            client.execute(() ->
-                    net.seep.odd.abilities.tamer.client.TamerScreens.openWheelScreen(root)
-            );
+    private static void registerRenameServer() {
+        ServerPlayNetworking.registerGlobalReceiver(PARTY_RENAME, (server, player, handler, buf, responseSender) -> {
+            int idx = buf.readVarInt();
+            String name = buf.readString(64);
+            server.execute(() -> net.seep.odd.abilities.tamer.TamerServerHooks.handleRename(player, idx, name));
         });
-        registerHudClient();
-
     }
 
-    public static void sendRename(int index, String newName) {
-        PacketByteBuf out = new PacketByteBuf(Unpooled.buffer());
-        out.writeVarInt(index);
-        out.writeString(newName == null ? "" : newName, 64);
-        ClientPlayNetworking.send(RENAME_C2S, out);
+    private static void registerKickServer() {
+        ServerPlayNetworking.registerGlobalReceiver(PARTY_KICK, (server, player, handler, buf, responseSender) -> {
+            int idx = buf.readVarInt();
+            server.execute(() -> net.seep.odd.abilities.tamer.TamerServerHooks.handleKick(player, idx));
+        });
     }
 
-    public static void sendSummonSelect(int index) {
-        PacketByteBuf out = new PacketByteBuf(Unpooled.buffer());
-        out.writeVarInt(index);
-        ClientPlayNetworking.send(SUMMON_SELECT_C2S, out);
+    private static void registerSummonServer() {
+        ServerPlayNetworking.registerGlobalReceiver(SUMMON_SELECT, (server, player, handler, buf, responseSender) -> {
+            int idx = buf.readVarInt();
+            server.execute(() -> net.seep.odd.abilities.tamer.TamerServerHooks.handleSummonSelect(player, idx));
+        });
+    }
+
+    private static void registerHealServer() {
+        ServerPlayNetworking.registerGlobalReceiver(PARTY_HEAL, (server, player, handler, buf, responseSender) -> {
+            int idx = buf.readVarInt();
+            server.execute(() -> net.seep.odd.abilities.tamer.TamerServerHooks.handleHeal(player, idx));
+        });
+    }
+
+    /* -------------------- Client receivers -------------------- */
+
+    private static void registerOpenPartyClient() {
+        ClientPlayNetworking.registerGlobalReceiver(OPEN_PARTY_S2C, (client, handler, buf, responseSender) -> {
+            NbtCompound root = buf.readNbt();
+            if (root == null) return;
+            client.execute(() -> TamerScreens.openPartyScreen(root));
+        });
+    }
+
+    private static void registerOpenWheelClient() {
+        ClientPlayNetworking.registerGlobalReceiver(OPEN_WHEEL_S2C, (client, handler, buf, responseSender) -> {
+            NbtCompound root = buf.readNbt();
+            if (root == null) return;
+
+            // make it effectively final + safe to use on the render thread
+            final NbtCompound payload = root.copy();
+
+            client.execute(() -> net.seep.odd.abilities.tamer.client.TamerScreens.openWheelScreen(payload));
+        });
+    }
+
+    private static void registerHudClient() {
+        ClientPlayNetworking.registerGlobalReceiver(HUD_SYNC, (client, handler, buf, responseSender) -> {
+            String name = buf.readString(256);
+            Identifier icon = buf.readIdentifier();
+            float hp = buf.readFloat();
+            float maxHp = buf.readFloat();
+            int level = buf.readVarInt();
+            int exp = buf.readVarInt();
+            int next = buf.readVarInt();
+
+            client.execute(() ->
+                    net.seep.odd.abilities.tamer.client.TamerHudState.update(
+                            name, icon, hp, maxHp, level, exp, next
+                    )
+            );
+        });
     }
 }

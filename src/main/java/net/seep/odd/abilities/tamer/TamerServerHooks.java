@@ -1,4 +1,3 @@
-// net/seep/odd/abilities/tamer/TamerServerHooks.java
 package net.seep.odd.abilities.tamer;
 
 import net.minecraft.entity.Entity;
@@ -19,52 +18,64 @@ public final class TamerServerHooks {
         TamerState st = TamerState.get(sw);
         st.renameMember(player.getUuid(), index, name);
         st.markDirty();
-        // still refresh the wheel/party UI when you explicitly rename
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, st.partyOf(player.getUuid()));
     }
 
-    /**
-     * Called after a successful capture (from TameBallEntity).
-     * Adds to party, despawns the target, and shows a concise popup message.
-     * DOES NOT auto-open the party manager anymore.
-     */
+    /** Heal a party member. If it’s active, heal the entity; if not active, mark success (next spawn is full anyway). */
+    public static void handleHeal(ServerPlayerEntity player, int index) {
+        if (!(player.getWorld() instanceof ServerWorld sw)) return;
+
+        TamerState st = TamerState.get(sw);
+        var list = st.partyOf(player.getUuid());
+        if (index < 0 || index >= list.size()) return;
+
+        var pm = list.get(index);
+        var active = st.getActive(player.getUuid());
+
+        // If it’s currently summoned, heal the live entity
+        if (active != null && active.index == index) {
+            Entity e = sw.getEntity(active.entity);
+            if (e instanceof LivingEntity le && le.isAlive()) {
+                le.setHealth(le.getMaxHealth());
+                player.sendMessage(Text.literal("Healed " + pm.displayName() + "!").formatted(Formatting.GREEN), true);
+            } else {
+                player.sendMessage(Text.literal("Couldn’t find an active summon to heal.").formatted(Formatting.RED), true);
+            }
+            return;
+        }
+
+        // Not active – acknowledge; (fresh spawns are full HP)
+        player.sendMessage(Text.literal(pm.displayName() + " is ready at full health.").formatted(Formatting.AQUA), true);
+    }
+
     public static void handleCapture(ServerPlayerEntity owner, LivingEntity target) {
         if (!(owner.getWorld() instanceof ServerWorld sw)) return;
 
-        TamerState st = TamerState.get(sw);
+        var st = TamerState.get(sw);
         if (st.partyOf(owner.getUuid()).size() >= TamerState.MAX_PARTY) {
             owner.sendMessage(Text.literal("Party is full!").formatted(Formatting.RED), true);
             return;
         }
 
-        // Build the party member from the target
         var typeId = Registries.ENTITY_TYPE.getId(target.getType());
         PartyMember pm = PartyMember.fromCapture(typeId, target);
-
-        // Add & persist
         st.addMember(owner.getUuid(), pm);
         st.markDirty();
 
-        // Toast-like overlay (hotbar) + keep the big toast sound handled client-side in the ball logic
         owner.sendMessage(Text.literal("★ Captured ").formatted(Formatting.GOLD)
                 .append(Text.literal(pm.displayName()).formatted(Formatting.YELLOW))
                 .append(Text.literal("!").formatted(Formatting.GOLD)), true);
 
-        // Remove the world entity last
         target.discard();
-
-        // ⛔ No auto UI open here anymore:
-        // net.seep.odd.abilities.net.TamerNet.sendOpenParty(owner, st.partyOf(owner.getUuid()));
+        // (No auto party UI open here)
     }
 
-    /** Remove a party member (and despawn if active). */
     public static void handleKick(ServerPlayerEntity player, int index) {
         if (!(player.getWorld() instanceof ServerWorld sw)) return;
         TamerState st = TamerState.get(sw);
         var list = st.partyOf(player.getUuid());
         if (index < 0 || index >= list.size()) return;
 
-        // Despawn if this was the active one
         var a = st.getActive(player.getUuid());
         if (a != null && a.index == index) {
             Entity old = sw.getEntity(a.entity);
@@ -74,18 +85,15 @@ public final class TamerServerHooks {
 
         list.remove(index);
         st.markDirty();
-        // Kicking is a deliberate party management action -> keep UI refresh
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, list);
     }
 
-    /** Summon the selected party member next to the player with friendly AI installed. */
     public static void handleSummonSelect(ServerPlayerEntity player, int index) {
         if (!(player.getWorld() instanceof ServerWorld sw)) return;
         TamerState st = TamerState.get(sw);
         var party = st.partyOf(player.getUuid());
         if (index < 0 || index >= party.size()) return;
 
-        // Despawn existing active
         var active = st.getActive(player.getUuid());
         if (active != null) {
             Entity old = sw.getEntity(active.entity);
@@ -93,7 +101,6 @@ public final class TamerServerHooks {
             st.clearActive(player.getUuid());
         }
 
-        // Spawn the new companion
         PartyMember pm = party.get(index);
         EntityType<?> type = Registries.ENTITY_TYPE.get(pm.entityTypeId);
         Entity spawned = type.create(sw);
@@ -108,11 +115,10 @@ public final class TamerServerHooks {
         le.refreshPositionAndAngles(spawn.x, spawn.y, spawn.z, player.getYaw(), 0);
 
         if (le instanceof net.minecraft.entity.mob.MobEntity mob) {
-            // Base follow/protect + species-specific combat behaviors are installed here
             TamerAI.install(mob, player);
         }
 
-        // Clean nametag (no level text on the entity)
+        // Keep nametag clean of level text
         le.setCustomName(Text.literal(pm.displayName()));
         le.setCustomNameVisible(true);
 
