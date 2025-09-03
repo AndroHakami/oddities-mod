@@ -45,6 +45,11 @@ dependencies {
 	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.2+1.20.1"
+	// VoiceAttackAPI (client-side mod)
+	modImplementation("maven.modrinth:voiceattackapi:1.7-1.20.1")
+
+// Required by VoiceAttackAPI
+	modImplementation("maven.modrinth:cloth-config:11.1.136+fabric")
 
 
 
@@ -56,6 +61,8 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+	modImplementation("maven.modrinth:voiceattackapi:${voiceattackapi_version}")
+	modImplementation("maven.modrinth:cloth-config:${cloth_config_version}")
 
 }
 

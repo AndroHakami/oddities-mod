@@ -18,13 +18,7 @@ import net.seep.odd.abilities.PowerCommands;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
-import net.seep.odd.abilities.power.Blockade;
-import net.seep.odd.abilities.power.FireBlastPower;
-import net.seep.odd.abilities.power.ForgerPower;
-import net.seep.odd.abilities.power.MistyVeilPower;
-import net.seep.odd.abilities.power.Powers;
-import net.seep.odd.abilities.power.TamerPower;
-import net.seep.odd.abilities.power.UmbraSoulPower;
+import net.seep.odd.abilities.power.*;
 
 import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.block.ModBlocks;
@@ -73,6 +67,8 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new ForgerPower());
 		Powers.register(new MistyVeilPower());
 		Powers.register(new TamerPower());
+		Powers.register(new OverdrivePower());
+
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -122,6 +118,14 @@ public final class Oddities implements ModInitializer {
 		TamerLeveling.register();
 		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
+
+		// Overdrive
+		net.seep.odd.abilities.overdrive.OverdriveNet.initServer();
+		net.seep.odd.abilities.overdrive.OverdriveSystem.registerServerTick();
+
+
+
+
 
 
 

@@ -96,6 +96,14 @@ public final class OdditiesClient implements ClientModInitializer {
         TamerNet.initClient();
         TamerHudOverlay.register();
 
+        // Overdrive (client)
+        net.seep.odd.abilities.overdrive.OverdriveNet.initClient();
+        net.seep.odd.abilities.overdrive.OverdriveClientController.register();
+        net.seep.odd.abilities.overdrive.OverdriveHudOverlay.register();
+
+
+
+
         // Entity renderers
         EntityRendererRegistry.register(ModEntities.CREEPY, CreepyRenderer::new);
         EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
