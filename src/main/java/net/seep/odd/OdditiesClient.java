@@ -101,6 +101,21 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.overdrive.OverdriveClientController.register();
         net.seep.odd.abilities.overdrive.OverdriveHudOverlay.register();
 
+        // Custom Player Model
+        net.seep.odd.abilities.anim.CpmBridge CPM;
+
+        {
+            var impl = net.seep.odd.abilities.anim.CpmBridgeCpm.tryCreate();
+            CPM = (impl != null) ? impl : new net.seep.odd.abilities.anim.CpmBridgeNoop();
+        }
+
+// Expose it somewhere convenient (static holder or a getter)
+        net.seep.odd.abilities.anim.CpmHolder.install(CPM);
+        net.seep.odd.abilities.anim.CpmNet.initClient();
+        net.seep.odd.integrations.cpm.CpmBridge.init();
+        net.seep.odd.abilities.overdrive.client.OverdriveClientState.register();
+
+
 
 
 

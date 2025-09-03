@@ -20,6 +20,8 @@ public final class OverdriveNet {
 
     // S → C (HUD)
     public static final Identifier HUD_SYNC         = new Identifier("odd","ov_hud");
+    public static final Identifier OVERDRIVE_ANIM = new Identifier("odd", "overdrive_anim");
+    public static final Identifier OV_HUD = new Identifier("odd","ov_hud");
 
     /* ---------------- client sends ---------------- */
 
@@ -40,23 +42,37 @@ public final class OverdriveNet {
         ServerPlayNetworking.registerGlobalReceiver(RELEASE_PUNCH,(s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.releasePunch(p)));
         ServerPlayNetworking.registerGlobalReceiver(ACTIVATE_OD,(s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.tryOverdrive(p)));
     }
+    // ANIMATION
+    public static void sendOverdriveAnim(ServerPlayerEntity player, boolean active) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeBoolean(active);
+        ServerPlayNetworking.send(player, OVERDRIVE_ANIM, buf);
+    }
 
     /* ---------------- server → client HUD ---------------- */
 
-    public static void sendHud(ServerPlayerEntity p, float energy, int modeOrdinal, int odTicksLeft) {
-        var buf = PacketByteBufs.create();
+    public static void sendHud(ServerPlayerEntity p, float energy, int modeOrdinal, int ticksLeft) {
+        var buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
         buf.writeFloat(energy);
-        buf.writeVarInt(modeOrdinal);
-        buf.writeVarInt(odTicksLeft);
-        ServerPlayNetworking.send(p, HUD_SYNC, buf);
+        buf.writeByte(modeOrdinal & 0xFF);   // 0..255, we only use 0..2
+        buf.writeVarInt(ticksLeft);          // 0 if not in Overdrive
+        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p, OV_HUD, buf);
     }
 
     public static void initClient() {
-        ClientPlayNetworking.registerGlobalReceiver(HUD_SYNC, (client, h, buf, rs) -> {
-            float energy = buf.readFloat();
-            int mode = buf.readVarInt();
-            int od = buf.readVarInt();
-            client.execute(() -> OverdriveHudOverlay.clientHudUpdate(energy, mode, od));
-        });
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
+                OV_HUD, (client, handler, buf, rs) -> {
+                    float energy  = buf.readFloat();
+                    int modeOrd   = buf.readUnsignedByte();
+                    int odTicks   = buf.readVarInt();
+
+                    client.execute(() -> {
+                        // update your Overdrive HUD state
+                        OverdriveHudOverlay.clientHudUpdate(energy, modeOrd, odTicks);
+                        // also tell the CPM bridge watcher
+                        net.seep.odd.abilities.overdrive.client.OverdriveClientState.setModeOrdinal(modeOrd);
+                    });
+                }
+        );
     }
 }

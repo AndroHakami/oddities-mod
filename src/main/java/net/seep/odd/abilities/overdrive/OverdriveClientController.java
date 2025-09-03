@@ -21,6 +21,7 @@ public final class OverdriveClientController {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             var p = client.player;
             if (p == null || client.world == null) return;
+            
 
             // Only react when the main hand is empty (prevents fighting other right-click uses).
             ItemStack main = p.getMainHandStack();

@@ -96,6 +96,7 @@ public final class OverdriveSystem {
 
         if (p.age % 5 == 0)
             OverdriveNet.sendHud(p, d.energy, d.mode.ordinal(), d.mode == Mode.OVERDRIVE ? d.overdriveTicksLeft : 0);
+
     }
 
     private static void addEnergy(Data d, float a){ d.energy = Math.min(MAX_ENERGY, d.energy + a); }
@@ -142,6 +143,10 @@ public final class OverdriveSystem {
         if (p.getWorld() instanceof ServerWorld sw) {
             sw.spawnParticles(ParticleTypes.FLASH, p.getX(), p.getY()+1.0, p.getZ(), 1, 0,0,0,0);
             sw.spawnParticles(ParticleTypes.ELECTRIC_SPARK, p.getX(), p.getY()+1.0, p.getZ(), 40, 0.4,0.4,0.4, 0.02);
+            d.mode = Mode.OVERDRIVE; d.overdriveTicksLeft = OVERDRIVE_BASE_T; d.energy = 0f; d.relayActive = false;
+
+// tell the client to start the CPM run animation
+            net.seep.odd.abilities.overdrive.OverdriveNet.sendOverdriveAnim(p, true);
         }
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_WARDEN_SONIC_BOOM, SoundCategory.PLAYERS, 0.7f, 1.3f);
         p.sendMessage(Text.literal("OVERDRIVE!"), true);
@@ -208,6 +213,9 @@ public final class OverdriveSystem {
                 le.addVelocity(push.x, push.y, push.z); le.velocityModified = true;
             }
             sw.spawnParticles(ParticleTypes.SONIC_BOOM, p.getX(), p.getY()+0.5, p.getZ(), 12, 1.2,0.5,1.2, 0.0);
+            net.seep.odd.abilities.overdrive.OverdriveNet.sendOverdriveAnim(p, false);
+
+            d.mode = Mode.NORMAL; d.overdriveTicksLeft = 0; p.sendMessage(Text.literal("Overdrive ended"), true);
             sw.spawnParticles(ParticleTypes.EXPLOSION_EMITTER, p.getX(), p.getY()+0.5, p.getZ(), 1, 0,0,0,0);
             sw.playSound(null, p.getBlockPos(), SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 0.9f, 0.7f);
         }
