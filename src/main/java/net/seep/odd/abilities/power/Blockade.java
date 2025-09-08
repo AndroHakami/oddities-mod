@@ -8,9 +8,9 @@ import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.sound.ModSounds;
 
@@ -30,7 +30,7 @@ public class Blockade implements Power {
                and leave a vanishing walkway in your wake. Great for chases, escapes, and dramatic exits.""";
     }
     @Override public Identifier iconTexture(String slot) {
-        return new Identifier("odd", "textures/gui/abilities/blockade_portrait.png"); // add these PNGs
+        return new Identifier("odd", "textures/gui/abilities/blockade_portrait.png");
     }
     @Override public Identifier portraitTexture() {
         return new Identifier("odd", "textures/gui/overview/crappy_portrait.png");
@@ -43,7 +43,7 @@ public class Blockade implements Power {
     }
     @Override public String slotDescription(String slot) {
         return switch (slot) {
-            case "primary" -> "Toggle: while active, drops temporary blocks under you that replace grass/plants.";
+            case "primary" -> "Toggle: while active, conjures temporary blocks under your feet";
             default -> "";
         };
     }
@@ -63,16 +63,21 @@ public class Blockade implements Power {
     private static boolean tickRegistered = false;
 
     // how often to attempt placement while active
-    private static final int PLACE_INTERVAL_TICKS = 1; // every tick; bump to 2 if too dense
+    private static final int PLACE_INTERVAL_TICKS = 1; // every tick
     private static int placeTicker = 0;
+
+    // ahead placement distance while sprinting (in blocks)
+    private static final double AHEAD_DIST = 0.45; // small nudge ahead so sprinting feels smooth
+
+    // despawn delay for the temporary block (ticks)
+    private static final int DESPAWN_TICKS = 80;
 
     public Blockade() {
         // register a single server tick handler (once)
         if (!tickRegistered) {
             tickRegistered = true;
             ServerTickEvents.END_SERVER_TICK.register(server -> {
-                placeTicker++;
-                if (placeTicker % PLACE_INTERVAL_TICKS != 0) return;
+                if ((++placeTicker % PLACE_INTERVAL_TICKS) != 0) return;
 
                 for (UUID id : ACTIVE) {
                     ServerPlayerEntity player = server.getPlayerManager().getPlayer(id);
@@ -85,7 +90,7 @@ public class Blockade implements Power {
                         continue;
                     }
 
-                    tryPlaceUnder(player);
+                    tryPlacePlatform3x3(player);
                 }
             });
         }
@@ -107,48 +112,70 @@ public class Blockade implements Power {
                 nowOn ? "Block Placement: ON" : "Block Placement: OFF"), true);
     }
 
-    private void tryPlaceUnder(ServerPlayerEntity player) {
+    /** Place under feet always; while sprinting also place one block ahead in look direction. */
+    private void tryPlacePlatform3x3(ServerPlayerEntity player) {
         ServerWorld world = (ServerWorld) player.getWorld();
 
-        // Block directly beneath the player’s feet
-        BlockPos pos = player.getBlockPos().down();
+        // grid Y to build on: exactly one below the player's feet
+        final int feetY = player.getBlockPos().getY() - 1;
+        final int cx = player.getBlockPos().getX();
+        final int cz = player.getBlockPos().getZ();
+
+        boolean placedAny = false;
+
+        // Offsets to cover a 3x3 centered at (cx,cz)
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                BlockPos pos = new BlockPos(cx + dx, feetY, cz + dz);
+                BlockState state = world.getBlockState(pos);
+
+                // Don't overwrite our own tile; only place into allowed cells
+                if (state.isOf(ModBlocks.CRAPPY_BLOCK)) continue;
+                if (!canReplace(world, pos, state)) continue;
+
+                world.setBlockState(pos, ModBlocks.CRAPPY_BLOCK.getDefaultState(), 3);
+                world.scheduleBlockTick(pos, ModBlocks.CRAPPY_BLOCK, 60);
+                placedAny = true;
+            }
+        }
+
+        // Single sound per tick, if at least one block was placed
+        if (placedAny) {
+            BlockPos soundAt = new BlockPos(cx, feetY, cz);
+            world.playSound(null, soundAt, ModSounds.CRAPPY_BLOCK_PLACE, SoundCategory.PLAYERS, 0.8f, 1f);
+        }
+    }
+
+    /** Place a single tile if allowed; schedule despawn; play sound. */
+    private void placeOneIfAllowed(ServerWorld world, BlockPos pos) {
         BlockState current = world.getBlockState(pos);
-
-        // Don't spam the same block
         if (current.isOf(ModBlocks.CRAPPY_BLOCK)) return;
+        if (!canReplace(world, pos, current)) return;
 
-        // Only replace air, grass block, plants, tall/short grass, replaceable plants, snow layers
-        if (!canReplace(current)) return;
-
-        // Place the block
         world.setBlockState(pos, ModBlocks.CRAPPY_BLOCK.getDefaultState(), 3);
-
-        // (CrappyBlock schedules its own removal in onBlockAdded, but we can be explicit too)
         world.scheduleBlockTick(pos, ModBlocks.CRAPPY_BLOCK, 80);
-
-        // Goofy placement sound
-        world.playSound(
-                null, pos,
-                ModSounds.CRAPPY_BLOCK_PLACE, // goofy squish :)
-                SoundCategory.PLAYERS,
-                0.8f, 1f
-        );
+        world.playSound(null, pos, ModSounds.CRAPPY_BLOCK_PLACE, SoundCategory.PLAYERS, 0.8f, 1f);
     }
 
-    private boolean canReplace(BlockState state) {
+    private boolean canReplace(ServerWorld world, BlockPos pos, BlockState state) {
+        // hard blocks that should never be replaced
+        if (state.isIn(net.minecraft.registry.tag.BlockTags.LEAVES)) return false; // <- covers cherry leaves etc.
+        // if you also want to avoid paving liquids, uncomment:
+        // if (state.isOf(Blocks.WATER) || state.isOf(Blocks.LAVA)) return false;
+
+        // allowed replacements
         if (state.isAir()) return true;
-        // grass block itself
-        if (state.isOf(Blocks.GRASS)) return true;
-        // 1-high grass & 2-high tall grass (1.20.1)
-        if (state.isOf(Blocks.GRASS) || state.isOf(Blocks.TALL_GRASS)) return true;
-        // any plant/flower/bush that’s replaceable
-        if (state.isIn(BlockTags.FLOWERS)) return true;
-        if (state.getBlock() instanceof PlantBlock) return true;
-        // thin snow layers are okay to overwrite
-        if (state.isOf(Blocks.SNOW)) return true;
+        if (state.isOf(Blocks.GRASS)) return true;        // short grass
+        if (state.isOf(Blocks.TALL_GRASS)) return true;   // tall grass
+        if (state.isIn(BlockTags.FLOWERS)) return true;   // flowers
+        if (state.getBlock() instanceof PlantBlock) return true; // small plants/bushes/saplings
+        if (state.isOf(Blocks.SNOW)) return true;         // thin snow layer
 
-        return false; // don't replace anything else
+        // everything else: NO
+        return false;
     }
+
+
 
     // (Optional) small cooldown so toggle isn't spammed in chat
     @Override public long cooldownTicks() { return 0; }
