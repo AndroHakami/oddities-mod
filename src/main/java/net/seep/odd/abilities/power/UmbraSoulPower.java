@@ -11,6 +11,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.astral.AstralInventory;
+import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.net.UmbraNet;
 
 import org.jetbrains.annotations.NotNull;
@@ -48,13 +49,13 @@ public final class UmbraSoulPower implements Power {
     }
 
     /* ===================== SHADOW CONFIG ===================== */
-    private static final int MAX_ENERGY      = 10 * 20;  // 10s at 20 tps
-    private static final int DRAIN_PER_TICK  = 2;        // drain while active
-    private static final int REGEN_PER_TICK  = 1;        // regen while off
-    private static final double H_SPEED      = 0.70;     // shadow glide
-    private static final double V_SPEED      = 0.70;
+    private static final int MAX_ENERGY      = 20 * 20;  // 10s at 20 tps
+    private static final int DRAIN_PER_TICK  = 9;        // drain while active
+    private static final int REGEN_PER_TICK  = 4;        // regen while off
+    private static final double H_SPEED      = 1.25;     // shadow glide
+    private static final double V_SPEED      = 1.25;
     private static final double SMOOTHING    = 0.35;
-    private static final int HUD_SYNC_PERIOD = 5;
+    private static final int HUD_SYNC_PERIOD = 0;
 
     // tiny smoke while shadow
     private static final int SMOKE_PERIOD_TICKS = 3;
@@ -68,7 +69,7 @@ public final class UmbraSoulPower implements Power {
 
     private static final double ASTRAL_FORCE_RANGE = 12.0;
     private static final double ASTRAL_CONE_COS    = 0.55;  // ~57°
-    private static final double ASTRAL_FORCE       = 0.12;  // per tick impulse
+    private static final double ASTRAL_FORCE       = 0.2;  // per tick impulse
     private static final int    INPUT_STALE_TICKS  = 6;     // ignore old masks
 
     /* ===================== STATE ===================== */
@@ -174,6 +175,7 @@ public final class UmbraSoulPower implements Power {
         p.setInvulnerable(true);
         p.fallDistance = 0;
         AstralInventory.enter(p);
+
 
         p.sendAbilitiesUpdate();
     }

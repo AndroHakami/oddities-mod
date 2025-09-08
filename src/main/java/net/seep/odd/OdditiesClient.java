@@ -15,7 +15,9 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.client.*;
+import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.net.*;
+import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
 import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
@@ -87,6 +89,7 @@ public final class OdditiesClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(HUD_STOP_ID, (client, handler, buf, responseSender) ->
                 client.execute(net.seep.odd.abilities.client.hud.AstralClientState::stop)
         );
+        AstralHudOverlay.register();
 
         // Misty (client)
         net.seep.odd.abilities.client.MistyClientController.register();
@@ -103,6 +106,7 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Custom Player Model
         net.seep.odd.abilities.anim.CpmBridge CPM;
+        OverdriveCpmBridge.init();
 
         {
             var impl = net.seep.odd.abilities.anim.CpmBridgeCpm.tryCreate();
@@ -114,6 +118,7 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.anim.CpmNet.initClient();
         net.seep.odd.integrations.cpm.CpmBridge.init();
         net.seep.odd.abilities.overdrive.client.OverdriveClientState.register();
+        OverdriveCpmBridge.init();
 
 
 

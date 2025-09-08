@@ -8,6 +8,9 @@ public final class OverdriveHudOverlay implements HudRenderCallback {
     private static float energy   = 0f;
     private static int   mode     = 0; // 0=Normal,1=Energized,2=Overdrive
     private static int   odTicks  = 0;
+    public static float getEnergy() { return energy; }       // 0..100 (or 0..1 — see note below)
+    public static int   getMode()   { return mode; }         // 0=Normal,1=Energized,2=Overdrive
+    public static int   getOdTicks(){ return odTicks; }
 
     private OverdriveHudOverlay() {}
 

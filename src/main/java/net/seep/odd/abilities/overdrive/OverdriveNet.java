@@ -18,61 +18,75 @@ public final class OverdriveNet {
     public static final Identifier RELEASE_PUNCH    = new Identifier("odd","ov_release_punch");
     public static final Identifier ACTIVATE_OD      = new Identifier("odd","ov_overdrive");
 
-    // S → C (HUD)
-    public static final Identifier HUD_SYNC         = new Identifier("odd","ov_hud");
-    public static final Identifier OVERDRIVE_ANIM = new Identifier("odd", "overdrive_anim");
-    public static final Identifier OV_HUD = new Identifier("odd","ov_hud");
+    // S → C
+    public static final Identifier OV_HUD           = new Identifier("odd","ov_hud");
+    public static final Identifier OVERDRIVE_ANIM   = new Identifier("odd","overdrive_anim"); // true=start run, false=stop run
 
     /* ---------------- client sends ---------------- */
-
     public static void sendToggleEnergized() { ClientPlayNetworking.send(TOGGLE_ENERGIZED, PacketByteBufs.create()); }
-    public static void sendRelay(boolean on)  { ClientPlayNetworking.send(on ? RELAY_ON : RELAY_OFF, PacketByteBufs.create()); }
-    public static void sendStartPunch()       { ClientPlayNetworking.send(START_PUNCH, PacketByteBufs.create()); }
-    public static void sendReleasePunch()     { ClientPlayNetworking.send(RELEASE_PUNCH, PacketByteBufs.create()); }
-    public static void sendOverdrive()        { ClientPlayNetworking.send(ACTIVATE_OD, PacketByteBufs.create()); }
+    public static void sendRelay(boolean on){ ClientPlayNetworking.send(on ? RELAY_ON : RELAY_OFF, PacketByteBufs.create()); }
+    public static void sendStartPunch() {
+        // ✔ gate by current power on the client
+        if (!"overdrive".equals(net.seep.odd.abilities.client.ClientPowerHolder.get())) return;
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(START_PUNCH, PacketByteBufs.create());
+        net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge.onLocalChargeStart();
+    }
+    public static void sendReleasePunch() {
+        if (!"overdrive".equals(net.seep.odd.abilities.client.ClientPowerHolder.get())) return;
+        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(RELEASE_PUNCH, PacketByteBufs.create());
+        net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge.onLocalPunch();
+    }
+    public static void sendOverdrive()       { ClientPlayNetworking.send(ACTIVATE_OD, PacketByteBufs.create()); }
 
     /* ---------------- server registers ---------------- */
-
     public static void initServer() {
-        ServerPlayNetworking.registerGlobalReceiver(TOGGLE_ENERGIZED, (server, player, h, buf, rs) ->
-                server.execute(() -> OverdriveSystem.toggleEnergized(player)));
-        ServerPlayNetworking.registerGlobalReceiver(RELAY_ON, (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.setRelay(p, true)));
-        ServerPlayNetworking.registerGlobalReceiver(RELAY_OFF,(s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.setRelay(p, false)));
-        ServerPlayNetworking.registerGlobalReceiver(START_PUNCH, (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.startPunch(p)));
-        ServerPlayNetworking.registerGlobalReceiver(RELEASE_PUNCH,(s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.releasePunch(p)));
-        ServerPlayNetworking.registerGlobalReceiver(ACTIVATE_OD,(s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.tryOverdrive(p)));
+        ServerPlayNetworking.registerGlobalReceiver(TOGGLE_ENERGIZED, (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.toggleEnergized(p)));
+        ServerPlayNetworking.registerGlobalReceiver(RELAY_ON,        (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.setRelay(p, true)));
+        ServerPlayNetworking.registerGlobalReceiver(RELAY_OFF,       (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.setRelay(p, false)));
+        ServerPlayNetworking.registerGlobalReceiver(START_PUNCH,     (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.startPunch(p)));
+        ServerPlayNetworking.registerGlobalReceiver(RELEASE_PUNCH,   (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.releasePunch(p)));
+        ServerPlayNetworking.registerGlobalReceiver(ACTIVATE_OD,     (s, p, h, b, rs) -> s.execute(() -> OverdriveSystem.tryOverdrive(p)));
     }
-    // ANIMATION
+
+    /* ---------------- S → C utility ---------------- */
     public static void sendOverdriveAnim(ServerPlayerEntity player, boolean active) {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeBoolean(active);
         ServerPlayNetworking.send(player, OVERDRIVE_ANIM, buf);
     }
 
-    /* ---------------- server → client HUD ---------------- */
-
     public static void sendHud(ServerPlayerEntity p, float energy, int modeOrdinal, int ticksLeft) {
-        var buf = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
+        PacketByteBuf buf = PacketByteBufs.create();
         buf.writeFloat(energy);
-        buf.writeByte(modeOrdinal & 0xFF);   // 0..255, we only use 0..2
-        buf.writeVarInt(ticksLeft);          // 0 if not in Overdrive
-        net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(p, OV_HUD, buf);
+        buf.writeByte(modeOrdinal & 0xFF);
+        buf.writeVarInt(ticksLeft);
+        ServerPlayNetworking.send(p, OV_HUD, buf);
     }
 
-    public static void initClient() {
-        net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.registerGlobalReceiver(
-                OV_HUD, (client, handler, buf, rs) -> {
-                    float energy  = buf.readFloat();
-                    int modeOrd   = buf.readUnsignedByte();
-                    int odTicks   = buf.readVarInt();
 
-                    client.execute(() -> {
-                        // update your Overdrive HUD state
-                        OverdriveHudOverlay.clientHudUpdate(energy, modeOrd, odTicks);
-                        // also tell the CPM bridge watcher
-                        net.seep.odd.abilities.overdrive.client.OverdriveClientState.setModeOrdinal(modeOrd);
-                    });
+    /* ---------------- client registers ---------------- */
+    public static void initClient() {
+        // HUD sync
+        ClientPlayNetworking.registerGlobalReceiver(OV_HUD, (client, handler, buf, rs) -> {
+            float energy  = buf.readFloat();
+            int modeOrd   = buf.readUnsignedByte();
+            int odTicks   = buf.readVarInt();
+            client.execute(() -> {
+                OverdriveHudOverlay.clientHudUpdate(energy, modeOrd, odTicks);
+                // (Optional) If you keep a client state mirror elsewhere, update it here too.
+            });
+        });
+
+        // Overdrive run animation toggle (server-authoritative)
+        ClientPlayNetworking.registerGlobalReceiver(OVERDRIVE_ANIM, (client, handler, buf, rs) -> {
+            boolean active = buf.readBoolean();
+            client.execute(() -> {
+                if (active) {
+                    net.seep.odd.abilities.overdrive.client.CpmHooks.play("overdrive_run");
+                } else {
+                    net.seep.odd.abilities.overdrive.client.CpmHooks.stop("overdrive_run");
                 }
-        );
+            });
+        });
     }
 }
