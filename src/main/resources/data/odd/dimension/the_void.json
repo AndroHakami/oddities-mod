@@ -1,0 +1,11 @@
+{
+  "type": "odd:void",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "odd:void",
+      "layers": [],
+      "structure_overrides": []
+    }
+  }
+}

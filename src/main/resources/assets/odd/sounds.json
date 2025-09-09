@@ -24,49 +24,47 @@
     ]
   },
   "forger_hit": {
-  "subtitle": "odd.forger_hit",
-  "sounds": [
-    "odd:forger_hit"
-  ]
-},
-
-"sound_block_break": {
-"subtitle": "odd.sound_block_break",
-"sounds": [
-"odd:sound_block_break"
-]
-},
-"sound_block_step": {
-"subtitle": "odd.sound_block_step",
-"sounds": [
-"odd:sound_block_step"
-]
-},
-"sound_block_place": {
-"subtitle": "odd.sound_block_place",
-"sounds": [
-"odd:sound_block_place"
-]
-},
-"sound_block_hit": {
-"subtitle": "odd.sound_block_hit",
-"sounds": [
-"odd:sound_block_hit"
-]
-},
-"sound_block_fall": {
-"subtitle": "odd.sound_block_fall",
-"sounds": [
-"odd:sound_block_fall"
-]
-},
+    "subtitle": "odd.forger_hit",
+    "sounds": [
+      "odd:forger_hit"
+    ]
+  },
+  "sound_block_break": {
+    "subtitle": "odd.sound_block_break",
+    "sounds": [
+      "odd:sound_block_break"
+    ]
+  },
+  "sound_block_step": {
+    "subtitle": "odd.sound_block_step",
+    "sounds": [
+      "odd:sound_block_step"
+    ]
+  },
+  "sound_block_place": {
+    "subtitle": "odd.sound_block_place",
+    "sounds": [
+      "odd:sound_block_place"
+    ]
+  },
+  "sound_block_hit": {
+    "subtitle": "odd.sound_block_hit",
+    "sounds": [
+      "odd:sound_block_hit"
+    ]
+  },
+  "sound_block_fall": {
+    "subtitle": "odd.sound_block_fall",
+    "sounds": [
+      "odd:sound_block_fall"
+    ]
+  },
   "snowgrave_teleport": {
     "subtitle": "snowgrave_teleport",
     "sounds": [
       "odd:snowgrave_teleport"
     ]
-},
-
+  },
   "crappy_block_place": {
     "subtitle": "crappy_block_place",
     "sounds": [
@@ -79,4 +77,14 @@
     "sounds": [
       "odd:crappy_block_fall"
     ]
-  }}
+  },
+  "void_ambience": {
+    "subtitle": "odd.void_ambience",
+    "sounds": [
+      {
+        "name": "odd:void_ambience",
+        "stream": true
+      }
+    ]
+  }
+}

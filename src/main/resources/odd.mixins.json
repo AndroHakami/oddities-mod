@@ -11,7 +11,11 @@
   "client": [
     "GameRendererAccessor",
     "ItemRendererAccessor",
-    "ModelLoaderMixin"
+    "ModelLoaderMixin",
+    "VoidFogMixin",
+    "client.OverdriveCameraShakeMixin",
+    "client.OverdriveFovMixin",
+    "client.OverdrivePerspectiveMixin"
   ],
   "injectors": {
     "defaultRequire": 1

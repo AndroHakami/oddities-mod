@@ -68,6 +68,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new MistyVeilPower());
 		Powers.register(new TamerPower());
 		Powers.register(new OverdrivePower());
+		Powers.register(new VoidPower());
 
 
 		// ---- Commands ----
@@ -122,6 +123,11 @@ public final class Oddities implements ModInitializer {
 		// Overdrive
 		net.seep.odd.abilities.overdrive.OverdriveNet.initServer();
 		net.seep.odd.abilities.overdrive.OverdriveSystem.registerServerTick();
+
+		// Void
+		net.seep.odd.abilities.voids.VoidRegistry.initCommon();
+
+
 
 
 

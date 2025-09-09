@@ -104,6 +104,11 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.overdrive.OverdriveClientController.register();
         net.seep.odd.abilities.overdrive.OverdriveHudOverlay.register();
 
+        // Void (Client)
+        net.seep.odd.abilities.voids.VoidNet.initServer();
+        net.seep.odd.abilities.voids.client.VoidClient.init();
+
+
         // Custom Player Model
         net.seep.odd.abilities.anim.CpmBridge CPM;
         OverdriveCpmBridge.init();
@@ -130,6 +135,10 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.EMERALD_SHURIKEN, EmeraldShurikenRenderer::new);
         EntityRendererRegistry.register(ModEntities.VILLAGER_EVO, VillagerEvo1Renderer::new);
         EntityRendererRegistry.register(ModEntities.TAME_BALL, TameBallRenderer::new);
+        EntityRendererRegistry.register(
+                net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL,
+                net.seep.odd.abilities.voids.client.VoidPortalRenderer::new
+        );
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }

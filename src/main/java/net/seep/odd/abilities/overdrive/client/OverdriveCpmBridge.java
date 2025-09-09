@@ -28,7 +28,11 @@ public final class OverdriveCpmBridge {
     private static boolean running = false;
     private static boolean lastOnGround = true;
     private static boolean chargePlaying = false;
+    private static final int MAX_CHARGE_TICKS = 30;
+    public static boolean isCharging() { return chargePlaying; }
+    public static boolean isPunching() { return punchTicksLeft > 0; }
     private static int punchTicksLeft = 0;
+    private static int chargeClientStartAge = -1;
     private static int suppressRunTicks = 0;
 
     private OverdriveCpmBridge() {}
@@ -93,10 +97,21 @@ public final class OverdriveCpmBridge {
         if (!chargePlaying) {
             CpmHooks.play(CHARGE_ANIM);
             chargePlaying = true;
+            noteChargeBegan(); // <-- add this
         }
-        // optional but recommended: keep run from overlapping with charge
         stopRun();
     }
+    public static void noteChargeBegan() {
+        var mc = net.minecraft.client.MinecraftClient.getInstance();
+        if (mc != null && mc.player != null) chargeClientStartAge = mc.player.age;
+    }
+    public static float chargeProgress() {
+        var mc = net.minecraft.client.MinecraftClient.getInstance();
+        if (!chargePlaying || mc == null || mc.player == null || chargeClientStartAge < 0) return 0f;
+        int held = mc.player.age - chargeClientStartAge;
+        return Math.min(1f, held / (float) MAX_CHARGE_TICKS);
+    }
+
 
     /** Call this if you implement a client-side cancel path (optional). */
     public static void onLocalChargeCancel() {
