@@ -13,6 +13,7 @@ public final class VoidPower implements Power {
             Open a rift that teleports anyone entering it to your tiny basalt-delta island.
             While inside the Void, press the button again to return to the exact spot and dimension you left.""";
     }
+
     @Override public Identifier iconTexture(String slot) {
         return new Identifier("odd", "textures/gui/abilities/void_portrait.png");
     }
@@ -21,6 +22,6 @@ public final class VoidPower implements Power {
 
     @Override public void activate(ServerPlayerEntity player) { VoidSystem.onPrimary(player); }
 
-    @Override public long cooldownTicks() { return 0; }
+    @Override public long cooldownTicks() { return 100; }
     @Override public long secondaryCooldownTicks() { return 0; }
 }

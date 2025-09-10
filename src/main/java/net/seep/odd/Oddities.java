@@ -21,6 +21,10 @@ import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
 
 import net.seep.odd.abilities.tamer.TamerLeveling;
+import net.seep.odd.abilities.voids.VoidPortalEntity;
+import net.seep.odd.abilities.voids.VoidRegistry;
+import net.seep.odd.abilities.voids.VoidSystem;
+import net.seep.odd.abilities.voids.client.VoidCpmBridge;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
@@ -125,7 +129,11 @@ public final class Oddities implements ModInitializer {
 		net.seep.odd.abilities.overdrive.OverdriveSystem.registerServerTick();
 
 		// Void
-		net.seep.odd.abilities.voids.VoidRegistry.initCommon();
+		VoidRegistry.initCommon();
+		VoidSystem.init();
+
+
+
 
 
 

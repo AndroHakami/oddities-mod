@@ -1,26 +1,44 @@
 package net.seep.odd.abilities.voids;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.PacketByteBuf;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
 public final class VoidNet {
-    private VoidNet(){}
+    private VoidNet() {}
 
-    public static final Identifier C2S_USE = new Identifier("odd","void/use");
+    // S → C
+    public static final Identifier S2C_OPEN_START = new Identifier("odd", "void/open_start");
+    public static final Identifier S2C_OPEN_END   = new Identifier("odd", "void/open_end");
 
-    public static void initServer() {
-        ServerPlayNetworking.registerGlobalReceiver(C2S_USE, (s, p, h, b, rs) ->
-                s.execute(() -> {
-                    if (!"void".equals(net.seep.odd.abilities.PowerAPI.get(p))) return;
-                    VoidSystem.onPrimary(p);
-                }));
+    /* ---------------- server sends ---------------- */
+
+    public static void sendOpenStart(ServerPlayerEntity p, float zoomSeconds) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeFloat(zoomSeconds);
+        ServerPlayNetworking.send(p, S2C_OPEN_START, buf);
     }
 
-    // call from a client keybind (same pattern as your other powers)
-    public static void sendUse() {
-        if (!"void".equals(net.seep.odd.abilities.client.ClientPowerHolder.get())) return;
-        ClientPlayNetworking.send(C2S_USE, PacketByteBufs.create());
+    public static void sendOpenEnd(ServerPlayerEntity p) {
+        ServerPlayNetworking.send(p, S2C_OPEN_END, PacketByteBufs.create());
+    }
+
+    /* ---------------- client registers ---------------- */
+
+    public static void initClient() {
+        ClientPlayNetworking.registerGlobalReceiver(S2C_OPEN_START, (client, handler, buf, rs) -> {
+            float secs = buf.readFloat();
+            client.execute(() -> {
+                net.seep.odd.abilities.voids.client.VoidCpmBridge.startOpenCinematic(secs);
+            });
+        });
+        ClientPlayNetworking.registerGlobalReceiver(S2C_OPEN_END, (client, handler, buf, rs) -> {
+            client.execute(() -> {
+                net.seep.odd.abilities.voids.client.VoidCpmBridge.endOpenCinematic();
+            });
+        });
     }
 }

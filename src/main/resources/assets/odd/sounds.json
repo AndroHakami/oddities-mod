@@ -11,6 +11,8 @@
       "odd:creepy_pull"
     ]
   },
+
+
   "creepy_push": {
     "subtitle": "odd.creepy_push",
     "sounds": [
@@ -64,6 +66,7 @@
     "sounds": [
       "odd:snowgrave_teleport"
     ]
+
   },
   "crappy_block_place": {
     "subtitle": "crappy_block_place",
@@ -76,6 +79,12 @@
     "subtitle": "crappy_block_fall",
     "sounds": [
       "odd:crappy_block_fall"
+    ]
+  },
+  "void_open": {
+    "subtitle": "void_open",
+    "sounds": [
+      "odd:void_open"
     ]
   },
   "void_ambience": {

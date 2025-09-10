@@ -39,6 +39,29 @@ public final class TamerPower implements Power {
             default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Capture a mob.";
+            case "secondary" -> "Open your party menu and review information about your summons!";
+            case "third" -> "Open your summon wheel.";
+            case "overview" -> "Snow-caster brings ice-cold abilities to the fight: explosives and teleports at your fingertips.";
+            default -> "Snow-caster brings ice-cold abilities to the fight: explosives and teleports at your fingertips.";
+        };
+    }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "Capture";
+            case "secondary" -> "Tame Menu";
+            case "third" -> "I Choose You!";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+    @Override public String longDescription() {
+        return """
+            Capture mobs and level them up to be the very best!""";
+    }
 
     /* ===================== PRIMARY: Capture target ===================== */
     @Override

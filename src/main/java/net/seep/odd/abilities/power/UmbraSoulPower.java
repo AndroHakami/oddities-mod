@@ -30,6 +30,12 @@ public final class UmbraSoulPower implements Power {
 
     @Override public String id() { return "umbra_soul"; }
     @Override public long cooldownTicks() { return 0; }
+
+    @Override
+    public String displayName() {
+        return "Red Shadow";
+    }
+
     @Override public long secondaryCooldownTicks() { return  60L * 20L ; }
 
     @Override

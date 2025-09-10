@@ -51,6 +51,10 @@ public final class OverdrivePower implements Power {
             """;
     }
 
+    @Override public Identifier portraitTexture() {
+        return new Identifier("odd", "textures/gui/overview/seep_portrait.png");
+    }
+
     /* ========== Ability buttons ========== */
 
     // Primary: toggle Energized mode

@@ -50,7 +50,7 @@ public class AbilityOverviewScreen extends Screen {
         // Left panel (portrait + hype text)
         drawPlayerPanel(ctx, leftX = margin, leftY = yTop, leftW = leftWidth, leftH = h - margin * 2, p);
 
-        // Right panel (ability cards + descriptions)
+        // Right panel (ability cards + descriptions) — conditional by hasSlot(...)
         drawAbilitiesPanel(ctx, margin + leftWidth + gap, yTop, rightW, p);
 
         super.render(ctx, mouseX, mouseY, delta);
@@ -135,55 +135,60 @@ public class AbilityOverviewScreen extends Screen {
         }
     }
 
-    // -------- RIGHT: Ability cards + under-card descriptions --------
+    // -------- RIGHT: Ability cards (conditionally per slot) --------
     private void drawAbilitiesPanel(DrawContext ctx, int x, int y, int w, Power p) {
         var mc = MinecraftClient.getInstance();
 
-        // title
         ctx.drawTextWithShadow(mc.textRenderer, "ABILITIES", x, y, 0xFFFFFF);
-
         int yCursor = y + 14;
 
-        // primary section
-        yCursor += drawAbilitySection(ctx, x, yCursor, w, "primary", p);
-        yCursor += 12; // gap
-
-        // secondary section
-        yCursor += drawAbilitySection(ctx, x, yCursor, w, "secondary", p);
-    }
-
-    /** Draw one ability card + long description below it. Returns total height used. */
-    private int drawAbilitySection(DrawContext ctx, int x, int y, int w, String slot, Power p) {
-        int cardH = drawAbilityCard(ctx, x, y, w, slot, p);
-        int descTop = y + cardH + 6;
-
-        var mc = MinecraftClient.getInstance();
-        String body = (p != null) ? p.slotLongDescription(slot) : "No power assigned.";
-        int wrapW = w - 6;
-        int textX = x + 3;
-        int lineY = descTop;
-
-        if (body != null && !body.isEmpty()) {
-            List<OrderedText> lines = mc.textRenderer.wrapLines(Text.literal(body), wrapW);
-            for (OrderedText line : lines) {
-                ctx.drawText(mc.textRenderer, line, textX, lineY, 0xE0E0E0, false);
-                lineY += mc.textRenderer.fontHeight + 1;
-            }
+        if (p == null) {
+            ctx.drawText(mc.textRenderer, Text.literal("No power selected."), x, yCursor + 6, 0xAAAAAA, false);
+            return;
         }
-        return (lineY - y);
+
+        // Render only slots the power claims to have.
+        yCursor += drawIfHas(ctx, x, yCursor, w, "primary",   p);
+        if (p.hasSlot("secondary")) { yCursor += 12; yCursor += drawIfHas(ctx, x, yCursor, w, "secondary", p); }
+        if (p.hasSlot("third"))     { yCursor += 12; yCursor += drawIfHas(ctx, x, yCursor, w, "third",     p); }
+        if (p.hasSlot("fourth"))    { yCursor += 12; yCursor += drawIfHas(ctx, x, yCursor, w, "fourth",    p); }
     }
 
-    /** Draw just the card row; return its height (kept at 52). */
+    private int drawIfHas(DrawContext ctx, int x, int y, int w, String slot, Power p) {
+        if (!p.hasSlot(slot)) return 0;
+        return drawAbilityCard(ctx, x, y, w, slot, p);
+    }
+
+    /** Draws the card (icon + title + key badge) and the description INSIDE it. */
     private int drawAbilityCard(DrawContext ctx, int x, int y, int w, String slot, Power p) {
         var mc = MinecraftClient.getInstance();
-        int h = 52;
+
+        // measure wrapped description first
+        String body = (p != null) ? p.slotLongDescription(slot) : "No power assigned.";
+        if (body == null) body = "";
+        int pad = 6;
+        int titleLeft = x + pad + 32 + 8; // icon (32) + gap
+        int maxTextW = Math.max(0, x + w - pad - titleLeft);
+
+        int lineH = mc.textRenderer.fontHeight; // tighter (no +1)
+        java.util.List<OrderedText> wrapped = body.isEmpty() || maxTextW <= 0
+                ? java.util.Collections.emptyList()
+                : mc.textRenderer.wrapLines(Text.literal(body), maxTextW);
+        int descH = wrapped.size() * lineH;
+
+        // compact header, then description
+        int headerH = 30;             // shorter header
+        int descTopPad = wrapped.isEmpty() ? 0 : 2; // tiny gap
+        int bottomPad = pad;
+        int cardH = headerH + (wrapped.isEmpty() ? bottomPad : (descTopPad + descH + bottomPad));
 
         // card bg
-        ctx.fill(x, y, x + w, y + h, 0x22000000);
-        ctx.drawBorder(x, y, w, h, 0x33FFFFFF);
+        ctx.fill(x, y, x + w, y + cardH, 0x22000000);
+        ctx.drawBorder(x, y, w, cardH, 0x33FFFFFF);
 
-        // icon 32x32
-        int iconX = x + 8, iconY = y + 10;
+        // icon 32x32 (clamp top if header is short)
+        int iconX = x + pad;
+        int iconY = y + Math.max(2, (headerH - 20) / 2);
         if (p != null) {
             Identifier icon = p.iconTexture(slot);
             ctx.drawTexture(icon, iconX, iconY, 0, 0, 32, 32, 32, 32);
@@ -193,20 +198,29 @@ public class AbilityOverviewScreen extends Screen {
         }
 
         // title
-        int textX = iconX + 42;
-        String title = p != null ? p.slotTitle(slot) : "Ability";
-        ctx.drawTextWithShadow(mc.textRenderer, title, textX, y + 8, 0xFFFFFFFF);
+        String title = (p != null) ? p.slotTitle(slot) : "Ability";
+        ctx.drawTextWithShadow(mc.textRenderer, title, titleLeft, y + 6, 0xFFFFFFFF);
 
         // key badge
         String key = AbilityKeybinds.boundKeyName(slot);
         int keyW = mc.textRenderer.getWidth(key) + 8;
-        int keyX = x + w - keyW - 8;
-        int keyY = y + (h - 16) / 2;
+        int keyX = x + w - keyW - pad;
+        int keyY = y + Math.max(2, (headerH - 16) / 2);
         ctx.fill(keyX, keyY, keyX + keyW, keyY + 16, 0x66000000);
         ctx.drawBorder(keyX, keyY, keyW, 16, 0x55FFFFFF);
         ctx.drawTextWithShadow(mc.textRenderer, key, keyX + 4, keyY + 4, 0xFFFFFF);
 
-        return h;
+        // description (inside card, pulled up)
+        if (!wrapped.isEmpty()) {
+            int descX = titleLeft;
+            int descY = y + headerH + descTopPad; // right under header
+            for (OrderedText line : wrapped) {
+                ctx.drawText(mc.textRenderer, line, descX, descY, 0xE0E0E0, false);
+                descY += lineH;
+            }
+        }
+
+        return cardH;
     }
 
     @Override

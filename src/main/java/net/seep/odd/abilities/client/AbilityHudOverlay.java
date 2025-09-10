@@ -83,7 +83,7 @@ public final class AbilityHudOverlay {
         int remain = ClientCooldowns.get(slot);
 
         // Backplate
-        ctx.fill(x - 2, y - 2, x + size + 2, y + size + 2, 0x66000000);
+
 
         // --- Proper scaling: draw the full 32x32 icon, scaled down to 'size' ---
         var m = ctx.getMatrices();

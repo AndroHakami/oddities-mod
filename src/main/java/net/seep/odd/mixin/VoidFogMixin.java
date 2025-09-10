@@ -18,7 +18,7 @@ public class VoidFogMixin {
     private static final Identifier VOID_DIM = new Identifier("odd", "the_void");
     // tweak here:
     private static final float FOG_NEAR = 0.0F;
-    private static final float FOG_FAR  = 18.0F;
+    private static final float FOG_FAR  = 300.0F;
 
     @Inject(method = "applyFog", at = @At("TAIL"))
     private static void odd$applyFog(Camera camera, BackgroundRenderer.FogType fogType, float viewDistance,

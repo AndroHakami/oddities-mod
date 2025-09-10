@@ -22,6 +22,8 @@ import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
 import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
+import net.seep.odd.abilities.voids.VoidPortalEntity;
+import net.seep.odd.abilities.voids.client.VoidCpmBridge;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
@@ -105,13 +107,15 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.overdrive.OverdriveHudOverlay.register();
 
         // Void (Client)
-        net.seep.odd.abilities.voids.VoidNet.initServer();
+        net.seep.odd.abilities.voids.VoidNet.initClient();
         net.seep.odd.abilities.voids.client.VoidClient.init();
+
 
 
         // Custom Player Model
         net.seep.odd.abilities.anim.CpmBridge CPM;
         OverdriveCpmBridge.init();
+        VoidCpmBridge.init();
 
         {
             var impl = net.seep.odd.abilities.anim.CpmBridgeCpm.tryCreate();
@@ -139,6 +143,7 @@ public final class OdditiesClient implements ClientModInitializer {
                 net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL,
                 net.seep.odd.abilities.voids.client.VoidPortalRenderer::new
         );
+
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }
