@@ -7,25 +7,34 @@ import net.minecraft.world.PersistentState;
 
 import java.util.*;
 
-/** Persistent server data: each player’s party + one active summon. */
+/** Persistent server data: each player’s party + one active summon + mode. */
 public final class TamerState extends PersistentState {
     public static final int MAX_PARTY = 6;
+
+    public enum Mode { PASSIVE, FOLLOW, AGGRESSIVE }
 
     private final Map<UUID, List<PartyMember>> parties = new HashMap<>();
 
     public static final class Active {
         public int index;
         public UUID entity;
-        public Active(int index, UUID entity) { this.index = index; this.entity = entity; }
+        public Mode mode;
+
+        public Active(int index, UUID entity) {
+            this(index, entity, Mode.FOLLOW);
+        }
+        public Active(int index, UUID entity, Mode mode) {
+            this.index = index;
+            this.entity = entity;
+            this.mode = (mode == null ? Mode.FOLLOW : mode);
+        }
     }
+
     private final Map<UUID, Active> actives = new HashMap<>();
 
     public static TamerState get(ServerWorld sw) {
         return sw.getServer().getOverworld().getPersistentStateManager().getOrCreate(
-                TamerState::fromNbt,
-                TamerState::new,
-                "odd_tamer"
-        );
+                TamerState::fromNbt, TamerState::new, "odd_tamer");
     }
 
     public static TamerState fromNbt(NbtCompound nbt) {
@@ -33,21 +42,26 @@ public final class TamerState extends PersistentState {
 
         // Parties
         NbtList owners = nbt.getList("owners", NbtCompound.COMPOUND_TYPE);
-        for (int i = 0; i < owners.size(); i++) {
-            NbtCompound o = owners.getCompound(i);
-            UUID u = o.getUuid("u");
-            NbtList arr = o.getList("party", NbtCompound.COMPOUND_TYPE);
-            List<PartyMember> list = new ArrayList<>(arr.size());
-            for (int j = 0; j < arr.size(); j++) list.add(PartyMember.fromNbt(arr.getCompound(j)));
-            s.parties.put(u, list);
+        for (int oi = 0; oi < owners.size(); oi++) {
+            NbtCompound o = owners.getCompound(oi);
+            UUID owner = o.getUuid("u");
+            NbtList arr = o.getList("p", NbtCompound.COMPOUND_TYPE);
+            List<PartyMember> list = new ArrayList<>();
+            for (int i = 0; i < arr.size(); i++) list.add(PartyMember.fromNbt(arr.getCompound(i)));
+            s.parties.put(owner, list);
         }
 
         // Actives
         NbtList al = nbt.getList("actives", NbtCompound.COMPOUND_TYPE);
         for (int i = 0; i < al.size(); i++) {
             NbtCompound x = al.getCompound(i);
-            s.actives.put(x.getUuid("u"), new Active(x.getInt("i"), x.getUuid("e")));
+            UUID owner = x.getUuid("u");
+            int idx = x.getInt("i");
+            UUID ent = x.getUuid("e");
+            Mode mode = Mode.values()[Math.max(0, Math.min(Mode.values().length - 1, x.getInt("m")))];
+            s.actives.put(owner, new Active(idx, ent, mode));
         }
+
         return s;
     }
 
@@ -59,8 +73,8 @@ public final class TamerState extends PersistentState {
             NbtCompound o = new NbtCompound();
             o.putUuid("u", e.getKey());
             NbtList arr = new NbtList();
-            for (PartyMember m : e.getValue()) arr.add(m.toNbt());
-            o.put("party", arr);
+            for (PartyMember pm : e.getValue()) arr.add(pm.toNbt());
+            o.put("p", arr);
             owners.add(o);
         }
         nbt.put("owners", owners);
@@ -72,42 +86,30 @@ public final class TamerState extends PersistentState {
             x.putUuid("u", e.getKey());
             x.putInt("i", e.getValue().index);
             x.putUuid("e", e.getValue().entity);
+            x.putInt("m", e.getValue().mode.ordinal());
             al.add(x);
         }
         nbt.put("actives", al);
-
         return nbt;
     }
 
-    /* ===== API ===== */
-    public List<PartyMember> partyOf(UUID player) {
-        return parties.computeIfAbsent(player, k -> new ArrayList<>(MAX_PARTY));
-    }
+    /* -------------------- API -------------------- */
 
+    public List<PartyMember> partyOf(UUID owner) {
+        return parties.computeIfAbsent(owner, k -> new ArrayList<>());
+    }
     public void addMember(UUID player, PartyMember m) {
         var list = partyOf(player);
         if (list.size() >= MAX_PARTY) return;
         list.add(m);
     }
 
-    public void renameMember(UUID player, int index, String newName) {
-        var list = partyOf(player);
-        if (index < 0 || index >= list.size()) return;
-        list.get(index).nickname = newName == null ? "" : newName;
-    }
-    // Add inside net/seep/odd/abilities/tamer/TamerState.java
-    /** Iterate actives map without exposing it publicly (used by leveling). */
-    java.util.Set<java.util.Map.Entry<java.util.UUID, Active>> activesEntrySet() {
-        return actives.entrySet();
-    }
-    public java.util.Set<java.util.UUID> owners() {
-        // read-only view is fine; we only iterate it
-        return java.util.Collections.unmodifiableSet(parties.keySet());
-    }
-
+    public Set<Map.Entry<UUID, List<PartyMember>>> entries() { return parties.entrySet(); }
+    public Set<UUID> owners() { return Collections.unmodifiableSet(parties.keySet()); }
 
     public Active getActive(UUID owner) { return actives.get(owner); }
     public void setActive(UUID owner, int index, UUID entity) { actives.put(owner, new Active(index, entity)); }
+    public void setMode(UUID owner, Mode mode) { var a = actives.get(owner); if (a != null) a.mode = mode; }
     public void clearActive(UUID owner) { actives.remove(owner); }
 
     /** Find which player owns a currently-active pet entity UUID (used by leveling hooks). */

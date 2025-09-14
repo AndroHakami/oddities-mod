@@ -14,6 +14,9 @@ import net.minecraft.util.math.GlobalPos;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
+import net.seep.odd.abilities.artificer.client.ArtificerHud;
+import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
+import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.net.*;
@@ -99,7 +102,9 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // ---- Tamer (client) ----
         TamerNet.initClient();
+        net.seep.odd.abilities.tamer.client.CommandWheelHud.init();
         TamerHudOverlay.register();
+        net.seep.odd.abilities.tamer.client.SummonWheelHud.init();
 
         // Overdrive (client)
         net.seep.odd.abilities.overdrive.OverdriveNet.initClient();
@@ -109,6 +114,10 @@ public final class OdditiesClient implements ClientModInitializer {
         // Void (Client)
         net.seep.odd.abilities.voids.VoidNet.initClient();
         net.seep.odd.abilities.voids.client.VoidClient.init();
+
+        //Artificer (client)
+        ArtificerHud.register();
+
 
 
 

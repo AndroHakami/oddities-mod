@@ -6,6 +6,7 @@
     "ExampleMixin",
     "ItemEntityMixin",
     "MobEntityAccessor",
+    "MobEntityAccessorMixin",
     "MobEntityTamerDataMixin"
   ],
   "client": [
@@ -15,7 +16,10 @@
     "VoidFogMixin",
     "client.OverdriveCameraShakeMixin",
     "client.OverdriveFovMixin",
-    "client.OverdrivePerspectiveMixin"
+    "client.OverdrivePerspectiveMixin",
+    "client.VacuumAimPoseMixin",
+    "client.VacuumNoBobMixin",
+    "client.accessor.LivingEntityRendererAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

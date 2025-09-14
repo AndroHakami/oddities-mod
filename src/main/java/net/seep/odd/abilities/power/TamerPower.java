@@ -30,70 +30,53 @@ public final class TamerPower implements Power {
 
     @Override public long cooldownTicks()          { return 0; }
     @Override public long secondaryCooldownTicks() { return 0; }
+
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
             case "primary"   -> new Identifier("odd", "textures/gui/abilities/tamer_command.png");
-            case "secondary" -> new Identifier("odd", "textures/gui/abilities/tamer_party.png"); // set this texture
-            case "third" -> new Identifier("odd", "textures/gui/abilities/tamer_summon.png"); // set this texture
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/tamer_party.png");
+            case "third"     -> new Identifier("odd", "textures/gui/abilities/tamer_summon.png");
             default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
-    @Override
-    public String slotLongDescription(String slot) {
-        return switch (slot) {
-            case "primary" -> "Capture a mob.";
-            case "secondary" -> "Open your party menu and review information about your summons!";
-            case "third" -> "Open your summon wheel.";
-            case "overview" -> "Snow-caster brings ice-cold abilities to the fight: explosives and teleports at your fingertips.";
-            default -> "Snow-caster brings ice-cold abilities to the fight: explosives and teleports at your fingertips.";
-        };
-    }
+
     @Override
     public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" -> "Capture";
-            case "secondary" -> "Tame Menu";
-            case "third" -> "I Choose You!";
-            default -> Power.super.slotTitle(slot);
+            case "primary"   -> "Command";
+            case "secondary" -> "Party";
+            case "third"     -> "Summon";
+            default          -> Power.super.slotTitle(slot);
         };
     }
-    @Override public String longDescription() {
-        return """
-            Capture mobs and level them up to be the very best!""";
+
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary"   -> "Open the command wheel: Passive / Follow / Recall / Aggressive.";
+            case "secondary" -> "Open your party manager.";
+            case "third"     -> "Open your summon wheel.";
+            default          -> "";
+        };
     }
 
-    /* ===================== PRIMARY: Capture target ===================== */
+    @Override
+    public String longDescription() {
+        return "Capture mobs and lead them in battle. Command companions with a quick radial.";
+    }
+
+    /* ===================== PRIMARY: Command Wheel ===================== */
     @Override
     public void activate(ServerPlayerEntity player) {
-        World w = player.getWorld();
-        if (!(w instanceof ServerWorld sw)) return;
+        if (!(player.getWorld() instanceof ServerWorld sw)) return;
         if (!PowerAPI.has(player) || !(Powers.get(PowerAPI.get(player)) instanceof TamerPower)) return;
 
-        LivingEntity target = raycastLiving(player, 16.0);
-        if (target == null) {
-            player.sendMessage(Text.literal("No valid target."), true);
-            return;
-        }
-        if (!isCapturable(target)) {
-            player.sendMessage(Text.literal("This one resists capture."), true);
-            return;
-        }
-
-        TamerState state = TamerState.get(sw);
-        var party = state.partyOf(player.getUuid());
-        if (party.size() >= TamerState.MAX_PARTY) {
-            player.sendMessage(Text.literal("Party is full."), true);
-            return;
-        }
-
-        var typeId = Registries.ENTITY_TYPE.getId(target.getType());
-        PartyMember member = PartyMember.fromCapture(typeId, target);
-        state.addMember(player.getUuid(), member);
-        state.markDirty();
-
-        target.discard();
-        player.sendMessage(Text.literal("Captured " + member.displayName() + " (Lv." + member.level + ")"), true);
+        TamerState st = TamerState.get(sw);
+        var a = st.getActive(player.getUuid());
+        boolean hasActive = (a != null && sw.getEntity(a.entity) != null);
+        int mode = (a != null && a.mode != null) ? a.mode.ordinal() : TamerState.Mode.FOLLOW.ordinal();
+        net.seep.odd.abilities.net.TamerNet.sendOpenCommand(player, hasActive, mode);
     }
 
     /* ===================== SECONDARY: Open Party Manager ===================== */
@@ -104,39 +87,16 @@ public final class TamerPower implements Power {
         net.seep.odd.abilities.net.TamerNet.sendOpenParty(player, state.partyOf(player.getUuid()));
     }
 
-    /* ===================== THIRD: Open radial wheel ===================== */
-    // Call from your PowerAPI when the user triggers the third slot.
-    @Override public void activateThird(ServerPlayerEntity player) {
-        if (!(player.getWorld() instanceof net.minecraft.server.world.ServerWorld sw)) return;
-        var state = net.seep.odd.abilities.tamer.TamerState.get(sw);
+    /* ===================== THIRD: Open radial Summon ===================== */
+    @Override
+    public void activateThird(ServerPlayerEntity player) {
+        if (!(player.getWorld() instanceof ServerWorld sw)) return;
+        var state = TamerState.get(sw);
         net.seep.odd.abilities.net.TamerNet.sendOpenWheel(player, state.partyOf(player.getUuid()));
     }
 
     /* ===================== Server Tick hook (pet follow/assist) ===================== */
-    public static void serverTick(ServerPlayerEntity p) {
-        net.seep.odd.abilities.tamer.TamerSummons.tick(p);
-    }
-
-    /* ===================== Helpers ===================== */
-    private static boolean isCapturable(LivingEntity e) {
-        return !(e instanceof EnderDragonEntity
-                || e instanceof WitherEntity
-                || e instanceof WardenEntity
-                || e instanceof ElderGuardianEntity)
-                && e.isAlive() && !e.isSpectator() && !e.isInvulnerable();
-    }
-
-    private static LivingEntity raycastLiving(ServerPlayerEntity p, double range) {
-        Vec3d eye  = p.getCameraPosVec(1.0f);
-        Vec3d look = p.getRotationVec(1.0f);
-        Vec3d end  = eye.add(look.multiply(range));
-        Box box = p.getBoundingBox().stretch(look.multiply(range)).expand(1.0D);
-
-        EntityHitResult hit = net.minecraft.entity.projectile.ProjectileUtil.raycast(
-                p, eye, end, box,
-                e -> e instanceof LivingEntity le && isCapturable(le) && e != p,
-                range * range
-        );
-        return hit != null ? (LivingEntity)hit.getEntity() : null;
+    public static void serverTick(ServerPlayerEntity player) {
+        net.seep.odd.abilities.tamer.TamerSummons.tick(player);
     }
 }

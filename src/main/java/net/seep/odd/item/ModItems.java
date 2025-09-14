@@ -9,6 +9,7 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
 import net.seep.odd.abilities.tamer.item.TameBallItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
 import net.seep.odd.item.ghost.GhostHandItem;
@@ -23,6 +24,8 @@ public class ModItems {
     public static final Item TAME_BALL = registerItem("tame_ball", new TameBallItem(new FabricItemSettings().maxCount(16)));
     public static final Item GHOST_HAND = registerItem("ghost_hand", new GhostHandItem(new FabricItemSettings().maxCount(1)));
     public static final Item EMERALD_SHURIKEN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "emerald_shuriken"), new Item(new Item.Settings()));
+    public static final Item VACUUM = registerItem("vacuum", new ArtificerVacuumItem(new FabricItemSettings().maxCount(1)));
+
 
     private static void addItemsToIngredientItemGroup(FabricItemGroupEntries entries) {
         entries.add(RUBY);

@@ -10,17 +10,26 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.registry.FuelRegistry;
 
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
 
+import net.seep.odd.abilities.AbilityServerTicks;
 import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.PowerCommands;
+
+import net.seep.odd.abilities.artificer.client.ArtificerHud;
+import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
+import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
+import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
 
 import net.seep.odd.abilities.tamer.TamerLeveling;
+import net.seep.odd.abilities.tamer.TamerMoves;
 import net.seep.odd.abilities.voids.VoidPortalEntity;
 import net.seep.odd.abilities.voids.VoidRegistry;
 import net.seep.odd.abilities.voids.VoidSystem;
@@ -73,6 +82,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new TamerPower());
 		Powers.register(new OverdrivePower());
 		Powers.register(new VoidPower());
+		Powers.register(new ArtificerPower());
 
 
 		// ---- Commands ----
@@ -121,6 +131,12 @@ public final class Oddities implements ModInitializer {
 		net.seep.odd.abilities.tamer.ai.SpeciesProfiles.init();
 		net.seep.odd.abilities.net.TamerNet.initCommon();
 		TamerLeveling.register();
+		AbilityServerTicks.init();
+		TamerMoves.bootstrap();
+		TamerLeveling.register();
+
+
+
 		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
 
@@ -131,6 +147,13 @@ public final class Oddities implements ModInitializer {
 		// Void
 		VoidRegistry.initCommon();
 		VoidSystem.init();
+
+		// Artificer
+		ArtificerHud.register();
+
+
+
+
 
 
 

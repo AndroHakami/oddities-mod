@@ -11,13 +11,11 @@ import net.minecraft.util.math.Box;
 public final class TamerSummons {
     private TamerSummons() {}
 
-    // Tunables
-    private static final double ASSIST_RADIUS   = 24.0;  // how far around the owner we look for hostiles
-    private static final double PROTECT_RADIUS  = 18.0;  // how far we redirect mobs that target the owner
-    private static final double FOLLOW_FAR_SQ   = 36.0;  // >6 blocks => move closer
-    private static final double FOLLOW_NEAR_SQ  = 6.25;  // <2.5 blocks => stop
+    private static final double ASSIST_RADIUS   = 24.0;
+    private static final double PROTECT_RADIUS  = 18.0;
+    private static final double FOLLOW_NEAR_SQ  = 2.25;
+    private static final double FOLLOW_FAR_SQ   = 100.0;
 
-    /** Call this once per server tick for the owner (e.g., from TamerPower.serverTick). */
     public static void tick(ServerPlayerEntity owner) {
         if (!(owner.getWorld() instanceof ServerWorld sw)) return;
 
@@ -31,47 +29,64 @@ public final class TamerSummons {
             st.markDirty();
             return;
         }
+        if (!(pet instanceof MobEntity mob)) return;
 
-        if (pet instanceof MobEntity mob) {
-            // 1) Redirect mobs that are targeting the owner to the pet ("taunt")
-            Box protect = owner.getBoundingBox().expand(PROTECT_RADIUS);
-            for (HostileEntity hostile : sw.getEntitiesByClass(HostileEntity.class, protect, h -> h.isAlive())) {
-                if (hostile.getTarget() == owner) {
-                    hostile.setTarget(mob);
+        // NEW: purge bad targets set by vanilla/other goals
+        var tgt = mob.getTarget();
+        if (tgt == mob || tgt == owner) { mob.setTarget(null); mob.setAttacking(false); }
+
+        boolean passive = (a.mode == TamerState.Mode.PASSIVE);
+        TamerAI.setPassive(mob, passive);
+
+        switch (a.mode) {
+            case PASSIVE -> {
+                mob.setTarget(null);
+                mob.setAttacking(false);
+                if (mob instanceof PathAwareEntity pae) {
+                    double d2 = mob.squaredDistanceTo(owner);
+                    if (d2 > FOLLOW_FAR_SQ) pae.getNavigation().startMovingTo(owner, 1.15);
+                    else if (d2 < FOLLOW_NEAR_SQ) pae.getNavigation().stop();
                 }
+                return;
             }
-
-            // 2) Acquire a target for the pet if it doesn't have one or its current target died
-            boolean needsTarget = mob.getTarget() == null || !mob.getTarget().isAlive();
-            if (needsTarget) {
-                HostileEntity nearest = null;
-                double best = Double.MAX_VALUE;
-
-                Box search = owner.getBoundingBox().expand(ASSIST_RADIUS);
-                for (HostileEntity hostile : sw.getEntitiesByClass(HostileEntity.class, search, h -> h.isAlive())) {
-                    // Prefer hostiles already aggro'd on the owner; otherwise pick the closest to owner
-                    double score = (hostile.getTarget() == owner) ? 0.0 : hostile.squaredDistanceTo(owner);
-                    if (score < best) { best = score; nearest = hostile; }
-                }
-
-                if (nearest != null) {
-                    mob.setTarget(nearest);
-                }
-            }
-
-            // 3) Simple follow when not in combat
-            if (mob.getTarget() == null) {
-                double d2 = mob.squaredDistanceTo(owner);
-                if (d2 > FOLLOW_FAR_SQ) {
-                    if (mob instanceof PathAwareEntity pae) {
-                        pae.getNavigation().startMovingTo(owner, 1.25);
-                    }
-                } else if (d2 < FOLLOW_NEAR_SQ) {
-                    if (mob instanceof PathAwareEntity pae) {
-                        pae.getNavigation().stop();
+            case FOLLOW -> {
+                LivingEntity prefer = owner.getAttacking();
+                if (prefer != null && prefer.isAlive() && prefer != mob && prefer != owner) {
+                    if (mob.getTarget() != prefer) {
+                        mob.setTarget(prefer);
+                        mob.setAttacking(true);
+                        if (mob instanceof PathAwareEntity pae) pae.getNavigation().startMovingTo(prefer, 1.25);
                     }
                 }
             }
+            case AGGRESSIVE -> {
+                Box area = owner.getBoundingBox().expand(ASSIST_RADIUS);
+                HostileEntity best = null;
+                double bestD = Double.MAX_VALUE;
+                for (HostileEntity h : sw.getEntitiesByClass(HostileEntity.class, area, HostileEntity::isAlive)) {
+                    if (h == mob) continue; // <<< critical: skip self
+                    double d = h.squaredDistanceTo(owner);
+                    if (d < bestD) { bestD = d; best = h; }
+                }
+                if (best != null && mob.getTarget() != best) {
+                    mob.setTarget(best);
+                    mob.setAttacking(true);
+                }
+            }
+        }
+
+        // Protect owner: hostile targeting owner → retarget to pet
+        Box protect = owner.getBoundingBox().expand(PROTECT_RADIUS);
+        for (HostileEntity hostile : sw.getEntitiesByClass(HostileEntity.class, protect, HostileEntity::isAlive)) {
+            if (hostile == mob) continue; // avoid self
+            if (hostile.getTarget() == owner) hostile.setTarget(mob);
+        }
+
+        // Navigate toward owner when idle/without target
+        if (mob.getTarget() == null && mob instanceof PathAwareEntity pae) {
+            double d2 = mob.squaredDistanceTo(owner);
+            if (d2 > FOLLOW_FAR_SQ) pae.getNavigation().startMovingTo(owner, 1.25);
+            else if (d2 < FOLLOW_NEAR_SQ) pae.getNavigation().stop();
         }
     }
 }

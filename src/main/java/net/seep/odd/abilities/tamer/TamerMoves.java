@@ -2,61 +2,101 @@ package net.seep.odd.abilities.tamer;
 
 import net.minecraft.util.Identifier;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
-/** Minimal move registry (IDs + display names for now). */
+/** Tiny registry for moves + per-species starters & learnsets. */
 public final class TamerMoves {
     private TamerMoves() {}
 
-    /** moveId -> display name (and later: power, cooldown, effect, etc.) */
-    public static final Map<String, String> MOVES = new HashMap<>();
+    private static final Map<String, TamerMove> MOVES = new HashMap<>();
+    private static final Map<String, String>    NAMES = new HashMap<>();
+    private static final Map<Identifier, List<String>> STARTERS = new HashMap<>();
+    private static final Map<Identifier, Map<Integer, String>> LEARNSETS = new HashMap<>();
 
-    /** entityTypeId (Identifier) -> starter moves (2–3). */
-    private static final Map<Identifier, String[]> STARTERS = new HashMap<>();
+    public static void bootstrap() {
+        // --- base/sample moves ---
+        register(new TamerMove("odd:bite",       "Bite",        "A quick chomp.",             TamerMove.Category.PHYSICAL, 40));
+        register(new TamerMove("odd:peck",       "Peck",        "A fast beak jab.",           TamerMove.Category.PHYSICAL, 35));
+        register(new TamerMove("odd:wind_gust",  "Wind Gust",   "Kick up a gust.",            TamerMove.Category.SPECIAL,  35));
+        register(new TamerMove("odd:heal_pulse", "Heal Pulse",  "Restore some HP.",           TamerMove.Category.STATUS,    0));
+        register(new TamerMove("odd:taunt",      "Taunt",       "Draw aggro to the user.",    TamerMove.Category.STATUS,    0));
 
-    // ---------- helpers (no registry access here) ----------
-    private static void define(String id, String display) { MOVES.put(id, display); }
+        // --- SHURIKEN (ranged) ---
+        register(new TamerMove("odd:shuriken",   "Shuriken",    "Throw a sharp star.",        TamerMove.Category.SPECIAL,  30));
 
-    private static Identifier id(String s) {
-        // allow "minecraft:zombie" or just "zombie"
-        int c = s.indexOf(':');
-        return (c >= 0) ? new Identifier(s) : new Identifier("minecraft", s);
+        // ENDER FALL
+        register(new TamerMove("odd:ender_fall", "Ender Fall",
+                "Teleport the target 30 blocks upward if the sky above is clear.",
+                TamerMove.Category.SPECIAL, 0));
+
+        // ---- defaults for any species without an explicit entry ----
+        setStartersFor(defaultId(), "odd:bite", "odd:wind_gust");
+        addLearn(defaultId(), 7,  "odd:taunt");
+        addLearn(defaultId(), 12, "odd:heal_pulse");
+
+        // ---- examples per species (adjust to taste) ----
+        setStartersFor(new Identifier("minecraft","chicken"), "odd:peck");
+        addLearn(new Identifier("minecraft","chicken"), 8, "odd:wind_gust");
+
+        setStartersFor(new Identifier("minecraft","zombie"), "odd:bite", "odd:taunt");
+        addLearn(new Identifier("minecraft","zombie"), 15, "odd:heal_pulse");
+
+        // Villager evo uses shuriken by default; base villager learns it on evolution/level-up if desired
+        setStartersFor(new Identifier("odd","villager_evo"), "odd:shuriken");
+        setStartersFor(new Identifier("minecraft","villager"), "odd:shuriken");
+        addLearn(new Identifier("minecraft","villager"), 6, "odd:shuriken");
+        setStartersFor(new Identifier("minecraft","enderman"), "odd:ender_fall");
     }
 
-    private static void mapStarters(String entityId, String... moveIds) {
-        STARTERS.put(id(entityId), moveIds);
+    /* ---------- public API ---------- */
+
+    public static void register(TamerMove move) {
+        MOVES.put(move.id(), move);
+        NAMES.put(move.id(), move.name());
     }
 
-    // ---------- static bootstrap (SAFE: only Identifiers & Strings) ----------
-    static {
-        // moves
-        define("tackle",        "Tackle");
-        define("quick_dash",    "Quick Dash");
-        define("howl",          "Howl");
-        define("venom_sting",   "Venom Sting");
-        define("web_shot",      "Web Shot");
-        define("bone_arrow",    "Bone Arrow");
-        define("power_shot",    "Power Shot");
-        define("rot_grasp",     "Rotting Grasp");
-        define("infect_bite",   "Infected Bite");
-        define("spark_pop",     "Spark Pop");
-
-        // vanilla starters — ONLY identifiers here, no registry access
-        mapStarters("minecraft:zombie",      "tackle", "rot_grasp", "infect_bite");
-        mapStarters("minecraft:skeleton",    "bone_arrow", "power_shot");
-        mapStarters("minecraft:spider",      "venom_sting", "web_shot", "quick_dash");
-        mapStarters("minecraft:creeper",     "spark_pop", "tackle");
-        mapStarters("minecraft:enderman",    "quick_dash", "howl");
-
-        // you can add your own with full ids, e.g.:
-        // mapStarters("odd:villager_evo", "tackle");
+    public static void setStartersFor(Identifier type, String... ids) {
+        STARTERS.put(type, Arrays.asList(ids));
     }
 
-    /** Returns a copy so callers can modify their array safely. */
+    public static void addLearn(Identifier type, int level, String id) {
+        LEARNSETS.computeIfAbsent(type, k -> new HashMap<>()).put(level, id);
+    }
+
     public static String[] starterMovesFor(Identifier typeId) {
-        String[] arr = STARTERS.get(typeId);
-        if (arr != null && arr.length > 0) return arr.clone();
-        return new String[] { "tackle", "quick_dash" }; // fallback
+        List<String> l = STARTERS.getOrDefault(typeId, STARTERS.get(defaultId()));
+        return l == null ? new String[0] : l.toArray(new String[0]);
     }
+
+    public static String learnMoveAtLevel(Identifier typeId, int level) {
+        Map<Integer, String> map = LEARNSETS.getOrDefault(typeId, LEARNSETS.get(defaultId()));
+        return (map == null) ? null : map.get(level);
+    }
+
+    /** True if PM already knows this move id. */
+    public static boolean knows(PartyMember pm, String id) {
+        if (pm == null || pm.moves == null) return false;
+        for (String s : pm.moves) if (id.equals(s)) return true;
+        return false;
+    }
+
+    public static boolean appendOrReplaceMove(PartyMember pm, String moveId) {
+        if (pm.moves == null) { pm.moves = new String[] { moveId }; return true; }
+        for (String s : pm.moves) if (s.equals(moveId)) return true; // already knows it
+        if (pm.moves.length < 4) {
+            String[] nx = Arrays.copyOf(pm.moves, pm.moves.length + 1);
+            nx[nx.length - 1] = moveId;
+            pm.moves = nx;
+            return true;
+        } else {
+            pm.moves[0] = moveId; // replace oldest
+            return false;
+        }
+    }
+
+    public static String nameOf(String id) {
+        return NAMES.getOrDefault(id, id);
+    }
+
+    private static Identifier defaultId() { return new Identifier("odd", "default"); }
 }
