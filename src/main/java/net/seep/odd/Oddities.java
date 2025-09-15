@@ -20,10 +20,13 @@ import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.PowerCommands;
 
 import net.seep.odd.abilities.artificer.client.ArtificerHud;
+import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
 import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
 import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
 import net.seep.odd.abilities.astral.AstralInventory;
+import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
+import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
@@ -150,6 +153,10 @@ public final class Oddities implements ModInitializer {
 
 		// Artificer
 		ArtificerHud.register();
+		ArtificerCondenserRegistry.registerAll();
+		ArtificerFluids.registerAll();
+		ArtificerMixerRegistry.registerAll();
+
 
 
 

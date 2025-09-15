@@ -3,7 +3,9 @@ package net.seep.odd;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.render.RenderLayer;
@@ -15,10 +17,15 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.artificer.client.ArtificerHud;
+import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
+import net.seep.odd.abilities.artificer.fluid.client.ArtificerFluidsClient;
 import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
 import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
+import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
+import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
+import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
 import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
@@ -117,6 +124,19 @@ public final class OdditiesClient implements ClientModInitializer {
 
         //Artificer (client)
         ArtificerHud.register();
+        net.seep.odd.abilities.artificer.condenser.ArtificerCreateInit.registerClient();
+        ArtificerCondenserRegistry.registerClient();
+        ArtificerFluidsClient.registerClient();
+        ArtificerMixerRegistry.registerClient();
+        ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
+            if (tintIndex == 1 && stack.hasNbt())
+                return stack.getNbt().getInt("odd_brew_color");
+            return 0xFFFFFFFF; // base layer untouched
+        }, ArtificerMixerRegistry.BREW_DRINKABLE, ArtificerMixerRegistry.BREW_THROWABLE);
+        HudRenderCallback.EVENT.register(new PotionMixerHud());
+
+
+
 
 
 

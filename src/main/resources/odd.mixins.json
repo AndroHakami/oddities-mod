@@ -17,9 +17,7 @@
     "client.OverdriveCameraShakeMixin",
     "client.OverdriveFovMixin",
     "client.OverdrivePerspectiveMixin",
-    "client.VacuumAimPoseMixin",
-    "client.VacuumNoBobMixin",
-    "client.accessor.LivingEntityRendererAccessor"
+    "client.VacuumNoBobMixin"
   ],
   "injectors": {
     "defaultRequire": 1
