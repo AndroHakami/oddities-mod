@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["gaia", "hot", "life"],
+  "per": 250,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "shockwave",
+  "color": 4281597951
+}

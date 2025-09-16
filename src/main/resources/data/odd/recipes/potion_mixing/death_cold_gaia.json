@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["gaia", "light", "life"],
+  "per": 300,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "healing_burst",
+  "color": 4281597951
+}

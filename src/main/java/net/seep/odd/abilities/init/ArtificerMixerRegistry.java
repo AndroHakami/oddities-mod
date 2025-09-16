@@ -69,6 +69,7 @@ public final class ArtificerMixerRegistry {
 
         // --- Fabric Transfer exposure for pipes (only once) ---
         FluidStorage.SIDED.registerForBlockEntity((be, dir) -> be.externalCombinedStorage(), POTION_MIXER_BE);
+        net.seep.odd.abilities.artificer.mixer.brew.BrewEffects.registerDefaults();
 
         // --- Screen Handler ---
         if (Registries.SCREEN_HANDLER.containsId(mixId)) {

@@ -1,9 +1,0 @@
-{
-  "type": "odd:potion_mixing",
-  "essences": ["gaia", "light", "hot"],
-  "per_essence_mb": 250,
-  "kind": "drinkable",
-  "count": 1,
-  "brew_id": "gaia_light_hot",
-  "color_argb": "0xFF46C046"
-}

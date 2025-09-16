@@ -144,6 +144,20 @@ public final class OdditiesClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(
                 new net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud()
         );
+        EntityRendererRegistry.register(
+                net.seep.odd.entity.ModEntities.BREW_BOTTLE,
+                ctx -> new net.minecraft.client.render.entity.FlyingItemEntityRenderer<>(ctx)
+        );
+        // Tint the liquid overlay (layer1 has tintIndex == 1)
+        net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
+                    if (tintIndex == 1) { // only tint the overlay layer
+                        var nbt = stack.getNbt();
+                        return (nbt != null && nbt.contains("odd_brew_color")) ? nbt.getInt("odd_brew_color") : 0xFFFFFFFF;
+                    }
+                    return 0xFFFFFFFF; // base stays un-tinted
+                }, net.seep.odd.abilities.init.ArtificerMixerRegistry.BREW_DRINKABLE,
+                net.seep.odd.abilities.init.ArtificerMixerRegistry.BREW_THROWABLE);
+
 
 
 

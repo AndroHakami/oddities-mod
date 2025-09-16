@@ -12,10 +12,12 @@ import net.seep.odd.abilities.artificer.EssenceType;
 public class MixerTankStorage extends SingleVariantStorage<FluidVariant> {
     private final long capacityMb;
     private final EssenceType essence;
+    private final Runnable onCommit; // <-- notify BE when transactions finish
 
-    public MixerTankStorage(long capacityMb, EssenceType essence) {
+    public MixerTankStorage(long capacityMb, EssenceType essence, Runnable onCommit) {
         this.capacityMb = capacityMb;
         this.essence = essence;
+        this.onCommit = onCommit;
     }
 
     public EssenceType getEssence() { return essence; }
@@ -23,13 +25,15 @@ public class MixerTankStorage extends SingleVariantStorage<FluidVariant> {
     @Override protected FluidVariant getBlankVariant() { return FluidVariant.blank(); }
     @Override protected long getCapacity(FluidVariant variant) { return capacityMb; }
 
-    @Override
-    protected boolean canInsert(FluidVariant variant) {
-        // Accept only this essence's fluid
+    @Override protected boolean canInsert(FluidVariant variant) {
         return !variant.isBlank() && variant.getFluid() == essence.getFluid();
     }
 
-    /* ---- NBT: amount + fluid id (for display/persistence) ---- */
+    @Override protected void onFinalCommit() {
+        if (onCommit != null) onCommit.run();   // <-- sync BE to clients
+    }
+
+    /* ---- NBT ---- */
     public void toNbt(NbtCompound tag) {
         tag.putLong("amt", getAmount());
         tag.putString("fluid", getResource().isBlank()
@@ -50,7 +54,6 @@ public class MixerTankStorage extends SingleVariantStorage<FluidVariant> {
             Identifier id = Identifier.tryParse(idStr);
             if (id != null) {
                 var fluid = Registries.FLUID.get(id);
-                // Only restore if it still matches this tank's essence
                 if (fluid == essence.getFluid()) {
                     try (Transaction tx = Transaction.openOuter()) {
                         insert(FluidVariant.of(fluid), amt, tx);

@@ -24,6 +24,8 @@ public final class ModEntities {
     public static final Identifier EMERALD_SHURIKEN_ID  = new Identifier(Oddities.MOD_ID, "emerald_shuriken");
     public static final Identifier VILLAGER_EVO_ID     = new Identifier(Oddities.MOD_ID, "villager_evo");
     public static final Identifier TAME_BALL_ID = new Identifier(Oddities.MOD_ID, "tame_ball");
+    public static final Identifier BREW_BOTTLE_ID = new Identifier(Oddities.MOD_ID, "brew_bottle");
+
 
     /** Assigned in {@link #register()} during mod init. */
     public static EntityType<CreepyEntity>             CREEPY;
@@ -31,6 +33,7 @@ public final class ModEntities {
     public static EntityType<EmeraldShurikenEntity>    EMERALD_SHURIKEN;
     public static EntityType<VillagerEvoEntity>       VILLAGER_EVO;
     public static EntityType<TameBallEntity> TAME_BALL;
+    public static EntityType<net.seep.odd.abilities.artificer.mixer.projectile.BrewBottleEntity> BREW_BOTTLE;
 
     public static void register() {
         // Creepy
@@ -99,6 +102,21 @@ public final class ModEntities {
                     TAME_BALL_ID,
                     net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder
                             .<TameBallEntity>create(SpawnGroup.MISC, TameBallEntity::new)
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(10)
+                            .build()
+            );
+        }
+        if (BREW_BOTTLE == null) {
+            BREW_BOTTLE = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    BREW_BOTTLE_ID,
+                    FabricEntityTypeBuilder
+                            .<net.seep.odd.abilities.artificer.mixer.projectile.BrewBottleEntity>create(
+                                    SpawnGroup.MISC,
+                                    net.seep.odd.abilities.artificer.mixer.projectile.BrewBottleEntity::new
+                            )
                             .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
                             .trackRangeBlocks(64)
                             .trackedUpdateRate(10)
