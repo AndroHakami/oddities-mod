@@ -26,6 +26,10 @@ import net.minecraft.world.WorldView;
 
 import net.seep.odd.abilities.artificer.EssenceType;
 
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
+
 public final class ArtificerFluids {
     private ArtificerFluids() {}
 
@@ -50,7 +54,7 @@ public final class ArtificerFluids {
         @Override
         protected BlockState toBlockState(FluidState state) {
             return BLOCKS[type.ordinal()].getDefaultState()
-                    .with(net.minecraft.block.FluidBlock.LEVEL, getBlockStateLevel(state)); // ✅ correct property
+                    .with(FluidBlock.LEVEL, getBlockStateLevel(state));
         }
 
         @Override
@@ -63,7 +67,6 @@ public final class ArtificerFluids {
         @Override public Fluid getFlowing()    { return FLOWING[type.ordinal()]; }
         @Override public Fluid getStill()      { return STILL[type.ordinal()]; }
 
-        // helps MC treat “this type” as the same family
         @Override
         public boolean matchesType(Fluid other) {
             return other == getStill() || other == getFlowing();
@@ -95,24 +98,17 @@ public final class ArtificerFluids {
             this.type = type;
         }
 
-        // Opaque/dark look
         @Override public float getAmbientOcclusionLightLevel(BlockState s, BlockView w, BlockPos p) { return 0.0f; }
 
-        @Override
-        public boolean isTransparent(BlockState state, BlockView world, BlockPos pos) {
+        @Override public boolean isTransparent(BlockState state, BlockView world, BlockPos pos) {
             return super.isTransparent(state, world, pos);
         }
 
         @Override
         public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
-            // Strong horizontal + modest vertical drag (similar to cobweb/powder snow style)
-            // Values are (x, y, z) multipliers applied internally by the engine
             entity.slowMovement(state, new net.minecraft.util.math.Vec3d(0.30D, 0.20D, 0.30D));
-
-            // Extra nudge so it "immediately" feels heavy—kept subtle to avoid jitter
             var v = entity.getVelocity();
             entity.setVelocity(v.x * 0.85, v.y * 0.90, v.z * 0.85);
-
             super.onEntityCollision(state, world, pos, entity);
         }
     }
@@ -125,6 +121,12 @@ public final class ArtificerFluids {
     public static final FluidBlock[]    BLOCKS  = new FluidBlock[EssenceType.values().length];
     public static final Item[]          BUCKETS = new Item[EssenceType.values().length];
 
+    /* ====================================================================== */
+    /*  Maps for EssenceType <-> Fluid lookups (used by EssenceType helpers)  */
+    /* ====================================================================== */
+    public static final EnumMap<EssenceType, Fluid> ESSENCE_FLUIDS = new EnumMap<>(EssenceType.class);
+    public static final Map<Fluid, EssenceType>     FLUID_TO_ESSENCE = new HashMap<>();
+
     public static void registerAll() {
         for (EssenceType t : EssenceType.values()) {
             int i = t.ordinal();
@@ -134,22 +136,28 @@ public final class ArtificerFluids {
             FLOWING[i] = Registry.register(Registries.FLUID, id("flowing_" + t.key),
                     new EssenceFluid.Flowing(t));
 
+            // Fill lookup maps (we treat the "still" variant as the canonical fluid for this essence)
+            ESSENCE_FLUIDS.put(t, STILL[i]);
+            FLUID_TO_ESSENCE.put(STILL[i], t);
+            FLUID_TO_ESSENCE.put(FLOWING[i], t);
+
             var blockSettings = FabricBlockSettings.copyOf(Blocks.LAVA)
                     .noCollision()
                     .dropsNothing()
                     .strength(100.0f)
-                    .velocityMultiplier(0.4f)        // ← slows movement while on/at surface
-                    .jumpVelocityMultiplier(0.5f);   // ← reduces hop out pop
+                    .velocityMultiplier(0.4f)
+                    .jumpVelocityMultiplier(0.5f);
 
+            // quick theming; adjust as you like
             if (t == EssenceType.LIGHT) blockSettings = blockSettings.luminance(14);
-            if (t == EssenceType.COLD) blockSettings = blockSettings.luminance(8);
-            if (t == EssenceType.GAIA) blockSettings = blockSettings.luminance(8);
-            if (t == EssenceType.HOT) blockSettings = blockSettings.luminance(10);
+            if (t == EssenceType.COLD)  blockSettings = blockSettings.luminance(8);
+            if (t == EssenceType.GAIA)  blockSettings = blockSettings.luminance(8);
+            if (t == EssenceType.HOT)   blockSettings = blockSettings.luminance(10);
             if (t == EssenceType.DEATH) blockSettings = blockSettings.luminance(6);
-            if (t == EssenceType.LIFE) blockSettings = blockSettings.luminance(10);
+            if (t == EssenceType.LIFE)  blockSettings = blockSettings.luminance(10);
 
             BLOCKS[i]  = Registry.register(Registries.BLOCK, id(t.key + "_fluid_block"),
-                    new EssenceFluidBlock(t, (FlowableFluid) STILL[i], blockSettings));
+                    new EssenceFluidBlock(t, STILL[i], blockSettings));
 
             BUCKETS[i] = Registry.register(Registries.ITEM, id("bucket_" + t.key),
                     new BucketItem(STILL[i], new Item.Settings()

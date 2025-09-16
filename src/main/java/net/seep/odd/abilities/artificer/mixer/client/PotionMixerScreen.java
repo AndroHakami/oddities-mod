@@ -5,8 +5,8 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.text.Text;
 import net.seep.odd.abilities.artificer.EssenceType;
-import net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -14,13 +14,12 @@ import java.util.Set;
 public class PotionMixerScreen extends HandledScreen<PotionMixerScreenHandler> {
     private final Set<EssenceType> picked = EnumSet.noneOf(EssenceType.class);
 
-    public PotionMixerScreen(PotionMixerScreenHandler h, PlayerInventory inv, Text title) {
-        super(h, inv, title);
+    public PotionMixerScreen(PotionMixerScreenHandler handler, PlayerInventory inv, Text title) {
+        super(handler, inv, title);
         backgroundWidth = 176; backgroundHeight = 166;
     }
 
-    @Override
-    protected void drawBackground(DrawContext ctx, float delta, int mx, int my) {
+    @Override protected void drawBackground(DrawContext ctx, float delta, int mouseX, int mouseY) {
         ctx.fill(x, y, x + backgroundWidth, y + backgroundHeight, 0xAA141414);
         int ty = y + 8;
         ctx.drawText(textRenderer, title, x + 8, ty, 0xFFFFFF, false);
@@ -39,8 +38,7 @@ public class PotionMixerScreen extends HandledScreen<PotionMixerScreenHandler> {
         ctx.drawText(textRenderer, Text.literal("Brew"), x + 8 + 20, ty + 3, 0xFFFFFFFF, false);
     }
 
-    @Override
-    public boolean mouseClicked(double mx, double my, int button) {
+    @Override public boolean mouseClicked(double mx, double my, int button) {
         int ty = y + 20;
         int ix = x + 8;
 
@@ -55,7 +53,7 @@ public class PotionMixerScreen extends HandledScreen<PotionMixerScreenHandler> {
 
         ty += 6;
         if (mx >= x + 8 && mx <= x + 68 && my >= ty && my <= ty + 14) {
-            MixerNet.sendBrew(handler.pos, picked);
+            if (picked.size() == 3) MixerNet.sendBrew(handler.pos, picked);
             return true;
         }
         return super.mouseClicked(mx, my, button);

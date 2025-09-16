@@ -9,7 +9,9 @@ import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.util.math.BlockPos;
 
 public class PotionMixerScreenHandler extends ScreenHandler {
-    public static ScreenHandlerType<PotionMixerScreenHandler> TYPE; // set in your existing registry spot
+    // Assigned in ModBlocks.registerModBlocks()
+    public static ScreenHandlerType<PotionMixerScreenHandler> TYPE;
+
     public final BlockPos pos;
 
     public PotionMixerScreenHandler(int syncId, PlayerInventory inv, BlockPos pos) {
@@ -18,16 +20,18 @@ public class PotionMixerScreenHandler extends ScreenHandler {
     }
 
     @Override
-    public ItemStack quickMove(PlayerEntity player, int slot) {
-        return null;
-    }
-
-    @Override public boolean canUse(PlayerEntity player) {
+    public boolean canUse(PlayerEntity player) {
         return player.getWorld().getBlockEntity(pos) instanceof PotionMixerBlockEntity;
     }
 
-    // Factory for registration:
-    public static ExtendedScreenHandlerType.ScreenHandlerFactory<PotionMixerScreenHandler> factory() {
+    /** Required by ScreenHandler even if you have no slots. */
+    @Override
+    public ItemStack quickMove(PlayerEntity player, int index) {
+        return ItemStack.EMPTY;
+    }
+
+    /** Factory used by ExtendedScreenHandlerType to read BlockPos from the buffer. */
+    public static ExtendedScreenHandlerType.ExtendedFactory<PotionMixerScreenHandler> factory() {
         return (syncId, inv, buf) -> new PotionMixerScreenHandler(syncId, inv, buf.readBlockPos());
     }
 }

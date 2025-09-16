@@ -15,6 +15,7 @@ import net.minecraft.recipe.RecipeType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.Direction;
 import net.seep.odd.abilities.artificer.mixer.*;
 
 public final class ArtificerMixerRegistry {
@@ -52,7 +53,10 @@ public final class ArtificerMixerRegistry {
         );
 
         // Fabric fluids I/O exposure (Create pipes talk to this)
-        FluidStorage.SIDED.registerForBlockEntity((be, dir) -> be.externalCombinedStorage(), POTION_MIXER_BE);
+        FluidStorage.SIDED.registerForBlockEntity(
+                (PotionMixerBlockEntity be, Direction dir) -> be.getFluidStorage(),
+                POTION_MIXER_BE
+        );
     }
 
     @Environment(EnvType.CLIENT)

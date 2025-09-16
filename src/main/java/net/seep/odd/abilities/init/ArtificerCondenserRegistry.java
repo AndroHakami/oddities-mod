@@ -5,6 +5,7 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
+import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.BlockItem;
@@ -14,7 +15,11 @@ import net.minecraft.registry.Registry;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.seep.odd.abilities.artificer.condenser.*;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
+
+import static net.seep.odd.abilities.init.ArtificerMixerRegistry.POTION_MIXER_BE;
 
 public final class ArtificerCondenserRegistry {
     private ArtificerCondenserRegistry() {}
@@ -56,6 +61,10 @@ public final class ArtificerCondenserRegistry {
         Registry.register(Registries.SCREEN_HANDLER,   id("condenser"),    CONDENSER_SH);
 
         CondenserNet.registerServer();
+        FluidStorage.SIDED.registerForBlockEntity(
+                (PotionMixerBlockEntity be, Direction dir) -> be.getFluidStorage(),
+                POTION_MIXER_BE
+        );
     }
 
     @Environment(EnvType.CLIENT)

@@ -40,6 +40,12 @@ import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
+import net.fabricmc.api.ClientModInitializer;
+import net.minecraft.client.gui.screen.ingame.HandledScreens;
+import net.seep.odd.block.ModBlocks;
+import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
+import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
@@ -56,6 +62,7 @@ public final class OdditiesClient implements ClientModInitializer {
         AbilityKeybinds.register();
         AbilityHudOverlay.register();
         ShadowFormOverlay.register();
+
 
         // Forger screens (client)
         HandledScreens.register(ModScreens.GRAND_ANVIL, GrandAnvilScreen::new);
@@ -134,6 +141,10 @@ public final class OdditiesClient implements ClientModInitializer {
             return 0xFFFFFFFF; // base layer untouched
         }, ArtificerMixerRegistry.BREW_DRINKABLE, ArtificerMixerRegistry.BREW_THROWABLE);
         HudRenderCallback.EVENT.register(new PotionMixerHud());
+        HandledScreens.register(ModBlocks.POTION_MIXER_HANDLER, PotionMixerScreen::new);
+
+
+
 
 
 

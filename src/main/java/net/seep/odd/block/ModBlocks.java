@@ -3,6 +3,7 @@ package net.seep.odd.block;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -11,29 +12,38 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.util.Identifier;
+
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerBlock;
 import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler;
 import net.seep.odd.block.custom.CrappyBlock;
+import net.seep.odd.block.custom.SoundBlock;
 import net.seep.odd.block.grandanvil.GrandAnvilBlock;
 import net.seep.odd.block.grandanvil.GrandAnvilBlockEntity;
-import net.seep.odd.block.custom.SoundBlock;
 import net.seep.odd.sound.ModSounds;
 
-import static net.seep.odd.abilities.init.ArtificerMixerRegistry.POTION_MIXER;
-
 public class ModBlocks {
+
+    /* ---------------- Existing blocks ---------------- */
+
     public static final Block RUBY_BLOCK = registerBlock("ruby_block",
             new Block(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).sounds(BlockSoundGroup.AMETHYST_BLOCK)), false);
+
     public static final Block RAW_RUBY_BLOCK = registerBlock("raw_ruby_block",
             new Block(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).sounds(BlockSoundGroup.AMETHYST_BLOCK)), false);
+
     public static final Block SOUND_BLOCK = registerBlock("sound_block",
             new SoundBlock(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).sounds(ModSounds.SOUND_BLOCK_SOUNDS)), false);
+
     public static final Block GRAND_ANVIL = Registry.register(
             Registries.BLOCK,
             new Identifier(Oddities.MOD_ID, "grand_anvil"),
-            new GrandAnvilBlock(AbstractBlock.Settings.copy(Blocks.ANVIL).strength(5.0f, 1200f).requiresTool().nonOpaque())
+            new GrandAnvilBlock(AbstractBlock.Settings.copy(Blocks.ANVIL)
+                    .strength(5.0f, 1200f).requiresTool().nonOpaque())
     );
 
     public static final BlockEntityType<GrandAnvilBlockEntity> GRAND_ANVIL_BE = Registry.register(
@@ -41,39 +51,81 @@ public class ModBlocks {
             new Identifier(Oddities.MOD_ID, "grand_anvil"),
             FabricBlockEntityTypeBuilder.create(GrandAnvilBlockEntity::new, GRAND_ANVIL).build(null)
     );
-    public static final BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE = Registry.register(
-            Registries.BLOCK_ENTITY_TYPE, new Identifier(Oddities.MOD_ID, "potion_mixer"), FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build(null)
-    );
-
-
-
 
     public static final Block CRAPPY_BLOCK = registerBlock("crappy_block",
             new CrappyBlock(
                     AbstractBlock.Settings.copy(Blocks.STONE)
-                            .sounds(ModSounds.CRAPPY_BLOCK_SOUNDS) // “goofy” feel
+                            .sounds(ModSounds.CRAPPY_BLOCK_SOUNDS)
                             .requiresTool()
                             .nonOpaque()
-                            .luminance(state -> 7), // easy to break if needed
-                    80 // lifespan ticks (4s)
+                            .luminance(state -> 7),
+                    80
             ),
-            false // set to true if you want a BlockItem
+            false
     );
 
+    /* ---------------- Potion Mixer ---------------- */
+
+    public static Block POTION_MIXER;
+    public static Item  POTION_MIXER_ITEM;
+    public static BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE;
+    public static ScreenHandlerType<PotionMixerScreenHandler> POTION_MIXER_HANDLER;
+
+    /* ---------------- Helpers ---------------- */
+
     private static Block registerBlock(String id, Block block, boolean withItem) {
-        Identifier rid = new Identifier("odd", id);
+        Identifier rid = new Identifier(Oddities.MOD_ID, id);
         Registry.register(Registries.BLOCK, rid, block);
         if (withItem) {
             Registry.register(Registries.ITEM, rid, new BlockItem(block, new Item.Settings()));
         }
         return block;
     }
+
     private static Item registerBlockItem(String name, Block block) {
         return Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, name),
                 new BlockItem(block, new FabricItemSettings()));
     }
 
+    /* ---------------- Entry point ---------------- */
+
     public static void registerModBlocks() {
         Oddities.LOGGER.info("Registering ModBlocks for " + Oddities.MOD_ID);
+
+        // Block
+        POTION_MIXER = Registry.register(
+                Registries.BLOCK,
+                new Identifier(Oddities.MOD_ID, "potion_mixer"),
+                new PotionMixerBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
+                        .strength(3.0f)
+                        .nonOpaque())
+        );
+
+        // Block item
+        POTION_MIXER_ITEM = Registry.register(
+                Registries.ITEM,
+                new Identifier(Oddities.MOD_ID, "potion_mixer"),
+                new BlockItem(POTION_MIXER, new Item.Settings())
+        );
+
+        // Block entity type
+        POTION_MIXER_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE,
+                new Identifier(Oddities.MOD_ID, "potion_mixer"),
+                FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build(null)
+        );
+        java.util.Objects.requireNonNull(POTION_MIXER_BE, "POTION_MIXER_BE not registered yet");
+
+        net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage.SIDED.registerForBlockEntity(
+                (be, dir) -> ((net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity) be).getFluidStorage(),
+                POTION_MIXER_BE
+        );
+
+        // Screen handler type
+        POTION_MIXER_HANDLER = Registry.register(
+                Registries.SCREEN_HANDLER,
+                new Identifier(Oddities.MOD_ID, "potion_mixer"),
+                new ExtendedScreenHandlerType<>(PotionMixerScreenHandler.factory())
+        );
     }
 }

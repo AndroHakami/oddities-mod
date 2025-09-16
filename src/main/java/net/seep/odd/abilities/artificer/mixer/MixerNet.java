@@ -11,29 +11,24 @@ import net.seep.odd.abilities.artificer.EssenceType;
 import java.util.EnumSet;
 import java.util.Set;
 
-/** C2S for the Potion Mixer only (lives under artificer.mixer). */
 public final class MixerNet {
     private MixerNet() {}
+    public static final Identifier MIXER_BREW = new Identifier("odd","mixer_brew");
 
-    public static final Identifier MIXER_BREW = new Identifier("odd", "mixer_brew");
-
-    /** Call this once during common init (server receivers). */
     public static void registerServer() {
-        ServerPlayNetworking.registerGlobalReceiver(MIXER_BREW, (server, player, handler, buf, responseSender) -> {
+        ServerPlayNetworking.registerGlobalReceiver(MIXER_BREW, (server, player, handler, buf, rs) -> {
             BlockPos pos = buf.readBlockPos();
             int n = buf.readVarInt();
-            Set<EssenceType> picked = EnumSet.noneOf(EssenceType.class);
-            for (int i = 0; i < n; i++) picked.add(buf.readEnumConstant(EssenceType.class));
-
+            Set<EssenceType> set = EnumSet.noneOf(EssenceType.class);
+            for (int i=0;i<n;i++) set.add(buf.readEnumConstant(EssenceType.class));
             server.execute(() -> {
                 if (player.getWorld().getBlockEntity(pos) instanceof PotionMixerBlockEntity be) {
-                    be.craft(picked);
+                    be.craft(set);
                 }
             });
         });
     }
 
-    /** Client-side send from the screen. */
     public static void sendBrew(BlockPos pos, Set<EssenceType> picked) {
         PacketByteBuf buf = new PacketByteBuf(Unpooled.buffer());
         buf.writeBlockPos(pos);

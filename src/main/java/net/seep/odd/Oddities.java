@@ -10,6 +10,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.registry.FuelRegistry;
 
+import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -24,6 +25,8 @@ import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
 import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
 import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
+import net.seep.odd.abilities.artificer.mixer.MixerNet;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
@@ -157,6 +160,13 @@ public final class Oddities implements ModInitializer {
 		ArtificerCondenserRegistry.registerAll();
 		ArtificerFluids.registerAll();
 		ArtificerMixerRegistry.registerAll();
+		MixerNet.registerServer();
+		FluidStorage.SIDED.registerForBlockEntity(
+				(be, dir) -> ((PotionMixerBlockEntity) be).getFluidStorage(),
+				ModBlocks.POTION_MIXER_BE
+		);
+
+
 
 
 
