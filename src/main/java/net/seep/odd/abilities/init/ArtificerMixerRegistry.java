@@ -4,6 +4,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -14,54 +15,138 @@ import net.minecraft.recipe.RecipeSerializer;
 import net.minecraft.recipe.RecipeType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Direction;
 import net.seep.odd.abilities.artificer.mixer.*;
 
 public final class ArtificerMixerRegistry {
     private ArtificerMixerRegistry() {}
 
-    public static final Block POTION_MIXER =
-            new PotionMixerBlock(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).strength(3.5f).requiresTool());
-
-    public static final BlockItem POTION_MIXER_ITEM =
-            new BlockItem(POTION_MIXER, new Item.Settings());
-
+    // NOTE: all are lazy; nothing is constructed until we actually register/adopt
+    public static Block POTION_MIXER;
     public static BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE;
+    public static ScreenHandlerType<PotionMixerScreenHandler> POTION_MIXER_SH;
+    public static RecipeType<PotionMixingRecipe> POTION_MIXING_TYPE;
+    public static RecipeSerializer<PotionMixingRecipe> POTION_MIXING_SERIALIZER;
+    public static Item BREW_DRINKABLE;
+    public static Item BREW_THROWABLE;
 
-    // Recipe plumbing
-    public static final RecipeType<PotionMixingRecipe> POTION_MIXING_TYPE =
-            Registry.register(Registries.RECIPE_TYPE, id("potion_mixing"), new RecipeType<>(){ public String toString(){ return "odd:potion_mixing"; }});
-
-    public static final RecipeSerializer<PotionMixingRecipe> POTION_MIXING_SERIALIZER =
-            Registry.register(Registries.RECIPE_SERIALIZER, id("potion_mixing"), new PotionMixingRecipeSerializer());
-
-    // Brew items (basic now; extend later)
-    public static final Item BREW_DRINKABLE =
-            Registry.register(Registries.ITEM, id("brew_drinkable"), new ArtificerBrewItem(new Item.Settings().maxCount(16), ArtificerBrewItem.Kind.DRINK));
-
-    public static final Item BREW_THROWABLE =
-            Registry.register(Registries.ITEM, id("brew_throwable"), new ArtificerBrewItem(new Item.Settings().maxCount(16), ArtificerBrewItem.Kind.THROW));
+    private static boolean REGISTERED = false;
 
     public static void registerAll() {
-        Registry.register(Registries.BLOCK, id("potion_mixer"), POTION_MIXER);
-        Registry.register(Registries.ITEM,  id("potion_mixer"), POTION_MIXER_ITEM);
+        if (REGISTERED) return;
+        REGISTERED = true;
 
-        POTION_MIXER_BE = Registry.register(
-                Registries.BLOCK_ENTITY_TYPE, id("potion_mixer"),
-                FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build()
-        );
+        final Identifier mixId = id("potion_mixer");
+        final Identifier mixTypeId = id("potion_mixing");
 
-        // Fabric fluids I/O exposure (Create pipes talk to this)
-        FluidStorage.SIDED.registerForBlockEntity(
-                (PotionMixerBlockEntity be, Direction dir) -> be.getFluidStorage(),
-                POTION_MIXER_BE
-        );
+        // --- Block ---
+        if (Registries.BLOCK.containsId(mixId)) {
+            POTION_MIXER = Registries.BLOCK.get(mixId);
+        } else {
+            POTION_MIXER = Registry.register(
+                    Registries.BLOCK, mixId,
+                    new PotionMixerBlock(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).nonOpaque().strength(3.0f))
+            );
+        }
+
+        // --- Block Item ---
+        if (!Registries.ITEM.containsId(mixId)) {
+            Registry.register(Registries.ITEM, mixId, new BlockItem(POTION_MIXER, new Item.Settings()));
+        }
+
+        // --- Block Entity ---
+        if (Registries.BLOCK_ENTITY_TYPE.containsId(mixId)) {
+            @SuppressWarnings("unchecked")
+            var existing = (BlockEntityType<PotionMixerBlockEntity>) Registries.BLOCK_ENTITY_TYPE.get(mixId);
+            POTION_MIXER_BE = existing;
+        } else {
+            POTION_MIXER_BE = Registry.register(
+                    Registries.BLOCK_ENTITY_TYPE, mixId,
+                    FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build()
+            );
+        }
+
+        // --- Fabric Transfer exposure for pipes (only once) ---
+        FluidStorage.SIDED.registerForBlockEntity((be, dir) -> be.externalCombinedStorage(), POTION_MIXER_BE);
+
+        // --- Screen Handler ---
+        if (Registries.SCREEN_HANDLER.containsId(mixId)) {
+            @SuppressWarnings("unchecked")
+            var existing = (ScreenHandlerType<PotionMixerScreenHandler>) Registries.SCREEN_HANDLER.get(mixId);
+            POTION_MIXER_SH = existing;
+        } else {
+            POTION_MIXER_SH = Registry.register(
+                    Registries.SCREEN_HANDLER, mixId,
+                    new ExtendedScreenHandlerType<>(PotionMixerScreenHandler.factory())
+            );
+        }
+        PotionMixerScreenHandler.TYPE = POTION_MIXER_SH;
+
+        // --- Recipe Type + Serializer ---
+        if (Registries.RECIPE_TYPE.containsId(mixTypeId)) {
+            @SuppressWarnings("unchecked")
+            var existing = (RecipeType<PotionMixingRecipe>) Registries.RECIPE_TYPE.get(mixTypeId);
+            POTION_MIXING_TYPE = existing;
+        } else {
+            POTION_MIXING_TYPE = Registry.register(
+                    Registries.RECIPE_TYPE, mixTypeId,
+                    new RecipeType<>() { public String toString() { return "odd:potion_mixing"; } }
+            );
+        }
+
+        if (Registries.RECIPE_SERIALIZER.containsId(mixTypeId)) {
+            var existing = Registries.RECIPE_SERIALIZER.get(mixTypeId);
+            // keep the existing one; no assignment needed unless you want a handle
+        } else {
+            POTION_MIXING_SERIALIZER = Registry.register(
+                    Registries.RECIPE_SERIALIZER, mixTypeId,
+                    new PotionMixingRecipeSerializer()
+            );
+        }
+
+        // --- Items (lazy-construct only if missing) ---
+        Identifier drinkId = id("brew_drinkable");
+        if (Registries.ITEM.containsId(drinkId)) {
+            BREW_DRINKABLE = Registries.ITEM.get(drinkId);
+        } else {
+            BREW_DRINKABLE = Registry.register(
+                    Registries.ITEM, drinkId,
+                    new ArtificerBrewItem(new Item.Settings(), ArtificerBrewItem.Kind.DRINK)
+            );
+        }
+
+        Identifier throwId = id("brew_throwable");
+        if (Registries.ITEM.containsId(throwId)) {
+            BREW_THROWABLE = Registries.ITEM.get(throwId);
+        } else {
+            BREW_THROWABLE = Registry.register(
+                    Registries.ITEM, throwId,
+                    new ArtificerBrewItem(new Item.Settings().maxCount(16), ArtificerBrewItem.Kind.THROW)
+            );
+        }
+
+        // Packets
+        MixerNet.register();
     }
 
     @Environment(EnvType.CLIENT)
     public static void registerClient() {
-        // (no GUI yet)
+        net.minecraft.client.gui.screen.ingame.HandledScreens.register(
+                POTION_MIXER_SH,
+                new net.minecraft.client.gui.screen.ingame.HandledScreens.Provider<
+                        net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler,
+                        net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen
+                        >() {
+                    @Override
+                    public net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen create(
+                            net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler handler,
+                            net.minecraft.entity.player.PlayerInventory inv,
+                            net.minecraft.text.Text title) {
+                        return new net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen(handler, inv, title);
+                    }
+                }
+        );
     }
 
     private static Identifier id(String p) { return new Identifier("odd", p); }

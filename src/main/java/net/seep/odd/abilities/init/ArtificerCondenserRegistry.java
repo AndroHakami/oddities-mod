@@ -61,10 +61,6 @@ public final class ArtificerCondenserRegistry {
         Registry.register(Registries.SCREEN_HANDLER,   id("condenser"),    CONDENSER_SH);
 
         CondenserNet.registerServer();
-        FluidStorage.SIDED.registerForBlockEntity(
-                (PotionMixerBlockEntity be, Direction dir) -> be.getFluidStorage(),
-                POTION_MIXER_BE
-        );
     }
 
     @Environment(EnvType.CLIENT)

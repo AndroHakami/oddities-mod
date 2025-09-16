@@ -141,7 +141,10 @@ public final class OdditiesClient implements ClientModInitializer {
             return 0xFFFFFFFF; // base layer untouched
         }, ArtificerMixerRegistry.BREW_DRINKABLE, ArtificerMixerRegistry.BREW_THROWABLE);
         HudRenderCallback.EVENT.register(new PotionMixerHud());
-        HandledScreens.register(ModBlocks.POTION_MIXER_HANDLER, PotionMixerScreen::new);
+        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(
+                new net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud()
+        );
+
 
 
 

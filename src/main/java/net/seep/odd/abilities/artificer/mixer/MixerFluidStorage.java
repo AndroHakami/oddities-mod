@@ -2,17 +2,17 @@ package net.seep.odd.abilities.artificer.mixer;
 
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.minecraft.util.math.Direction;
-import net.seep.odd.block.ModBlocks;
+import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 
-/** Fabric Transfer bridge so pipes can insert/extract from the mixer tanks. */
+/** Fabric Transfer exposure for the Potion Mixer. */
 public final class MixerFluidStorage {
     private MixerFluidStorage() {}
 
+    /** Call once after POTION_MIXER_BE is registered (or keep the inline call in the registry). */
     public static void register() {
-        // Expose the BE's combined Storage<FluidVariant> on all sides
         FluidStorage.SIDED.registerForBlockEntity(
-                (PotionMixerBlockEntity be, Direction dir) -> be.getFluidStorage(),
-                ModBlocks.POTION_MIXER_BE
+                (PotionMixerBlockEntity be, Direction dir) -> be.externalCombinedStorage(),
+                ArtificerMixerRegistry.POTION_MIXER_BE
         );
     }
 }

@@ -3,7 +3,6 @@ package net.seep.odd.block;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
-import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
@@ -12,14 +11,12 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
-import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.util.Identifier;
 
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.artificer.mixer.PotionMixerBlock;
 import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
-import net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler;
 import net.seep.odd.block.custom.CrappyBlock;
 import net.seep.odd.block.custom.SoundBlock;
 import net.seep.odd.block.grandanvil.GrandAnvilBlock;
@@ -64,12 +61,11 @@ public class ModBlocks {
             false
     );
 
-    /* ---------------- Potion Mixer ---------------- */
+    /* ---------------- Potion Mixer (blocks only) ---------------- */
 
     public static Block POTION_MIXER;
     public static Item  POTION_MIXER_ITEM;
     public static BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE;
-    public static ScreenHandlerType<PotionMixerScreenHandler> POTION_MIXER_HANDLER;
 
     /* ---------------- Helpers ---------------- */
 
@@ -113,19 +109,6 @@ public class ModBlocks {
                 Registries.BLOCK_ENTITY_TYPE,
                 new Identifier(Oddities.MOD_ID, "potion_mixer"),
                 FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build(null)
-        );
-        java.util.Objects.requireNonNull(POTION_MIXER_BE, "POTION_MIXER_BE not registered yet");
-
-        net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage.SIDED.registerForBlockEntity(
-                (be, dir) -> ((net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity) be).getFluidStorage(),
-                POTION_MIXER_BE
-        );
-
-        // Screen handler type
-        POTION_MIXER_HANDLER = Registry.register(
-                Registries.SCREEN_HANDLER,
-                new Identifier(Oddities.MOD_ID, "potion_mixer"),
-                new ExtendedScreenHandlerType<>(PotionMixerScreenHandler.factory())
         );
     }
 }

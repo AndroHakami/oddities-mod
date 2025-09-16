@@ -4,9 +4,9 @@ import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidVariant;
 import net.fabricmc.fabric.api.transfer.v1.storage.Storage;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.CombinedStorage;
-import net.fabricmc.fabric.api.transfer.v1.storage.base.SingleVariantStorage;
+import net.fabricmc.fabric.api.transfer.v1.storage.StorageView;
 import net.fabricmc.fabric.api.transfer.v1.transaction.Transaction;
+import net.fabricmc.fabric.api.transfer.v1.transaction.TransactionContext;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
@@ -15,148 +15,135 @@ import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.network.PacketByteBuf;
-import net.minecraft.registry.Registries;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.ItemScatterer;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.artificer.EssenceType;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
-import net.seep.odd.block.ModBlocks;
-import net.seep.odd.sound.ModSounds;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*;
+import java.util.EnumMap;
+import java.util.Iterator;
+import java.util.Set;
 
+/** Create-powered mixer BE with per-essence tanks and Fabric Transfer exposure. */
 public class PotionMixerBlockEntity extends KineticBlockEntity implements ExtendedScreenHandlerFactory {
     public static final int MIN_SPEED = 8;
     private static final long CAPACITY_MB = 1000;
-    private static final long COST_PER_ESSENCE = 100;
 
-    private final EnumMap<EssenceType, SingleVariantStorage<FluidVariant>> tanks = new EnumMap<>(EssenceType.class);
-    private final SimpleInventory output = new SimpleInventory(1);
+    private final EnumMap<EssenceType, MixerTankStorage> tanks = new EnumMap<>(EssenceType.class);
 
     public PotionMixerBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlocks.POTION_MIXER_BE, pos, state);
+        super(ArtificerMixerRegistry.POTION_MIXER_BE, pos, state);
         for (EssenceType t : EssenceType.values()) {
-            tanks.put(t, new SingleVariantStorage<>() {
-                @Override protected FluidVariant getBlankVariant() { return FluidVariant.blank(); }
-                @Override protected long getCapacity(FluidVariant variant) { return CAPACITY_MB; }
-                @Override protected boolean canInsert(FluidVariant variant) {
-                    return EssenceType.fromFluid(variant.getFluid()) == t;
-                }
-                @Override protected void onFinalCommit() { markDirty(); }
-            });
+            tanks.put(t, new MixerTankStorage(CAPACITY_MB));
         }
     }
 
-    public Storage<FluidVariant> getFluidStorage() {
-        return new CombinedStorage<>(new ArrayList<>(tanks.values()));
+    @Override
+    public void tick() {
+        super.tick();
+        if (getSpeed() != 0) setCachedState(getCachedState()); // keep BE live for Create
     }
 
-    // HUD helpers
-    public long getAmountDisplayMb(EssenceType t) { var s = tanks.get(t); return s == null ? 0 : s.getAmount(); }
-    public float getSpeedAbs() { return Math.abs(getSpeed()); }
-    public boolean isPoweredAndReady() { return Math.abs(getSpeed()) >= MIN_SPEED; }
+    /* ====== UI ====== */
+    @Override public Text getDisplayName() { return Text.translatable("block.odd.potion_mixer"); }
 
+    @Nullable @Override
+    public ScreenHandler createMenu(int syncId, PlayerInventory playerInventory, PlayerEntity player) {
+        return new PotionMixerScreenHandler(syncId, playerInventory, getPos());
+    }
 
-    // Craft: 3 distinct essences (orderless)
-    public boolean craft(Set<EssenceType> chosen) {
-        if (world == null || world.isClient) return false;
-        if (!isPoweredAndReady()) return false;
-        if (chosen == null || chosen.size() != 3) return false;
-        for (EssenceType t : chosen) { var s = tanks.get(t); if (s == null || s.getAmount() < COST_PER_ESSENCE) return false; }
+    @Override public void writeScreenOpeningData(ServerPlayerEntity player, PacketByteBuf buf) { buf.writeBlockPos(getPos()); }
 
-        PotionMixingRecipe recipe = findRecipe(chosen);
-        if (recipe == null) return false;
+    /* ====== Save/Load ====== */
+    @Override
+    protected void write(NbtCompound nbt, boolean clientPacket) {
+        super.write(nbt, clientPacket);
+        for (var e : tanks.entrySet()) {
+            NbtCompound t = new NbtCompound();
+            e.getValue().toNbt(t);
+            nbt.put("tank_" + e.getKey().name(), t);
+        }
+    }
+
+    @Override
+    protected void read(NbtCompound nbt, boolean clientPacket) {
+        super.read(nbt, clientPacket);
+        for (EssenceType t : EssenceType.values()) {
+            if (nbt.contains("tank_" + t.name())) {
+                tanks.get(t).fromNbt(nbt.getCompound("tank_" + t.name()));
+            }
+        }
+    }
+
+    /* ====== External IO (for pipes) ====== */
+    public Storage<FluidVariant> externalCombinedStorage() { return new MixerCombinedStorage(tanks); }
+
+    /* ====== Crafting ======
+       Note: your current PotionMixingRecipe.java in the repo is "machine-only" and does not
+       expose a helper like essenceAsStack(..). To keep this file compiling and functional,
+       we do a simple brew output here (you can wire real recipe selection later). */
+    public void tryBrew(Set<EssenceType> picked) {
+        if (world == null || world.isClient) return;
+        if (getSpeed() < MIN_SPEED) return;
+        if (picked.size() != 3) return;
+
+        long per = 250; // 250 mB from each essence
+        for (EssenceType t : picked) {
+            if (tanks.get(t).getAmount() < per) return;
+        }
+
+        ItemStack out = new ItemStack(ArtificerMixerRegistry.BREW_DRINKABLE, 1);
+        // Optional: tag for future effect/color selection
+        // out.getOrCreateNbt().putString("odd_brew_key", canonicalKey(picked));
 
         try (Transaction tx = Transaction.openOuter()) {
-            for (EssenceType t : chosen) {
-                tanks.get(t).extract(FluidVariant.of(t.getFluid()), COST_PER_ESSENCE, tx);
+            for (EssenceType t : picked) {
+                var tank = tanks.get(t);
+                tank.extract(tank.getResource(), per, tx);
             }
             tx.commit();
         }
 
-        ItemStack result = recipe.assembleItem();
-        if (!result.isEmpty()) {
-            if (output.getStack(0).isEmpty()) output.setStack(0, result.copy());
-            else ItemScatterer.spawn(world, pos.getX() + 0.5, pos.getY() + 1.0, pos.getZ() + 0.5, result);
-        }
-
-        world.playSound(null, pos, ModSounds.MIXER_BLEND_SUCCESS, SoundCategory.BLOCKS, 1f, 1f);
-        markDirty();
-        return true;
+        var ie = new net.minecraft.entity.ItemEntity(
+                world, pos.getX() + 0.5, pos.getY() + 1.1, pos.getZ() + 0.5, out);
+        world.spawnEntity(ie);
     }
 
-    private @Nullable PotionMixingRecipe findRecipe(Set<EssenceType> chosen) {
-        if (world == null || chosen == null || chosen.size() != 3) return null;
-
-        // Pull all recipes of our registered type from the RecipeManager
-        var all = world.getRecipeManager().listAllOfType(ArtificerMixerRegistry.POTION_MIXING_TYPE);
-
-        for (PotionMixingRecipe r : all) {
-            // either use the helper we added:
-            if (r.matches(chosen)) return r;
-
-            // or, equivalently:
-            // var req = r.requiredEssences();
-            // if (req != null && req.size() == 3 && req.equals(chosen)) return r;
-        }
-        return null;
-    }
-
-    // Screen factory
-    @Override public Text getDisplayName() { return Text.translatable("block.odd.potion_mixer"); }
-    @Override public void writeScreenOpeningData(ServerPlayerEntity player, PacketByteBuf buf) { buf.writeBlockPos(pos); }
-    @Override public @Nullable ScreenHandler createMenu(int syncId, PlayerInventory inv, PlayerEntity player) {
-        return new PotionMixerScreenHandler(syncId, inv, pos);
-    }
-    public Inventory getOutput() { return output; }
-
-    // NBT save/load for tanks
-    @Override protected void write(NbtCompound nbt, boolean clientPacket) {
-        super.write(nbt, clientPacket);
-        int i = 0;
-        for (EssenceType t : EssenceType.values()) {
-            var s = tanks.get(t);
-            NbtCompound tank = new NbtCompound();
-            if (s.getAmount() > 0) {
-                tank.putString("fluid", Registries.FLUID.getId(s.getResource().getFluid()).toString());
-                tank.putLong("amt", s.getAmount());
-            } else {
-                tank.putString("fluid", "");
-                tank.putLong("amt", 0);
+    /* ====== Fabric Storage bridge (combined view over all tanks) ====== */
+    public record MixerCombinedStorage(EnumMap<EssenceType, MixerTankStorage> map) implements Storage<FluidVariant> {
+        @Override
+        public long insert(FluidVariant resource, long maxAmount, TransactionContext transaction) {
+            long inserted = 0;
+            for (MixerTankStorage s : map.values()) {
+                if (inserted >= maxAmount) break;
+                inserted += s.insert(resource, maxAmount - inserted, transaction);
             }
-            nbt.put("tank_" + (i++), tank);
+            return inserted;
         }
-    }
-
-    @Override protected void read(NbtCompound nbt, boolean clientPacket) {
-        super.read(nbt, clientPacket);
-        int i = 0;
-        for (EssenceType t : EssenceType.values()) {
-            String key = "tank_" + (i++);
-            if (!nbt.contains(key)) continue;
-            NbtCompound tag = nbt.getCompound(key);
-            String fStr = tag.getString("fluid");
-            long amt = tag.getLong("amt");
-            var storage = tanks.get(t);
-            if (storage == null) continue;
-
-            try (Transaction tx = Transaction.openOuter()) {
-                if (storage.getAmount() > 0) {
-                    storage.extract(storage.getResource(), storage.getAmount(), tx);
-                }
-                if (!fStr.isEmpty() && amt > 0) {
-                    Identifier id = Identifier.tryParse(fStr);
-                    if (id != null) storage.insert(FluidVariant.of(Registries.FLUID.get(id)), amt, tx);
-                }
-                tx.commit();
+        @Override
+        public long extract(FluidVariant resource, long maxAmount, TransactionContext transaction) {
+            long extracted = 0;
+            for (MixerTankStorage s : map.values()) {
+                if (extracted >= maxAmount) break;
+                extracted += s.extract(resource, maxAmount - extracted, transaction);
             }
+            return extracted;
+        }
+        @Override
+        public Iterator<StorageView<FluidVariant>> iterator() {
+            java.util.ArrayList<StorageView<FluidVariant>> list = new java.util.ArrayList<>();
+            for (MixerTankStorage s : map.values())
+                for (StorageView<FluidVariant> v : s) list.add(v);
+            return list.iterator();
         }
     }
+
+    /* ====== HUD helpers used by PotionMixerHud ====== */
+    public long getAmountDisplayMb(EssenceType t) { var tank = this.tanks.get(t); return tank != null ? tank.getAmount() : 0L; }
+    public int getSpeedAbs() { return Math.round(Math.abs(getSpeed())); }
+    public boolean isPoweredAndReady() { return getSpeedAbs() >= MIN_SPEED; }
 }

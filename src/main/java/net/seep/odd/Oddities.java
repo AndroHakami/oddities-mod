@@ -160,11 +160,11 @@ public final class Oddities implements ModInitializer {
 		ArtificerCondenserRegistry.registerAll();
 		ArtificerFluids.registerAll();
 		ArtificerMixerRegistry.registerAll();
-		MixerNet.registerServer();
-		FluidStorage.SIDED.registerForBlockEntity(
-				(be, dir) -> ((PotionMixerBlockEntity) be).getFluidStorage(),
-				ModBlocks.POTION_MIXER_BE
-		);
+		MixerNet.register();
+
+
+
+
 
 
 
