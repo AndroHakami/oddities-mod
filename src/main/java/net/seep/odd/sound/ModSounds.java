@@ -27,6 +27,7 @@ public class ModSounds {
     public static final SoundEvent CRAPPY_BLOCK_STEP = registerSoundEvent("crappy_block_step");
     public static final SoundEvent VOID_AMBIENCE = registerSoundEvent("void_ambience");
     public static final SoundEvent VOID_OPEN = registerSoundEvent("void_open");
+    public static final SoundEvent MIXER_BLEND_SUCCESS = registerSoundEvent("mixer_blend_success");
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
             ModSounds.SOUND_BLOCK_BREAK,

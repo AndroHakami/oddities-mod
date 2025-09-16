@@ -1,5 +1,8 @@
 package net.seep.odd.abilities.artificer;
 
+import me.shedaniel.cloth.clothconfig.shadowed.blue.endless.jankson.annotation.Nullable;
+import net.minecraft.fluid.Fluid;
+
 // net.seep.odd.abilities.artificer.EssenceType
 public enum EssenceType {
     LIGHT("light", 0xFFFFFFFF),
@@ -15,6 +18,11 @@ public enum EssenceType {
 
     public static EssenceType byKey(String k) {
         for (var e : values()) if (e.key.equals(k)) return e;
+        return null;
+    }
+    public Fluid getFluid() { return OddFluids.ESSENCE_FLUIDS.get(this); }
+    public static @Nullable EssenceType fromFluid(Fluid f) {
+        for (var e : values()) if (OddFluids.ESSENCE_FLUIDS.get(e) == f) return e;
         return null;
     }
 

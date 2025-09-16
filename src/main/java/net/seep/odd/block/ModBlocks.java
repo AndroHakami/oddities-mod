@@ -14,11 +14,14 @@ import net.minecraft.registry.Registry;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
 import net.seep.odd.block.custom.CrappyBlock;
 import net.seep.odd.block.grandanvil.GrandAnvilBlock;
 import net.seep.odd.block.grandanvil.GrandAnvilBlockEntity;
 import net.seep.odd.block.custom.SoundBlock;
 import net.seep.odd.sound.ModSounds;
+
+import static net.seep.odd.abilities.init.ArtificerMixerRegistry.POTION_MIXER;
 
 public class ModBlocks {
     public static final Block RUBY_BLOCK = registerBlock("ruby_block",
@@ -37,6 +40,9 @@ public class ModBlocks {
             Registries.BLOCK_ENTITY_TYPE,
             new Identifier(Oddities.MOD_ID, "grand_anvil"),
             FabricBlockEntityTypeBuilder.create(GrandAnvilBlockEntity::new, GRAND_ANVIL).build(null)
+    );
+    public static final BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE = Registry.register(
+            Registries.BLOCK_ENTITY_TYPE, new Identifier(Oddities.MOD_ID, "potion_mixer"), FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build(null)
     );
 
 
