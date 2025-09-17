@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["gaia", "cold", "light"],
+  "per": 300,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "crystaline_trap",
+  "color": 10496272
+}

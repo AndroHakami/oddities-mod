@@ -72,6 +72,8 @@ public final class Oddities implements ModInitializer {
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
+		net.seep.odd.util.TickScheduler.init();
+
 
 		// Entities & attributes
 		ModEntities.register();
@@ -161,6 +163,7 @@ public final class Oddities implements ModInitializer {
 		ArtificerFluids.registerAll();
 		ArtificerMixerRegistry.registerAll();
 		MixerNet.register();
+		net.seep.odd.util.CrystalTrapCleaner.init();
 
 
 

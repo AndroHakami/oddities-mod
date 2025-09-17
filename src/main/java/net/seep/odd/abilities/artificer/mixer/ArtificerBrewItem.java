@@ -93,15 +93,12 @@ public class ArtificerBrewItem extends Item {
             world.spawnEntity(proj);
 
             // Throw sound (prefer potion throw; fallback to snowball if missing)
-            try {
-                world.playSound(null, p.getBlockPos(),
-                        SoundEvents.ENTITY_SPLASH_POTION_THROW, SoundCategory.PLAYERS,
-                        0.8f, 0.9f + power * 0.3f);
-            } catch (Throwable t) {
-                world.playSound(null, p.getBlockPos(),
-                        SoundEvents.ENTITY_SNOWBALL_THROW, SoundCategory.PLAYERS,
-                        0.8f, 0.9f + power * 0.3f);
-            }
+            world.playSound(
+                    null, p.getBlockPos(),
+                    net.minecraft.sound.SoundEvents.ENTITY_SPLASH_POTION_THROW,  // try GLASS_BREAK or BOTTLE_EMPTY if you prefer
+                    net.minecraft.sound.SoundCategory.PLAYERS,
+                    0.9f, 1.0f
+            );
 
             if (!p.getAbilities().creativeMode) stack.decrement(1);
             p.incrementStat(Stats.USED.getOrCreateStat(this));
