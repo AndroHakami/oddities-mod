@@ -46,7 +46,7 @@ public final class ArtificerMixerRegistry {
         } else {
             POTION_MIXER = Registry.register(
                     Registries.BLOCK, mixId,
-                    new PotionMixerBlock(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).nonOpaque().strength(3.0f))
+                    new PotionMixerMegaBlock(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).nonOpaque().strength(3.0f))
             );
         }
 

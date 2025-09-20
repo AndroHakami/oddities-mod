@@ -1,6 +1,7 @@
 package net.seep.odd;
 
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
@@ -54,6 +55,8 @@ import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
+
+import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sound.ModSounds;
 
 import org.slf4j.Logger;
@@ -164,6 +167,12 @@ public final class Oddities implements ModInitializer {
 		ArtificerMixerRegistry.registerAll();
 		MixerNet.register();
 		net.seep.odd.util.CrystalTrapCleaner.init();
+
+
+		// sun moon
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+				CelestialCommands.register(dispatcher)
+		);
 
 
 

@@ -2,10 +2,9 @@ package net.seep.odd;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.render.RenderLayer;
@@ -46,6 +45,10 @@ import net.seep.odd.block.ModBlocks;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.seep.odd.sky.CelestialCommands;
+import net.seep.odd.sky.CelestialEventClient;
+import net.seep.odd.sky.CelestialEventS2C;
+
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
@@ -185,6 +188,20 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.integrations.cpm.CpmBridge.init();
         net.seep.odd.abilities.overdrive.client.OverdriveClientState.register();
         OverdriveCpmBridge.init();
+
+
+        // Unique Moon AND sUN
+
+        CelestialEventS2C.registerClientReceivers();
+        ClientTickEvents.END_CLIENT_TICK.register(client -> CelestialEventClient.clientTick());
+
+
+
+
+
+
+
+
 
 
 

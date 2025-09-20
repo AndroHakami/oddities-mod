@@ -15,10 +15,14 @@
     "ItemRendererAccessor",
     "ModelLoaderMixin",
     "VoidFogMixin",
+    "client.BackgroundRendererMixin",
+    "client.ClientWorldMixin",
     "client.OverdriveCameraShakeMixin",
     "client.OverdriveFovMixin",
     "client.OverdrivePerspectiveMixin",
-    "client.VacuumNoBobMixin"
+    "client.VacuumNoBobMixin",
+    "client.WorldRendererCloudMixin",
+    "client.WorldRendererSkyMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -15,7 +15,7 @@ import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.util.Identifier;
 
 import net.seep.odd.Oddities;
-import net.seep.odd.abilities.artificer.mixer.PotionMixerBlock;
+import net.seep.odd.abilities.artificer.mixer.PotionMixerMegaBlock;
 import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
 import net.seep.odd.block.custom.CrappyBlock;
 import net.seep.odd.block.custom.SoundBlock;
@@ -92,7 +92,7 @@ public class ModBlocks {
         POTION_MIXER = Registry.register(
                 Registries.BLOCK,
                 new Identifier(Oddities.MOD_ID, "potion_mixer"),
-                new PotionMixerBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
+                new PotionMixerMegaBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
                         .strength(3.0f)
                         .nonOpaque())
         );
