@@ -27,7 +27,7 @@ public class ModSounds {
     public static final SoundEvent CRAPPY_BLOCK_STEP = registerSoundEvent("crappy_block_step");
     public static final SoundEvent VOID_AMBIENCE = registerSoundEvent("void_ambience");
     public static final SoundEvent VOID_OPEN = registerSoundEvent("void_open");
-    public static final SoundEvent MIXER_BLEND_SUCCESS = registerSoundEvent("mixer_blend_success");
+
 
     // UFO SHIT
     public static final SoundEvent SAUCER_HOVER = registerSoundEvent("saucer_hover");
@@ -46,6 +46,8 @@ public class ModSounds {
             ModSounds.CRAPPY_BLOCK_BREAK,
             ModSounds.CRAPPY_BLOCK_STEP, ModSounds.CRAPPY_BLOCK_PLACE,
             ModSounds.CRAPPY_BLOCK_HIT, ModSounds.CRAPPY_BLOCK_FALL);
+
+
 
     private static SoundEvent registerSoundEvent(String name) {
         Identifier id = new Identifier(Oddities.MOD_ID, name);

@@ -4,23 +4,20 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.*;
+import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.entity.Entity;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.world.World;
-import net.seep.odd.abilities.artificer.client.ArtificerHud;
-import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
-import net.seep.odd.abilities.artificer.fluid.client.ArtificerFluidsClient;
-import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
-import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
-import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
+
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
@@ -31,26 +28,26 @@ import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
 import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
-import net.seep.odd.abilities.voids.VoidPortalEntity;
 import net.seep.odd.abilities.voids.client.VoidCpmBridge;
+
+import net.seep.odd.abilities.artificer.client.ArtificerHud;
+import net.seep.odd.abilities.artificer.fluid.client.ArtificerFluidsClient;
+import net.seep.odd.abilities.artificer.mixer.MixerNet;
+import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
+import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
+
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
+
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
-import net.fabricmc.api.ClientModInitializer;
-import net.minecraft.client.gui.screen.ingame.HandledScreens;
-import net.seep.odd.block.ModBlocks;
-import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
-import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.seep.odd.entity.outerman.OuterManRenderer;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
-import net.seep.odd.sky.CelestialCommands;
+
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
-
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
@@ -68,8 +65,6 @@ public final class OdditiesClient implements ClientModInitializer {
         AbilityHudOverlay.register();
         ShadowFormOverlay.register();
 
-
-
         // Forger screens (client)
         HandledScreens.register(ModScreens.GRAND_ANVIL, GrandAnvilScreen::new);
         BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.GRAND_ANVIL, RenderLayer.getCutout());
@@ -81,7 +76,7 @@ public final class OdditiesClient implements ClientModInitializer {
         AstralClientController.register();
 
         // Camera swap for possession
-        ClientPlayNetworking.registerGlobalReceiver(new Identifier("odd","possess_start"),
+        ClientPlayNetworking.registerGlobalReceiver(new Identifier("odd", "possess_start"),
                 (client, h, buf, rs) -> {
                     int targetId = buf.readVarInt();
                     client.execute(() -> {
@@ -93,7 +88,7 @@ public final class OdditiesClient implements ClientModInitializer {
                         PossessionClientController.setPossessing(true);
                     });
                 });
-        ClientPlayNetworking.registerGlobalReceiver(new Identifier("odd","possess_stop"),
+        ClientPlayNetworking.registerGlobalReceiver(new Identifier("odd", "possess_stop"),
                 (client, h, buf, rs) ->
                         client.execute(() -> {
                             if (client.player != null) client.setCameraEntity(client.player);
@@ -108,7 +103,9 @@ public final class OdditiesClient implements ClientModInitializer {
             int maxTicks     = buf.readVarInt();
             client.execute(() -> {
                 RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, dimId);
-                net.seep.odd.abilities.client.hud.AstralClientState.start(GlobalPos.create(key, pos), maxTicks, MinecraftClient.getInstance());
+                net.seep.odd.abilities.client.hud.AstralClientState.start(
+                        GlobalPos.create(key, pos), maxTicks, MinecraftClient.getInstance()
+                );
             });
         });
         ClientPlayNetworking.registerGlobalReceiver(HUD_STOP_ID, (client, handler, buf, responseSender) ->
@@ -135,80 +132,43 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.voids.VoidNet.initClient();
         net.seep.odd.abilities.voids.client.VoidClient.init();
 
-        //Artificer (client)
+        // --- Artificer (client) ---
         ArtificerHud.register();
         net.seep.odd.abilities.artificer.condenser.ArtificerCreateInit.registerClient();
         ArtificerCondenserRegistry.registerClient();
         ArtificerFluidsClient.registerClient();
         ArtificerMixerRegistry.registerClient();
+        // Item tint (overlay layer index 1)
         ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
-            if (tintIndex == 1 && stack.hasNbt())
+            if (tintIndex == 1 && stack.hasNbt()) {
                 return stack.getNbt().getInt("odd_brew_color");
-            return 0xFFFFFFFF; // base layer untouched
+            }
+            return 0xFFFFFFFF;
         }, ArtificerMixerRegistry.BREW_DRINKABLE, ArtificerMixerRegistry.BREW_THROWABLE);
+        // HUD overlay for mixer
         HudRenderCallback.EVENT.register(new PotionMixerHud());
-        net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT.register(
-                new net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud()
-        );
+        // Brew bottle renderer
         EntityRendererRegistry.register(
                 net.seep.odd.entity.ModEntities.BREW_BOTTLE,
                 ctx -> new net.minecraft.client.render.entity.FlyingItemEntityRenderer<>(ctx)
         );
-        // Tint the liquid overlay (layer1 has tintIndex == 1)
-        net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
-                    if (tintIndex == 0) { // only tint the overlay layer
-                        var nbt = stack.getNbt();
-                        return (nbt != null && nbt.contains("odd_brew_color")) ? nbt.getInt("odd_brew_color") : 0xFFFFFFFF;
-                    }
-                    return 0xFFFFFFFF; // base stays un-tinted
-                }, net.seep.odd.abilities.init.ArtificerMixerRegistry.BREW_DRINKABLE,
-                net.seep.odd.abilities.init.ArtificerMixerRegistry.BREW_THROWABLE);
 
-
-
-
-
-
-
-
-
-
-
-
-        // Custom Player Model
+        // CPM bridges (client)
         net.seep.odd.abilities.anim.CpmBridge CPM;
         OverdriveCpmBridge.init();
         VoidCpmBridge.init();
-
         {
             var impl = net.seep.odd.abilities.anim.CpmBridgeCpm.tryCreate();
             CPM = (impl != null) ? impl : new net.seep.odd.abilities.anim.CpmBridgeNoop();
         }
-
-// Expose it somewhere convenient (static holder or a getter)
         net.seep.odd.abilities.anim.CpmHolder.install(CPM);
         net.seep.odd.abilities.anim.CpmNet.initClient();
         net.seep.odd.integrations.cpm.CpmBridge.init();
         net.seep.odd.abilities.overdrive.client.OverdriveClientState.register();
-        OverdriveCpmBridge.init();
 
-
-        // Unique Moon AND sUN
-
+        // Celestial events (client-only)
         CelestialEventS2C.registerClientReceivers();
         ClientTickEvents.END_CLIENT_TICK.register(client -> CelestialEventClient.clientTick());
-
-
-
-
-
-
-
-
-
-
-
-
 
         // Entity renderers
         EntityRendererRegistry.register(ModEntities.CREEPY, CreepyRenderer::new);
@@ -222,7 +182,6 @@ public final class OdditiesClient implements ClientModInitializer {
                 net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL,
                 net.seep.odd.abilities.voids.client.VoidPortalRenderer::new
         );
-
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }

@@ -8,7 +8,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-
 import net.seep.odd.abilities.artificer.EssenceType;
 
 public final class CondenserNet {
@@ -20,11 +19,8 @@ public final class CondenserNet {
     public static void registerServer() {
         ServerPlayNetworking.registerGlobalReceiver(
                 C2S_PRESS,
-                (MinecraftServer server,
-                 ServerPlayerEntity player,
-                 net.minecraft.server.network.ServerPlayNetworkHandler handler,
-                 PacketByteBuf buf,
-                 net.fabricmc.fabric.api.networking.v1.PacketSender responseSender) -> {
+                (MinecraftServer server, ServerPlayerEntity player, net.minecraft.server.network.ServerPlayNetworkHandler h,
+                 PacketByteBuf buf, net.fabricmc.fabric.api.networking.v1.PacketSender rs) -> {
 
                     BlockPos pos = buf.readBlockPos();
                     String key   = buf.readString(32);
@@ -48,6 +44,5 @@ public final class CondenserNet {
         ClientPlayNetworking.send(C2S_PRESS, out);
     }
 
-    /** Keep if you call it from your client init; it’s a no-op by design. */
     public static void registerClient() { /* no-op */ }
 }

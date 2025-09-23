@@ -1,5 +1,6 @@
 package net.seep.odd.abilities.net;
 
+import me.shedaniel.cloth.clothconfig.shadowed.blue.endless.jankson.annotation.Nullable;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -95,17 +96,24 @@ public final class TamerNet {
     /** Top-right HUD sync (name/icon/hp/xp). */
     public static void sendHud(ServerPlayerEntity p,
                                String displayName,
-                               Identifier iconTex,
+                               @Nullable Identifier iconTex,
                                float hp, float maxHp,
                                int level, int exp, int next) {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeString(displayName);
-        buf.writeIdentifier(iconTex);
+
+        // Fallback to your built-in default icon if null
+        Identifier safeIcon = (iconTex != null)
+                ? iconTex
+                : new Identifier("odd", "textures/gui/tamer/icons/default.png");
+        buf.writeIdentifier(safeIcon);
+
         buf.writeFloat(hp);
         buf.writeFloat(maxHp);
         buf.writeVarInt(level);
         buf.writeVarInt(exp);
         buf.writeVarInt(next);
+
         ServerPlayNetworking.send(p, HUD_SYNC, buf);
     }
 

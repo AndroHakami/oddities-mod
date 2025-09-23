@@ -11,52 +11,41 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.registry.FuelRegistry;
 
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.ActionResult;
 
 import net.seep.odd.abilities.AbilityServerTicks;
 import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.PowerCommands;
-
-import net.seep.odd.abilities.artificer.client.ArtificerHud;
+import net.seep.odd.abilities.artificer.condenser.CondenserNet; // (only used inside registry)
 import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
-import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
-import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumModel;
-import net.seep.odd.abilities.artificer.item.client.ArtificerVacuumRenderer;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
-import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
-import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
-
 import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.abilities.tamer.TamerMoves;
-import net.seep.odd.abilities.voids.VoidPortalEntity;
 import net.seep.odd.abilities.voids.VoidRegistry;
 import net.seep.odd.abilities.voids.VoidSystem;
-import net.seep.odd.abilities.voids.client.VoidCpmBridge;
+
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
+
 import net.seep.odd.enchant.ItalianStompersHandler;
 import net.seep.odd.enchant.ModEnchantments;
 
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.creepy.CreepyEntity;
-
 import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
+
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
-
 
 import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sound.ModSounds;
@@ -77,14 +66,15 @@ public final class Oddities implements ModInitializer {
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
 
-
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
 		net.seep.odd.util.TickScheduler.init();
-
 
 		// Entities & attributes
 		ModEntities.register();
 		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
 
 		// GeckoLib (common entrypoint)
 		GeckoLib.initialize();
@@ -100,12 +90,14 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new VoidPower());
 		Powers.register(new ArtificerPower());
 
-
 		// ---- Commands ----
 		PowerCommands.register();
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+				CelestialCommands.register(dispatcher) // sun/moon commands: server-side only
+		);
 
 		// ---- Forger (common/server) ----
-		ModScreens.register();
+		ModScreens.register(); // screen HANDLERS (server-safe)
 		ModEnchantments.register();
 		ModGrandAnvilRecipes.register();
 		GrandAnvilNet.registerServer();
@@ -125,7 +117,6 @@ public final class Oddities implements ModInitializer {
 		net.seep.odd.abilities.astral.AstralGuards.register();
 		AstralInventory.init(ModItems.GHOST_HAND);
 
-
 		// Umbra (server tick)
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (var p : server.getPlayerManager().getPlayerList()) {
@@ -141,23 +132,14 @@ public final class Oddities implements ModInitializer {
 
 		// Net channels (server/common)
 		UmbraNet.registerServerAstral();
-		MistyNet.init();       // server receivers
+		MistyNet.init(); // server receivers
 
-		// TaMER
+		// Tamer
 		net.seep.odd.abilities.tamer.ai.SpeciesProfiles.init();
 		net.seep.odd.abilities.net.TamerNet.initCommon();
 		TamerLeveling.register();
 		AbilityServerTicks.init();
 		TamerMoves.bootstrap();
-		TamerLeveling.register();
-
-
-
-		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
-
 
 		// Overdrive
 		net.seep.odd.abilities.overdrive.OverdriveNet.initServer();
@@ -167,42 +149,12 @@ public final class Oddities implements ModInitializer {
 		VoidRegistry.initCommon();
 		VoidSystem.init();
 
-		// Artificer
-		ArtificerHud.register();
-		ArtificerCondenserRegistry.registerAll();
+		// ---- Artificer (split: common here; client in OdditiesClient) ----
+		ArtificerCondenserRegistry.registerCommon();
 		ArtificerFluids.registerAll();
-		ArtificerMixerRegistry.registerAll();
-		MixerNet.register();
+		ArtificerMixerRegistry.registerCommon();
+		MixerNet.registerServer();
 		net.seep.odd.util.CrystalTrapCleaner.init();
-
-
-		// sun moon
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-				CelestialCommands.register(dispatcher)
-		);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 		// ---- Restrict interaction while possessing ----
 		AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) ->

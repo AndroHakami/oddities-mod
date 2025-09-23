@@ -1,7 +1,7 @@
 package net.seep.odd.entity.outerman;
 
 import net.minecraft.util.Identifier;
-import net.seep.odd.entity.ufo.UfoSaucerEntity;
+
 import software.bernie.geckolib.model.GeoModel;
 
 public class OuterManModel extends GeoModel<OuterManEntity> {

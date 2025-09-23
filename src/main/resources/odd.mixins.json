@@ -2,32 +2,30 @@
   "required": true,
   "package": "net.seep.odd.mixin",
   "compatibilityLevel": "JAVA_17",
-  "mixins": [
-    "BlockDisplayEntityAccessor",
-    "ExampleMixin",
-    "ItemEntityMixin",
-    "MobEntityAccessor",
-    "MobEntityAccessorMixin",
-    "MobEntityTamerDataMixin"
-  ],
+  "minVersion": "0.8",
   "client": [
-    "GameRendererAccessor",
-    "ItemRendererAccessor",
-    "ModelLoaderMixin",
-    "VoidFogMixin",
     "client.BackgroundRendererMixin",
     "client.ClientWorldMixin",
+    "client.WorldRendererSkyMixin",
+    "client.WorldRendererCloudMixin",
     "client.OverdriveCameraShakeMixin",
     "client.OverdriveFovMixin",
     "client.OverdrivePerspectiveMixin",
     "client.VacuumNoBobMixin",
-    "client.WorldRendererCloudMixin",
-    "client.WorldRendererSkyMixin"
+
+    "GameRendererAccessor",
+    "ItemRendererAccessor",
+    "ModelLoaderMixin",
+    "VoidFogMixin"
+  ],
+  "mixins": [
+    "ExampleMixin",
+    "ItemEntityMixin",
+    "BlockDisplayEntityAccessor",
+    "MobEntityAccessorMixin",
+    "MobEntityTamerDataMixin"
   ],
   "injectors": {
     "defaultRequire": 1
-  },
-  "overwrites": {
-    "requireAnnotations": true
-	}
+  }
 }

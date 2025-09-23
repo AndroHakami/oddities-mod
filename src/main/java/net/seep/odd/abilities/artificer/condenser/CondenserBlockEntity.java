@@ -20,8 +20,8 @@ import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 
 public class CondenserBlockEntity extends BlockEntity implements Inventory {
-    public static final int SLOT_VACUUM = 0;  // must be Vacuum
-    public static final int SLOT_BUCKET = 1;  // must be vanilla Empty Bucket
+    public static final int SLOT_VACUUM = 0;
+    public static final int SLOT_BUCKET = 1;
     public static final int COST = 500;
 
     private final DefaultedList<ItemStack> items = DefaultedList.ofSize(2, ItemStack.EMPTY);
@@ -29,8 +29,6 @@ public class CondenserBlockEntity extends BlockEntity implements Inventory {
     public CondenserBlockEntity(BlockPos pos, BlockState state) {
         super(ArtificerCondenserRegistry.CONDENSER_BE, pos, state);
     }
-
-    /* ===== Logic ===== */
 
     public void tryCondense(EssenceType type, PlayerEntity player) {
         if (world == null || world.isClient) return;
@@ -41,21 +39,24 @@ public class CondenserBlockEntity extends BlockEntity implements Inventory {
         if (!(vac.getItem() instanceof ArtificerVacuumItem)) return;
         if (!buck.isOf(Items.BUCKET)) return;
 
-        // how much of this essence do we have?
+        // Make sure a bucket item exists for this essence BEFORE we extract any charge.
+        var bucketItem = net.seep.odd.abilities.artificer.fluid.ArtificerFluids.bucketFor(type);
+        if (bucketItem == null) {
+            player.sendMessage(Text.literal("No fluid bucket registered for " + type.key), true);
+            return;
+        }
+
         int have = EssenceStorage.get(vac, type);
         if (have < COST) {
             player.sendMessage(Text.literal("Need " + COST + " " + type.key + " essence."), true);
             return;
         }
 
-        // take COST from the vacuum
+        // drain after all checks pass
         int drained = EssenceStorage.extract(vac, type, COST);
         if (drained < COST) return;
 
-        // Produce the correct fluid bucket for this essence
-        ItemStack out = new ItemStack(ArtificerFluids.bucketFor(type));
-
-        // consume one empty bucket and give result
+        ItemStack out = new ItemStack(bucketItem);
         buck.decrement(1);
         if (buck.isEmpty()) {
             setStack(SLOT_BUCKET, out);
@@ -67,50 +68,29 @@ public class CondenserBlockEntity extends BlockEntity implements Inventory {
         markDirty();
     }
 
-    /* ===== Inventory minimal impl (2 slots) ===== */
-
+    /* ---- Inventory ---- */
     @Override public int size() { return items.size(); }
-
-    @Override public boolean isEmpty() {
-        for (ItemStack s : items) if (!s.isEmpty()) return false;
-        return true;
-    }
-
+    @Override public boolean isEmpty() { for (ItemStack s : items) if (!s.isEmpty()) return false; return true; }
     @Override public ItemStack getStack(int slot) { return items.get(slot); }
-
     @Override public ItemStack removeStack(int slot, int amount) {
         ItemStack res = Inventories.splitStack(items, slot, amount);
         if (!res.isEmpty()) markDirty();
         return res;
     }
-
     @Override public ItemStack removeStack(int slot) {
         ItemStack res = Inventories.removeStack(items, slot);
         markDirty();
         return res;
     }
-
     @Override public void setStack(int slot, ItemStack stack) {
         items.set(slot, stack);
         if (stack.getCount() > getMaxCountPerStack()) stack.setCount(getMaxCountPerStack());
         markDirty();
     }
-
     @Override public boolean canPlayerUse(PlayerEntity player) { return true; }
-
     @Override public void clear() { items.clear(); markDirty(); }
 
-    /* ===== NBT ===== */
-
-    @Override
-    public void readNbt(NbtCompound nbt) {
-        super.readNbt(nbt);
-        Inventories.readNbt(nbt, items);
-    }
-
-    @Override
-    protected void writeNbt(NbtCompound nbt) {
-        super.writeNbt(nbt);
-        Inventories.writeNbt(nbt, items);
-    }
+    /* ---- NBT ---- */
+    @Override public void readNbt(NbtCompound nbt) { super.readNbt(nbt); Inventories.readNbt(nbt, items); }
+    @Override protected void writeNbt(NbtCompound nbt) { super.writeNbt(nbt); Inventories.writeNbt(nbt, items); }
 }
