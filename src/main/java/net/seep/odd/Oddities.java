@@ -52,6 +52,8 @@ import net.seep.odd.enchant.ModEnchantments;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.creepy.CreepyEntity;
 
+import net.seep.odd.entity.outerman.OuterManEntity;
+import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
@@ -151,6 +153,9 @@ public final class Oddities implements ModInitializer {
 
 		FabricDefaultAttributeRegistry.register(ModEntities.CREEPY, CreepyEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
+
 
 		// Overdrive
 		net.seep.odd.abilities.overdrive.OverdriveNet.initServer();

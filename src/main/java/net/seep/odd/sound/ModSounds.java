@@ -29,6 +29,14 @@ public class ModSounds {
     public static final SoundEvent VOID_OPEN = registerSoundEvent("void_open");
     public static final SoundEvent MIXER_BLEND_SUCCESS = registerSoundEvent("mixer_blend_success");
 
+    // UFO SHIT
+    public static final SoundEvent SAUCER_HOVER = registerSoundEvent("saucer_hover");
+    public static final SoundEvent SAUCER_ATTACK = registerSoundEvent("saucer_attack");
+    public static final SoundEvent SAUCER_BOOST = registerSoundEvent("saucer_boost");
+    public static final SoundEvent SAUCER_TRACTOR = registerSoundEvent("saucer_tractor");
+    public static final SoundEvent SAUCER_HURT = registerSoundEvent("saucer_hurt");
+    public static final SoundEvent SAUCER_DEATH = registerSoundEvent("saucer_death");
+
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
             ModSounds.SOUND_BLOCK_BREAK,
             ModSounds.SOUND_BLOCK_STEP, ModSounds.SOUND_BLOCK_PLACE,

@@ -22,7 +22,7 @@ public abstract class WorldRendererSkyMixin {
                     target = "Lcom/mojang/blaze3d/systems/RenderSystem;setShaderTexture(ILnet/minecraft/util/Identifier;)V",
                     ordinal = 0), // first occurrence = sun
             index = 1,
-            remap = false
+            remap = true
     )
     private Identifier odd$swapSun(Identifier original) {
         return CelestialEventClient.getSunTextureOr(original);
@@ -36,7 +36,7 @@ public abstract class WorldRendererSkyMixin {
                     target = "Lcom/mojang/blaze3d/systems/RenderSystem;setShaderTexture(ILnet/minecraft/util/Identifier;)V",
                     ordinal = 1), // second = moon
             index = 1,
-            remap = false
+            remap = true
     )
     private Identifier odd$swapMoon(Identifier original) {
         return CelestialEventClient.getMoonTextureOr(original);

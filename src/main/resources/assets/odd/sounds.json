@@ -11,6 +11,43 @@
       "odd:creepy_pull"
     ]
   },
+  "saucer_attack": {
+    "subtitle": "odd.saucer_attack",
+    "sounds": [
+      "odd:saucer_attack"
+    ]
+  },
+  "saucer_hurt": {
+    "subtitle": "odd.saucer_hurt",
+    "sounds": [
+      "odd:saucer_hurt"
+    ]
+  },
+  "saucer_death": {
+    "subtitle": "odd.saucer_death",
+    "sounds": [
+      "odd:saucer_death"
+    ]
+  },
+  "saucer_hover": {
+    "subtitle": "odd.saucer_hover",
+    "sounds": [
+      "odd:saucer_hover"
+    ]
+  },
+  "saucer_boost": {
+    "subtitle": "odd.saucer_boost",
+    "sounds": [
+      "odd:saucer_boost"
+    ]
+  },
+  "saucer_tractor": {
+    "subtitle": "odd.saucer_tractor",
+    "sounds": [
+      "odd:saucer_tractor"
+    ]
+  },
+
 
 
   "creepy_push": {

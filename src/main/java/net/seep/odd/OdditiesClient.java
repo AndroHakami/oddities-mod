@@ -45,6 +45,8 @@ import net.seep.odd.block.ModBlocks;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.seep.odd.entity.outerman.OuterManRenderer;
+import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
@@ -212,6 +214,8 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.MISTY_BUBBLE, MistyBubbleRenderer::new);
         EntityRendererRegistry.register(ModEntities.EMERALD_SHURIKEN, EmeraldShurikenRenderer::new);
         EntityRendererRegistry.register(ModEntities.VILLAGER_EVO, VillagerEvo1Renderer::new);
+        EntityRendererRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerRenderer::new);
+        EntityRendererRegistry.register(ModEntities.OUTERMAN, OuterManRenderer::new);
         EntityRendererRegistry.register(ModEntities.TAME_BALL, TameBallRenderer::new);
         EntityRendererRegistry.register(
                 net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL,

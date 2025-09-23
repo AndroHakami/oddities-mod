@@ -1,0 +1,96 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.unknown",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 3,
+				"visible_bounds_height": 3.5,
+				"visible_bounds_offset": [0, 1.25, 0]
+			},
+			"bones": [
+				{
+					"name": "entire_body",
+					"pivot": [0, 16, 0]
+				},
+				{
+					"name": "body",
+					"parent": "entire_body",
+					"pivot": [0, 16, 0],
+					"cubes": [
+						{"origin": [-4, 11, -2], "size": [8, 12, 4], "uv": [32, 16]}
+					]
+				},
+				{
+					"name": "tail",
+					"parent": "body",
+					"pivot": [0, 14, 1],
+					"rotation": [47.5, 0, 0],
+					"cubes": [
+						{"origin": [-1.89657, 1.29909, 0.98712], "size": [3, 12, 1], "uv": [56, 0]}
+					]
+				},
+				{
+					"name": "head",
+					"parent": "entire_body",
+					"pivot": [0, 23, 0],
+					"cubes": [
+						{"origin": [-4, 23, -4], "size": [8, 8, 8], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "head_stick",
+					"parent": "head",
+					"pivot": [0, 23, 0],
+					"cubes": [
+						{"origin": [-5, 31, 0], "size": [10, 7, 1], "uv": [34, 0]}
+					]
+				},
+				{
+					"name": "headwear",
+					"parent": "head_stick",
+					"pivot": [0, 22, 0],
+					"cubes": [
+						{"origin": [-4, 22, -4], "size": [8, 8, 8], "inflate": -0.5, "uv": [0, 16]}
+					]
+				},
+				{
+					"name": "right_arm",
+					"parent": "entire_body",
+					"pivot": [-4, 20, 0],
+					"cubes": [
+						{"origin": [-6, 9, -1], "size": [2, 12, 2], "uv": [39, 18]}
+					]
+				},
+				{
+					"name": "left_arm",
+					"parent": "entire_body",
+					"pivot": [4, 20, 0],
+					"mirror": true,
+					"cubes": [
+						{"origin": [4, 8, -1], "size": [2, 13, 2], "uv": [56, 17], "mirror": false}
+					]
+				},
+				{
+					"name": "right_leg",
+					"parent": "entire_body",
+					"pivot": [-2, 12, 0],
+					"cubes": [
+						{"origin": [-3, 0, -1], "size": [2, 12, 2], "uv": [56, 18]}
+					]
+				},
+				{
+					"name": "left_leg",
+					"parent": "entire_body",
+					"pivot": [2, 11, 0],
+					"mirror": true,
+					"cubes": [
+						{"origin": [1, 0, -1], "size": [2, 12, 2], "uv": [56, 1], "mirror": false}
+					]
+				}
+			]
+		}
+	]
+}
