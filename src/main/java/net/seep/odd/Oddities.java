@@ -76,6 +76,8 @@ public final class Oddities implements ModInitializer {
 		ModBlocks.registerModBlocks();
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
+
+
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
 		net.seep.odd.util.TickScheduler.init();
 

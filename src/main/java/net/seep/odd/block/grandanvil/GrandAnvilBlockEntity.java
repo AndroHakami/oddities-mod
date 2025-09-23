@@ -15,12 +15,15 @@ import net.minecraft.screen.ArrayPropertyDelegate;
 import net.minecraft.screen.NamedScreenHandlerFactory;
 import net.minecraft.screen.PropertyDelegate;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.sound.SoundCategory;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
+import net.seep.odd.sound.ModSounds; // <-- for material_break sound
 
 public class GrandAnvilBlockEntity extends BlockEntity
         implements NamedScreenHandlerFactory, ExtendedScreenHandlerFactory {
@@ -33,6 +36,9 @@ public class GrandAnvilBlockEntity extends BlockEntity
     public static final int P_REQ      = 4; // required hits
     public static final int P_DIFF     = 5; // difficulty 1..7
     public static final int P_SEED     = 6; // RNG seed for windows
+
+    // Hit judge window (kept same as before, but named)
+    private static final int HIT_TOLERANCE_TICKS = 3;
 
     // BE state
     private boolean qteActive = false;
@@ -95,6 +101,7 @@ public class GrandAnvilBlockEntity extends BlockEntity
         if (!qteActive) return;
         qteTicks++;
         if (qteTicks >= qteDuration) {
+            // timeout = unsuccessful → break material
             finishQte(false);
         } else {
             sync();
@@ -128,25 +135,55 @@ public class GrandAnvilBlockEntity extends BlockEntity
 
     public void hit() {
         if (!qteActive) return;
-        // Hit succeeds if we're within ±3 ticks of any of the randomized marks.
-        // (Server will regenerate the same marks using seed+difficulty.)
+
+        // Hit succeeds if we're within ±tolerance of any of the randomized marks.
+        // (Server regenerates the same marks using seed+difficulty.)
         int[] marks = randomizedMarks(qteDifficulty, qteDuration, qteSeed);
+
+        boolean success = false;
         for (int m : marks) {
-            if (Math.abs(qteTicks - m) <= 3) { qteSuccesses++; break; }
+            if (Math.abs(qteTicks - m) <= HIT_TOLERANCE_TICKS) {
+                success = true;
+                break;
+            }
         }
-        if (qteSuccesses >= qteRequired) finishQte(true);
-        else sync();
+
+        if (!success) {
+            // ANY MISS: stop QTE AND break 1 material with sound
+            breakMaterialAndStop();
+            return;
+        }
+
+        // success
+        qteSuccesses++;
+        if (qteSuccesses >= qteRequired) {
+            finishQte(true);
+        } else {
+            sync();
+        }
+    }
+
+    /** Consumes one material, plays break sound, and stops the QTE. */
+    private void breakMaterialAndStop() {
+        qteActive = false;
+        if (world != null && !world.isClient) {
+            // consume one material
+            var cat = inv.getStack(1);
+            if (!cat.isEmpty()) { cat.decrement(1); inv.setStack(1, cat); }
+            // play break sound at the anvil
+            world.playSound(null, this.pos, SoundEvents.ENTITY_ITEM_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);
+        }
+        markDirty(); sync();
     }
 
     private void finishQte(boolean success) {
         qteActive = false;
         if (world != null && !world.isClient) {
             if (success) {
-                // consume one material
+                // SUCCESS: consume one material and apply recipe
                 var cat = inv.getStack(1);
                 if (!cat.isEmpty()) { cat.decrement(1); inv.setStack(1, cat); }
 
-                // apply recipe result by id
                 var recOpt = world.getRecipeManager().listAllOfType(ModGrandAnvilRecipes.TYPE).stream()
                         .filter(r -> r.getId().toString().equals(this.recipeId))
                         .findFirst();
@@ -154,6 +191,12 @@ public class GrandAnvilBlockEntity extends BlockEntity
                 var gear = inv.getStack(0);
                 recOpt.ifPresent(r -> r.apply(gear, world));
                 inv.setStack(0, gear);
+                world.playSound(null, this.pos, SoundEvents.BLOCK_ENCHANTMENT_TABLE_USE, SoundCategory.BLOCKS, 1.0f, 1.0f);
+            } else {
+                // UNSUCCESSFUL (timeout): break the material too
+                var cat = inv.getStack(1);
+                if (!cat.isEmpty()) { cat.decrement(1); inv.setStack(1, cat); }
+                world.playSound(null, this.pos, SoundEvents.ENTITY_ITEM_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);
             }
         }
         markDirty(); sync();
@@ -174,8 +217,6 @@ public class GrandAnvilBlockEntity extends BlockEntity
         java.util.Arrays.sort(out);
         return out;
     }
-
-    private boolean canStart() { return !inv.getStack(0).isEmpty() && !inv.getStack(1).isEmpty(); }
 
     private void sync() {
         if (world != null) world.updateListeners(pos, getCachedState(), getCachedState(), 3);

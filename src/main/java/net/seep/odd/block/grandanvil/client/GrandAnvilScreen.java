@@ -17,6 +17,9 @@ public class GrandAnvilScreen extends HandledScreen<GrandAnvilScreenHandler> {
     private static final Identifier TEX = new Identifier("odd", "textures/gui/grand_anvil.png");
     private ButtonWidget startBtn;
 
+    // local UI throttle to mirror server cooldown (~0.3s)
+    private int localHitCooldown = 0;
+
     public GrandAnvilScreen(GrandAnvilScreenHandler handler, PlayerInventory inv, Text title) {
         super(handler, inv, title);
         this.backgroundWidth = 176;
@@ -32,6 +35,12 @@ public class GrandAnvilScreen extends HandledScreen<GrandAnvilScreenHandler> {
                 .dimensions(x + 62, y + 60, 50, 20)
                 .build();
         addDrawableChild(startBtn);
+    }
+
+    @Override
+    public void handledScreenTick() {
+        super.handledScreenTick();
+        if (localHitCooldown > 0) localHitCooldown--;
     }
 
     @Override
@@ -78,32 +87,29 @@ public class GrandAnvilScreen extends HandledScreen<GrandAnvilScreenHandler> {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         // SPACE = hit
         if (handler.active() && keyCode == 32) {
-            GrandAnvilNet.c2sHit(handler.getPos());
-
-            // client cosmetic spark & sound
-            var mc = MinecraftClient.getInstance();
-            if (mc.player != null && mc.world != null) {
-                mc.world.addParticle(net.minecraft.particle.ParticleTypes.CRIT,
-                        mc.player.getX(), mc.player.getEyeY(), mc.player.getZ(),
-                        0.0, 0.02, 0.0);
-                mc.world.playSound(mc.player,
-                        mc.player.getBlockPos(),
-                        ModSounds.FORGER_HIT, SoundCategory.PLAYERS, 1, 1);
-
+            if (localHitCooldown == 0) {
+                GrandAnvilNet.c2sHit(handler.getPos());
+                localHitCooldown = 6; // mirror server cooldown for feel
+                // client cosmetic spark & sound
+                var mc = MinecraftClient.getInstance();
+                if (mc.player != null && mc.world != null) {
+                    mc.world.addParticle(net.minecraft.particle.ParticleTypes.CRIT,
+                            mc.player.getX(), mc.player.getEyeY(), mc.player.getZ(),
+                            0.0, 0.02, 0.0);
+                    mc.world.playSound(mc.player,
+                            mc.player.getBlockPos(),
+                            ModSounds.FORGER_HIT, SoundCategory.PLAYERS, 1, 1);
+                }
             }
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
+
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        // draw the vanilla dark gradient over the game first
         this.renderBackground(ctx);
-
-        // then let HandledScreen draw the GUI (slots, widgets, etc.)
         super.render(ctx, mouseX, mouseY, delta);
-
-        // and finally tooltips
         this.drawMouseoverTooltip(ctx, mouseX, mouseY);
     }
 }

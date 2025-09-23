@@ -16,6 +16,6 @@ public class ItalianStompersEnchantment extends Enchantment {
     @Override public int getMinPower(int level) { return 1; }
     @Override public int getMaxPower(int level) { return 1; }
 
-    @Override public boolean isTreasure() { return true; } // only via your anvil, not random tables
+    @Override public boolean isTreasure() { return false; } // only via your anvil, not random tables
     @Override public boolean isCursed() { return false; }
 }

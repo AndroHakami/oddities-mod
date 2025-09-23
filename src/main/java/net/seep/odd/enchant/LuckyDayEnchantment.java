@@ -13,7 +13,7 @@ public class LuckyDayEnchantment extends Enchantment {
     @Override public int getMinPower(int level) { return 15; }
 
     // We don’t want this from tables/books – only the Forger should add it:
-    @Override public boolean isTreasure() { return true; }
+    @Override public boolean isTreasure() { return false; }
     @Override public boolean isAvailableForRandomSelection() { return false; }
     @Override public boolean isAvailableForEnchantedBookOffer() { return false; }
 }

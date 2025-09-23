@@ -69,6 +69,7 @@ public final class OdditiesClient implements ClientModInitializer {
         ShadowFormOverlay.register();
 
 
+
         // Forger screens (client)
         HandledScreens.register(ModScreens.GRAND_ANVIL, GrandAnvilScreen::new);
         BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.GRAND_ANVIL, RenderLayer.getCutout());
