@@ -139,12 +139,7 @@ public final class OdditiesClient implements ClientModInitializer {
         ArtificerFluidsClient.registerClient();
         ArtificerMixerRegistry.registerClient();
         // Item tint (overlay layer index 1)
-        ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
-            if (tintIndex == 1 && stack.hasNbt()) {
-                return stack.getNbt().getInt("odd_brew_color");
-            }
-            return 0xFFFFFFFF;
-        }, ArtificerMixerRegistry.BREW_DRINKABLE, ArtificerMixerRegistry.BREW_THROWABLE);
+
         // HUD overlay for mixer
         HudRenderCallback.EVENT.register(new PotionMixerHud());
         // Brew bottle renderer

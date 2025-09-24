@@ -37,9 +37,7 @@ public record PotionMixingRecipe(
     @Override public ItemStack getOutput(DynamicRegistryManager drm) { return ItemStack.EMPTY; }
 
     @Override
-    public Identifier getId() {
-        return null;
-    }
+    public Identifier getId() { return id(); }
 
     @Override public RecipeSerializer<?> getSerializer() { return ArtificerMixerRegistry.POTION_MIXING_SERIALIZER; }
     @Override public RecipeType<?> getType() { return ArtificerMixerRegistry.POTION_MIXING_TYPE; }
