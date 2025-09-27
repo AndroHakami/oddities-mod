@@ -51,6 +51,7 @@ import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 
+import net.seep.odd.particles.client.OddParticlesClient;
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
 
@@ -64,6 +65,7 @@ public final class OdditiesClient implements ClientModInitializer {
         ClientPowerNetworking.registerReceiver(ClientPowerHolder::set, PowerNetworking.SYNC);
         ClientCooldowns.registerTicker();
         ClientPowerNetworking.registerCooldownReceiver();
+        OddParticlesClient.register();
 
         // Keybinds + HUDs (client)
         AbilityKeybinds.register();

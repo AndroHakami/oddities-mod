@@ -32,27 +32,26 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.particles.OddParticles;
 import org.joml.Vector3f;
 
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Spectral Phase (CPM handles visuals):
- * - No gravity, 3D thrust along look (up/down included).
- * - Entry shove into faced surface; anti-flight auto-exit (blast obeys phase_toggle).
- * - Energy charges ONLY when grounded/embedded.
- * - Manual exit may BLAST (toggle via secondary "phase_toggle").
- * - Constant Night Vision I + Darkness I while phased (no particles/icons).
- * - HUD updates via SpectralNet.
- *
- * Cooldowns: provided via the Power overrides (no internal timer).
+ * Spectral Phase:
+ * - No gravity; thrust along look (vertical included).
+ * - Entry shove; anti-flight auto-exit (blast obeys phase_toggle).
+ * - Charges energy only while grounded/embedded.
+ * - Night Vision + Darkness while phased (no particles/icons).
+ * - Custom Air meter drains while embedded; suffocates when empty.
+ * - HUD shows Energy (red) + Air (blue) side-by-side.
  */
 public final class SpectralPhasePower implements Power {
 
     /* ======================= config ======================= */
     public static final int MAX_CHARGE_TICKS = 20 * 8;   // ~8s to full
-    public static final int COOLDOWN_TICKS   = 20 * 6;   // shown/enforced by host system
+    public static final int COOLDOWN_TICKS   = 20 * 6;   // ability system cooldown
 
     private static final float EXPLOSION_MIN = 1.25f;
     private static final float EXPLOSION_MAX = 4.50f;
@@ -74,17 +73,22 @@ public final class SpectralPhasePower implements Power {
     private static final double ENTRY_PUSH_STEP = 0.35;
     private static final int ENTRY_PUSH_STEPS = 2;
 
-    // Status effects (refresh cadence/durations)
-    private static final int NV_REFRESH_EVERY   = 40;  // ticks
-    private static final int NV_DURATION_TICKS  = 300; // keep >200 to avoid NV flicker
-    private static final int DK_REFRESH_EVERY   = 30;  // ticks
-    private static final int DK_DURATION_TICKS  = 60;  // short, refreshed frequently
+    // Status effects (while phased)
+    private static final int NV_REFRESH_EVERY   = 40;
+    private static final int NV_DURATION_TICKS  = 300;
+    private static final int DK_REFRESH_EVERY   = 30;
+    private static final int DK_DURATION_TICKS  = 60;
+
+    // Breathing (custom bar)
+    private static final int   BREATH_MAX_TICKS      = 20 * 10; // 10s while embedded
+    private static final int   BREATH_DRAIN_PER_TICK = 1;       // drain per tick embedded
+    private static final int   BREATH_REGEN_PER_TICK = 2;       // regen per tick when not embedded
+    private static final int   SUFFOCATE_EVERY       = 10;      // damage cadence when out of air
+    private static final float SUFFOCATE_DAMAGE      = 1.0f;    // half-heart
 
     /* ======================= power meta ======================= */
     @Override public String id() { return "spectral_phase"; }
     @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
-
-    // Cooldowns via host ability system
     @Override public long cooldownTicks() { return COOLDOWN_TICKS; }
     @Override public long secondaryCooldownTicks() { return 0; } // phase_toggle has no cooldown
 
@@ -98,17 +102,15 @@ public final class SpectralPhasePower implements Power {
     }
     @Override public String longDescription() {
         return """
-            Become semi-transparent and intangible. While phased, gravity is disabled and you’re propelled
-            in the direction you’re looking (up/down included). A short entry shove pushes you into the
-            facing surface; afterwards, if you’re fully in open air, you auto-exit. Whether that auto-exit
-            (and manual exit) explodes depends on the phase_toggle (secondary). Energy fills only while
-            grounded/in solid. Night Vision I + Darkness I are applied constantly while phased. Cooldown is
-            applied via the ability system.
+            Become semi-transparent and intangible. Thrust along your look direction (vertical included),
+            briefly shove into the surface on entry, and auto-exit if you’re fully in open air (blast obeys
+            the phase_toggle). Energy only charges while grounded/embedded. While phased you gain Night
+            Vision + Darkness. You also have limited air inside blocks; run out and you suffocate.
             """;
     }
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Toggle phasing (3D thrust; no gravity; red HUD; anti-flight).";
+            case "primary"   -> "Toggle phasing (thrust, no gravity, energy, air).";
             case "secondary" -> "phase_toggle: Toggle Exit Blast ON/OFF.";
             default          -> "Spectral Phase";
         };
@@ -119,8 +121,12 @@ public final class SpectralPhasePower implements Power {
         boolean active;
         int charge;
         int entryGrace;
-        boolean exitBlastEnabled = true; // manual/auto exit explosion?
+        boolean exitBlastEnabled = true;
+        int breath = BREATH_MAX_TICKS;
+
+        // HUD dedupe
         int lastSentCharge = -1;
+        int lastSentAirScaled = -1;
         boolean lastSentActive = false;
     }
     private static final Map<UUID, PhaseData> DATA = new Object2ObjectOpenHashMap<>();
@@ -133,7 +139,6 @@ public final class SpectralPhasePower implements Power {
         PhaseData st = S(player);
 
         if (st.active) {
-            // Manual exit; respect current phase_toggle
             if (st.exitBlastEnabled) exitAndBlast(player, st);
             else                     exitNoBlast(player, st);
         } else {
@@ -143,7 +148,6 @@ public final class SpectralPhasePower implements Power {
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
-        // phase_toggle: toggle Exit Blast mode (affects manual AND auto-exit)
         if (!isCurrent(player)) return;
         PhaseData st = S(player);
         st.exitBlastEnabled = !st.exitBlastEnabled;
@@ -163,7 +167,6 @@ public final class SpectralPhasePower implements Power {
 
         if (st.active) {
             p.noClip = true;
-
             p.setNoGravity(true);
             p.fallDistance = 0f;
 
@@ -185,7 +188,7 @@ public final class SpectralPhasePower implements Power {
                 }
                 st.entryGrace--;
             } else {
-                // Anti-flight: fully in air → forced auto-exit (now respects phase_toggle)
+                // Anti-flight: fully in air → auto-exit (respects phase_toggle)
                 BlockPos feet = p.getBlockPos();
                 BlockPos head = feet.up();
                 if (sw.isAir(feet) && sw.isAir(head)) {
@@ -199,10 +202,21 @@ public final class SpectralPhasePower implements Power {
                 sw.spawnParticles(RED_DUST, p.getX(), p.getEyeY(), p.getZ(), 3, 0.08, 0.05, 0.08, 0.0);
             }
 
-            // Charge while grounded/embedded (noclip breaks vanilla isOnGround)
+            // Charge while grounded/embedded
             if (isGroundedWhilePhased(p, sw) && st.charge < MAX_CHARGE_TICKS) st.charge++;
 
-            // 3D thrust along look, capped
+            // Breathing
+            boolean embedded = isEmbedded(sw, p);
+            if (embedded) {
+                st.breath = Math.max(0, st.breath - BREATH_DRAIN_PER_TICK);
+                if (st.breath == 0 && (p.age % SUFFOCATE_EVERY) == 0) {
+                    p.damage(p.getDamageSources().inWall(), SUFFOCATE_DAMAGE);
+                }
+            } else {
+                st.breath = Math.min(BREATH_MAX_TICKS, st.breath + BREATH_REGEN_PER_TICK);
+            }
+
+            // Thrust along look, with cap
             Vec3d look = p.getRotationVector().normalize();
             Vec3d nv = p.getVelocity().add(look.multiply(THRUST_PER_TICK));
             double spd = nv.length();
@@ -215,7 +229,6 @@ public final class SpectralPhasePower implements Power {
         } else {
             p.noClip = false;
             p.setNoGravity(false);
-            // ensure effects are gone when not phased
             clearPhaseEffects(p);
             if ((p.age % HUD_SYNC_EVERY) == 0) syncHud(p, st, false);
         }
@@ -225,12 +238,11 @@ public final class SpectralPhasePower implements Power {
     private static void enterPhase(ServerPlayerEntity p, PhaseData st) {
         st.active = true;
         st.charge = 0;
+        st.breath = BREATH_MAX_TICKS;
         st.entryGrace = ENTRY_GRACE_TICKS;
 
         p.noClip = true;
-        applyFlags(p, true);
         p.setVelocity(Vec3d.ZERO);
-        // apply immediately so there’s no frame without effects
         applyPhaseEffects(p);
 
         net.seep.odd.abilities.spectral.SpectralNet.broadcastPhaseState(p, true);
@@ -247,13 +259,13 @@ public final class SpectralPhasePower implements Power {
         st.active   = false;
         st.charge   = 0;
         st.entryGrace = 0;
+        st.breath = BREATH_MAX_TICKS;
 
         p.noClip = false;
-        applyFlags(p, false);
         clearPhaseEffects(p);
 
         net.seep.odd.abilities.spectral.SpectralNet.broadcastPhaseState(p, false);
-        doScaledExplosion(p, ratio); // <- actual blast
+        doScaledExplosion(p, ratio);
 
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_WARDEN_SONIC_BOOM, SoundCategory.PLAYERS, 0.7f, 1.15f);
         p.sendMessage(Text.literal("Spectral Phase: OFF (Blast)"), true);
@@ -261,7 +273,6 @@ public final class SpectralPhasePower implements Power {
         syncHud(p, st, false);
     }
 
-    // Auto-exit path: if toggle is ON, explode; otherwise behave like no-blast.
     private static void exitAuto(ServerPlayerEntity p, PhaseData st) {
         if (st.exitBlastEnabled) {
             p.sendMessage(Text.literal("Spectral Phase: auto-exit (Blast)"), true);
@@ -272,14 +283,13 @@ public final class SpectralPhasePower implements Power {
         }
     }
 
-    // Manual/forced no-blast exit
     private static void exitNoBlast(ServerPlayerEntity p, PhaseData st) {
         st.active   = false;
         st.charge   = 0;
         st.entryGrace = 0;
+        st.breath = BREATH_MAX_TICKS;
 
         p.noClip = false;
-        applyFlags(p, false);
         clearPhaseEffects(p);
 
         net.seep.odd.abilities.spectral.SpectralNet.broadcastPhaseState(p, false);
@@ -287,41 +297,29 @@ public final class SpectralPhasePower implements Power {
         syncHud(p, st, false);
     }
 
+    /** Restores everything safely (used on disconnect/force-reset). */
     private static void clearState(ServerPlayerEntity p, PhaseData st) {
-        st.active = false; st.charge = 0; st.entryGrace = 0;
+        st.active = false;
+        st.charge = 0;
+        st.entryGrace = 0;
+        st.breath = BREATH_MAX_TICKS;
+
         p.noClip = false;
-        applyFlags(p, false);
-        clearPhaseEffects(p);
-        syncHud(p, st, false);
-    }
-
-    /** Visual/safety flags. */
-    private static void applyFlags(ServerPlayerEntity p, boolean on) {
-
-        p.setNoGravity(on);
+        p.setNoGravity(false);
         p.fallDistance = 0f;
-        if (!on) p.clearActiveItem();
+        clearPhaseEffects(p);
+
+        net.seep.odd.abilities.spectral.SpectralNet.broadcastPhaseState(p, false);
+        syncHud(p, st, false);
     }
 
     /** Status effects handling */
     private static void applyPhaseEffects(ServerPlayerEntity p) {
-        // Night Vision I
         if ((p.age % NV_REFRESH_EVERY) == 0) {
-            p.addStatusEffect(new StatusEffectInstance(
-                    StatusEffects.NIGHT_VISION, NV_DURATION_TICKS, 0,
-                    true,  /* ambient */
-                    false, /* showParticles */
-                    false  /* showIcon */
-            ));
+            p.addStatusEffect(new StatusEffectInstance(StatusEffects.NIGHT_VISION, NV_DURATION_TICKS, 0, true, false, false));
         }
-        // Darkness I
         if ((p.age % DK_REFRESH_EVERY) == 0) {
-            p.addStatusEffect(new StatusEffectInstance(
-                    StatusEffects.DARKNESS, DK_DURATION_TICKS, 0,
-                    true,  /* ambient */
-                    false, /* showParticles */
-                    false  /* showIcon */
-            ));
+            p.addStatusEffect(new StatusEffectInstance(StatusEffects.DARKNESS, DK_DURATION_TICKS, 0, true, false, false));
         }
     }
     private static void clearPhaseEffects(ServerPlayerEntity p) {
@@ -329,19 +327,17 @@ public final class SpectralPhasePower implements Power {
         p.removeStatusEffect(StatusEffects.DARKNESS);
     }
 
-    /** Explosion scaled by charge; no block damage. Also spawn an emitter so it’s always visible. */
+    /** Explosion plus custom burst particles. */
     private static void doScaledExplosion(ServerPlayerEntity src, float ratio) {
         if (!(src.getWorld() instanceof ServerWorld sw)) return;
         float power = (float) MathHelper.lerp(ratio, EXPLOSION_MIN, EXPLOSION_MAX);
 
-        sw.createExplosion(
-                src, null, null,
-                src.getX(), src.getBodyY(0.5), src.getZ(),
-                power,
-                false,
-                net.minecraft.world.World.ExplosionSourceType.NONE
-        );
+        sw.createExplosion(src, null, null, src.getX(), src.getBodyY(0.5), src.getZ(),
+                power, false, net.minecraft.world.World.ExplosionSourceType.NONE);
+
         sw.spawnParticles(ParticleTypes.EXPLOSION_EMITTER, src.getX(), src.getBodyY(0.5), src.getZ(), 1, 0, 0, 0, 0.0);
+        sw.spawnParticles(OddParticles.SPECTRAL_BURST, src.getX(), src.getBodyY(0.5), src.getZ(),
+                90, 0.35, 0.35, 0.35, 0.45);
     }
 
     private static boolean isCurrent(ServerPlayerEntity p) {
@@ -375,29 +371,34 @@ public final class SpectralPhasePower implements Power {
         });
     }
 
-    /* ======================= HUD sync helpers (via SpectralNet) ======================= */
+    /* ======================= HUD sync helpers ======================= */
     private static void syncHud(ServerPlayerEntity p, PhaseData st, boolean active) {
-        if (st.lastSentCharge == st.charge && st.lastSentActive == active) return;
+        // scale breath to the same range as max energy so the client can reuse "max"
+        int airScaled = (int)MathHelper.clamp(
+                Math.round((st.breath / (double)BREATH_MAX_TICKS) * MAX_CHARGE_TICKS),
+                0, MAX_CHARGE_TICKS
+        );
+
+        if (st.lastSentCharge == st.charge && st.lastSentActive == active && st.lastSentAirScaled == airScaled) return;
         st.lastSentCharge = st.charge;
         st.lastSentActive = active;
+        st.lastSentAirScaled = airScaled;
 
-        net.seep.odd.abilities.spectral.SpectralNet.sendHud(p, active, st.charge, MAX_CHARGE_TICKS, 0);
+        net.seep.odd.abilities.spectral.SpectralNet.sendHud(p, active, st.charge, MAX_CHARGE_TICKS, airScaled);
     }
 
-    /* ======================= CLIENT: HUD only (network is in SpectralNet) ======================= */
+    /* ======================= CLIENT: Energy + Air HUD (side-by-side) ======================= */
     @Environment(EnvType.CLIENT)
     public static final class Client {
         private static boolean active;
         private static int charge;
         private static int max;
-        private static int cooldown; // unused in the current HUD but kept for compatibility
+        private static int airScaled; // mapped from 4th int
 
-        /** Called by SpectralNet on PHASE_HUD. */
-        public static void onHud(boolean a, int c, int m, int cd) {
-            active = a; charge = c; max = m; cooldown = cd;
+        public static void onHud(boolean a, int c, int m, int scaledAir) {
+            active = a; charge = c; max = m; airScaled = scaledAir;
         }
 
-        /** Registers the HUD renderer. */
         public static void init() {
             HudRenderCallback.EVENT.register((DrawContext ctx, float tickDelta) -> {
                 if (!active) return;
@@ -406,30 +407,41 @@ public final class SpectralPhasePower implements Power {
                 int sw = mc.getWindow().getScaledWidth();
                 int sh = mc.getWindow().getScaledHeight();
 
-                int w = 110, h = 8;
-                int x = (sw - w) / 2;
-                int y = sh - 38;
+                int w = 96, h = 8, gap = 8;
+                int total = w * 2 + gap;
+                int xLeft = (sw - total) / 2;
+                int xRight = xLeft + w + gap;
+                int y = sh - 56; // a bit higher than HP bar
 
-                // frame
-                ctx.fill(x - 2, y - 2, x + w + 2, y + h + 2, 0x66000000);
-                // background
-                ctx.fill(x, y, x + w, y + h, 0x33000000);
-                // fill
-                float pct = MathHelper.clamp(max == 0 ? 0f : (charge / (float) max), 0f, 1f);
-                int fill = (int) (w * pct);
-                ctx.fill(x, y, x + fill, y + h, 0xAAFF0000);
+                // ENERGY (left, red)
+                drawBar(ctx, mc, xLeft, y, w, h, charge, max, 0xAAFF0000, "Energy", 0xFFAA3333);
 
-                String label = "Energy " + (int)(pct * 100) + "%";
-                ctx.drawText(mc.textRenderer, label, x, y - 10, 0xFFAA3333, true);
+                // AIR (right, blue)
+                drawBar(ctx, mc, xRight, y, w, h, airScaled, max, 0xAA66A9FF, "Air", 0xFF66A9FF);
             });
+        }
+
+        private static void drawBar(DrawContext ctx, MinecraftClient mc,
+                                    int x, int y, int w, int h,
+                                    int value, int max, int fillColor,
+                                    String label, int labelColor) {
+            ctx.fill(x - 2, y - 2, x + w + 2, y + h + 2, 0x66000000); // frame
+            ctx.fill(x, y, x + w, y + h, 0x33000000);                 // bg
+            float pct = MathHelper.clamp(max == 0 ? 0f : (value / (float) max), 0f, 1f);
+            ctx.fill(x, y, x + (int)(w * pct), y + h, fillColor);     // fill
+            ctx.drawText(mc.textRenderer, label + " " + (int)(pct * 100) + "%", x, y - 10, labelColor, true);
         }
     }
 
     /* ======================= helpers ======================= */
     private static boolean isGroundedWhilePhased(ServerPlayerEntity p, ServerWorld sw) {
-        // Consider "grounded" if vanilla says so OR you're embedded/standing on a non-air block.
         BlockPos feet = p.getBlockPos();
         return p.isOnGround() || !sw.isAir(feet) || !sw.isAir(feet.down());
+    }
+    private static boolean isEmbedded(ServerWorld sw, ServerPlayerEntity p) {
+        BlockPos feet = p.getBlockPos();
+        BlockPos head = feet.up();
+        return !sw.isAir(feet) || !sw.isAir(head);
     }
     private static boolean isPhaseAllowed(ServerWorld sw, BlockPos pos) {
         BlockState s = sw.getBlockState(pos);

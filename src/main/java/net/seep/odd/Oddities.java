@@ -50,6 +50,7 @@ import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
+import net.seep.odd.particles.OddParticles;
 import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sound.ModSounds;
 
@@ -71,6 +72,7 @@ public final class Oddities implements ModInitializer {
 
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
 		net.seep.odd.util.TickScheduler.init();
+		OddParticles.register();
 
 		// Entities & attributes
 		ModEntities.register();
