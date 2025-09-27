@@ -26,6 +26,9 @@ import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
+import net.seep.odd.abilities.spectral.SpectralNet;
+import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
+import net.seep.odd.abilities.spectral.SpectralRenderState;
 import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.abilities.tamer.TamerMoves;
 import net.seep.odd.abilities.voids.VoidRegistry;
@@ -89,6 +92,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new OverdrivePower());
 		Powers.register(new VoidPower());
 		Powers.register(new ArtificerPower());
+		Powers.register(new SpectralPhasePower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -149,14 +153,52 @@ public final class Oddities implements ModInitializer {
 		VoidRegistry.initCommon();
 		VoidSystem.init();
 
-		// ---- Artificer (split: common here; client in OdditiesClient) ----
+		// Artificer
 		ArtificerCondenserRegistry.registerCommon();
 		ArtificerFluids.registerAll();
 		ArtificerMixerRegistry.registerCommon();
 		MixerNet.registerServer();
 		net.seep.odd.util.CrystalTrapCleaner.init();
 
-		// ---- Restrict interaction while possessing ----
+		// Spectral Phase
+		net.seep.odd.abilities.spectral.SpectralNet.registerServer();
+
+
+
+
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
+			for (var p : server.getPlayerManager().getPlayerList()) {
+				net.seep.odd.abilities.power.SpectralPhasePower.serverTick(p);
+			}
+		});
+
+
+
+
+
+		net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) ->
+				(player instanceof net.minecraft.server.network.ServerPlayerEntity sp
+						&& net.seep.odd.abilities.power.SpectralPhasePower.isPhased(sp))
+						? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
+		net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player, world, hand, hit) ->
+				(player instanceof net.minecraft.server.network.ServerPlayerEntity sp
+						&& net.seep.odd.abilities.power.SpectralPhasePower.isPhased(sp))
+						? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
+		net.fabricmc.fabric.api.event.player.AttackEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
+				(player instanceof net.minecraft.server.network.ServerPlayerEntity sp
+						&& net.seep.odd.abilities.power.SpectralPhasePower.isPhased(sp))
+						? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
+		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, world, hand, entity, hit) ->
+				(player instanceof net.minecraft.server.network.ServerPlayerEntity sp
+						&& net.seep.odd.abilities.power.SpectralPhasePower.isPhased(sp))
+						? net.minecraft.util.ActionResult.FAIL : net.minecraft.util.ActionResult.PASS);
+
+
+		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+				net.seep.odd.abilities.power.SpectralPhasePower.forceReset(handler.player)
+		);
+
+
 		AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) ->
 				(player instanceof ServerPlayerEntity sp && PossessionManager.INSTANCE.isPossessing(sp))
 						? ActionResult.FAIL : ActionResult.PASS);

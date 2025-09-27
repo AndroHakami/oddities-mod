@@ -4,26 +4,26 @@
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.8",
   "client": [
+    "GameRendererAccessor",
+    "ItemRendererAccessor",
+    "ModelLoaderMixin",
+    "VoidFogMixin",
     "client.BackgroundRendererMixin",
     "client.ClientWorldMixin",
-    "client.WorldRendererSkyMixin",
-    "client.WorldRendererCloudMixin",
     "client.OverdriveCameraShakeMixin",
     "client.OverdriveFovMixin",
     "client.OverdrivePerspectiveMixin",
     "client.VacuumNoBobMixin",
-
-    "GameRendererAccessor",
-    "ItemRendererAccessor",
-    "ModelLoaderMixin",
-    "VoidFogMixin"
+    "client.WorldRendererCloudMixin",
+    "client.WorldRendererSkyMixin"
   ],
   "mixins": [
+    "BlockDisplayEntityAccessor",
     "ExampleMixin",
     "ItemEntityMixin",
-    "BlockDisplayEntityAccessor",
     "MobEntityAccessorMixin",
-    "MobEntityTamerDataMixin"
+    "MobEntityTamerDataMixin",
+    "spectral.PlayerSpectralNoclipMixin"
   ],
   "injectors": {
     "defaultRequire": 1

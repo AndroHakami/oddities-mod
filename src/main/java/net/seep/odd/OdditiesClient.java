@@ -24,6 +24,11 @@ import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
+import net.seep.odd.abilities.power.SpectralPhasePower;
+import net.seep.odd.abilities.spectral.SpectralClientState;
+import net.seep.odd.abilities.spectral.SpectralNet;
+import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
+import net.seep.odd.abilities.spectral.SpectralRenderState;
 import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
@@ -147,6 +152,15 @@ public final class OdditiesClient implements ClientModInitializer {
                 net.seep.odd.entity.ModEntities.BREW_BOTTLE,
                 ctx -> new net.minecraft.client.render.entity.FlyingItemEntityRenderer<>(ctx)
         );
+
+        // Spectral Phase (client)
+        SpectralRenderState.installClientTickKeepAlive();
+        SpectralNet.registerClient();
+        net.seep.odd.abilities.power.SpectralPhasePower.Client.init();
+
+
+
+
 
         // CPM bridges (client)
         net.seep.odd.abilities.anim.CpmBridge CPM;
