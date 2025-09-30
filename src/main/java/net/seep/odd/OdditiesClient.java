@@ -20,11 +20,17 @@ import net.minecraft.world.World;
 
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
+import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
+import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordRenderer;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
+import net.seep.odd.abilities.power.CosmicPower;
 import net.seep.odd.abilities.power.SpectralPhasePower;
+import net.seep.odd.abilities.rider.RiderClientInput;
+import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralClientState;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
@@ -45,7 +51,9 @@ import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
 
+import net.seep.odd.client.audio.RiderRadioClient;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
@@ -160,6 +168,16 @@ public final class OdditiesClient implements ClientModInitializer {
         SpectralNet.registerClient();
         net.seep.odd.abilities.power.SpectralPhasePower.Client.init();
 
+        // Rider (Client)
+        RiderNet.Client.init();
+        RiderClientInput.init();
+        RiderRadioClient.init();
+
+        // Cosmic Sword (Client)
+        CosmicPower.Client.init();
+        CosmicNet.registerClient();
+
+
 
 
 
@@ -189,6 +207,8 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerRenderer::new);
         EntityRendererRegistry.register(ModEntities.OUTERMAN, OuterManRenderer::new);
         EntityRendererRegistry.register(ModEntities.TAME_BALL, TameBallRenderer::new);
+        EntityRendererRegistry.register(ModEntities.RIDER_CAR, RiderCarRenderer::new);
+        EntityRendererRegistry.register(ModEntities.HOMING_COSMIC_SWORD, HomingCosmicSwordRenderer::new);
         EntityRendererRegistry.register(
                 net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL,
                 net.seep.odd.abilities.voids.client.VoidPortalRenderer::new

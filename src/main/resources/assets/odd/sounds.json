@@ -62,6 +62,42 @@
       "odd:italian_stompers_jump"
     ]
   },
+  "car_start": {
+    "subtitle": "odd.car_start",
+    "sounds": [
+      "odd:car_start"
+    ]
+  },
+  "car_acc": {
+    "subtitle": "odd.car_acc",
+    "sounds": [
+      "odd:car_acc"
+    ]
+  },
+  "radio_spanish": {
+    "subtitle": "odd.radio_spanish",
+    "sounds": [
+      "odd:radio_spanish"
+    ]
+  },
+  "radio_fight": {
+    "subtitle": "odd.radio_fight",
+    "sounds": [
+      "odd:radio_fight"
+    ]
+  },
+  "radio_ryan": {
+    "subtitle": "odd.radio_ryan",
+    "sounds": [
+      "odd:radio_ryan"
+    ]
+  },
+  "radio_light": {
+    "subtitle": "odd.radio_light",
+    "sounds": [
+      "odd:radio_light"
+    ]
+  },
   "forger_hit": {
     "subtitle": "odd.forger_hit",
     "sounds": [

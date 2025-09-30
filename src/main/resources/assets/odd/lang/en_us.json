@@ -13,6 +13,7 @@
  "item.odd.bucket_death": "Bucket of Death Essence",
  "item.odd.bucket_light": "Bucket of Light Essence",
  "item.odd.bucket_gaia": "Bucket of Gaia Essence",
+ "item.odd.cosmic_katana": "Cosmic Katana",
  "item.odd.vacuum": "Dyson 3000",
  "item.odd.tame_ball": "Tame Ball",
  "item.odd.emerald_shuriken": "",
@@ -22,6 +23,15 @@
  "block.odd.raw_ruby_block": "Block of Raw Ruby",
  "block.odd.sound_block": "Sound Block",
  "block.odd.condenser": "Artificer Condenser",
+ "entity.odd.rider_car": "Awesomeness Car",
+ "category.oddities.abilities": "Oddities",
+ "key.oddities.ability_overview": "Oddity Overview Screen",
+ "key.oddities.primary_ability": "Primary Ability",
+ "key.oddities.secondary_ability": "Secondary Ability",
+ "key.oddities.third_ability": "Third Ability",
+ "key.oddities.fourth_ability": "Fourth Ability",
+ "key.categories_odd": "Rider Car Settings",
+ "key.odd.honk": "Honk",
 
 
  "tooltip.odd.metal_detector.tooltip": "Finds Valueables underground!",

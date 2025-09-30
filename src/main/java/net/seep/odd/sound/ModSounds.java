@@ -2,10 +2,12 @@ package net.seep.odd.sound;
 
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
+import net.seep.odd.entity.car.RiderCarEntity;
 
 public class ModSounds {
 
@@ -37,6 +39,18 @@ public class ModSounds {
     public static final SoundEvent SAUCER_HURT = registerSoundEvent("saucer_hurt");
     public static final SoundEvent SAUCER_DEATH = registerSoundEvent("saucer_death");
 
+    // Rider Car
+    public static final SoundEvent CAR_START = registerSoundEvent("car_start");
+    public static final SoundEvent CAR_ACC = registerSoundEvent("car_acc");
+
+
+    //Rider Car Radio
+    public static final SoundEvent RADIO_TRACK1 = registerSoundEvent("radio_spanish");
+    public static final SoundEvent RADIO_TRACK2 = registerSoundEvent("radio_fight");
+    public static final SoundEvent RADIO_TRACK3 = registerSoundEvent("radio_ryan");
+    public static final SoundEvent RADIO_TRACK4 = registerSoundEvent("radio_light");
+
+
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
             ModSounds.SOUND_BLOCK_BREAK,
             ModSounds.SOUND_BLOCK_STEP, ModSounds.SOUND_BLOCK_PLACE,
@@ -50,12 +64,14 @@ public class ModSounds {
 
 
     private static SoundEvent registerSoundEvent(String name) {
+
         Identifier id = new Identifier(Oddities.MOD_ID, name);
         return Registry.register(Registries.SOUND_EVENT, id, SoundEvent.of(id));
     }
 
 
     public static void registerSounds() {
+
         Oddities.LOGGER.info("Registering Sounds for " + Oddities.MOD_ID);
 
     }

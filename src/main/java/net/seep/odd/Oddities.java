@@ -11,7 +11,9 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
 import net.fabricmc.fabric.api.registry.FuelRegistry;
 
+import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.ActionResult;
 
 import net.seep.odd.abilities.AbilityServerTicks;
@@ -21,11 +23,13 @@ import net.seep.odd.abilities.artificer.condenser.CondenserNet; // (only used in
 import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.astral.AstralInventory;
+import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
+import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
@@ -43,6 +47,8 @@ import net.seep.odd.enchant.ItalianStompersHandler;
 import net.seep.odd.enchant.ModEnchantments;
 
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.entity.car.RiderCarEntity;
+import net.seep.odd.entity.car.radio.RadioTracksInit;
 import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
@@ -80,6 +86,7 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.VILLAGER_EVO, net.seep.odd.abilities.tamer.entity.VillagerEvoEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.RIDER_CAR, RiderCarEntity.createAttributes());
 
 		// GeckoLib (common entrypoint)
 		GeckoLib.initialize();
@@ -95,6 +102,8 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new VoidPower());
 		Powers.register(new ArtificerPower());
 		Powers.register(new SpectralPhasePower());
+		Powers.register(new RiderPower());
+		Powers.register(new CosmicPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -174,10 +183,6 @@ public final class Oddities implements ModInitializer {
 			}
 		});
 
-
-
-
-
 		net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) ->
 				(player instanceof net.minecraft.server.network.ServerPlayerEntity sp
 						&& net.seep.odd.abilities.power.SpectralPhasePower.isPhased(sp))
@@ -199,6 +204,19 @@ public final class Oddities implements ModInitializer {
 		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
 				net.seep.odd.abilities.power.SpectralPhasePower.forceReset(handler.player)
 		);
+
+		// Rider
+		RiderNet.registerServer();
+		RadioTracksInit.init();
+
+
+		// Cosmic Sword
+		CosmicNet.register();
+
+
+
+
+
 
 
 		AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) ->

@@ -102,18 +102,19 @@ public final class SpectralPhasePower implements Power {
     }
     @Override public String longDescription() {
         return """
-            Become semi-transparent and intangible. Thrust along your look direction (vertical included),
-            briefly shove into the surface on entry, and auto-exit if you’re fully in open air (blast obeys
-            the phase_toggle). Energy only charges while grounded/embedded. While phased you gain Night
-            Vision + Darkness. You also have limited air inside blocks; run out and you suffocate.
+            Become semi-transparent and intangible. Phase in and out of blocks,
+            and charge up a powerful exit with spectral phase!.
             """;
     }
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Toggle phasing (thrust, no gravity, energy, air).";
-            case "secondary" -> "phase_toggle: Toggle Exit Blast ON/OFF.";
+            case "primary"   -> "Phase into blocks, move towards the direction of your crosshair, and charge up energy for a powerful blast";
+            case "secondary" -> "Toggle Exit Blast ON/OFF.";
             default          -> "Spectral Phase";
         };
+    }
+    @Override public Identifier portraitTexture() {
+        return new Identifier("odd", "textures/gui/overview/max_portrait.png");
     }
 
     /* ======================= per-player state ======================= */

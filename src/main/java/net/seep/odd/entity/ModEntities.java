@@ -13,10 +13,12 @@ import net.seep.odd.Oddities;
 import net.seep.odd.abilities.tamer.entity.VillagerEvoEntity;
 import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
+import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.misty.MistyBubbleEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
+import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -32,6 +34,13 @@ public final class ModEntities {
     public static final Identifier UFO_SAUCER_ID        = new Identifier(Oddities.MOD_ID, "ufo_saucer");
     public static final Identifier OUTERMAN_ID          = new Identifier(Oddities.MOD_ID, "outerman");
 
+    // Car
+    public static final Identifier RIDER_CAR_ID         = new Identifier(Oddities.MOD_ID, "rider_car");
+
+    // Cosmic Katana
+    public static final Identifier HOMING_COSMIC_SWORD_ID = new Identifier(Oddities.MOD_ID, "homing_cosmic_sword");
+
+
     /** Assigned in {@link #register()} during mod init. */
     public static EntityType<CreepyEntity>             CREEPY;
     public static EntityType<MistyBubbleEntity>        MISTY_BUBBLE;
@@ -43,6 +52,12 @@ public final class ModEntities {
     // NEW: UFO Saucer
     public static EntityType<UfoSaucerEntity>          UFO_SAUCER;
     public static EntityType<OuterManEntity>          OUTERMAN;
+
+    // Car
+    public static EntityType<RiderCarEntity>           RIDER_CAR;
+
+    // Cosmic Katana
+    public static EntityType<HomingCosmicSwordEntity> HOMING_COSMIC_SWORD;
 
     public static void register() {
         // Creepy
@@ -131,6 +146,35 @@ public final class ModEntities {
                             .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
                             .trackRangeBlocks(64)
                             .trackedUpdateRate(10)
+                            .build()
+            );
+        }
+        if (RIDER_CAR == null) {
+            RIDER_CAR = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    RIDER_CAR_ID,
+                    FabricEntityTypeBuilder.create(
+                                    SpawnGroup.MISC,
+                                    (EntityType<RiderCarEntity> type, World world) -> new RiderCarEntity(type, world)
+                            )
+                            .dimensions(EntityDimensions.fixed(3.6f, 1.2f)) // tweak to your model
+                            .trackRangeBlocks(96)
+                            .trackedUpdateRate(2)
+                            .build()
+            );
+            FabricDefaultAttributeRegistry.register(RIDER_CAR, RiderCarEntity.createAttributes());
+        }
+        // Cosmic: Homing Sword projectile
+        if (HOMING_COSMIC_SWORD == null) {
+            HOMING_COSMIC_SWORD = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    HOMING_COSMIC_SWORD_ID,
+                    FabricEntityTypeBuilder.<HomingCosmicSwordEntity>create(
+                                    SpawnGroup.MISC,
+                                    HomingCosmicSwordEntity::new)
+                            .dimensions(EntityDimensions.fixed(0.5f, 0.5f))
+                            .trackRangeBlocks(96)   // smooth tracking at range
+                            .trackedUpdateRate(1)   // update every tick for clean homing
                             .build()
             );
         }
