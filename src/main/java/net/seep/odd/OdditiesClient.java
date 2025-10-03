@@ -21,8 +21,13 @@ import net.minecraft.world.World;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.cosmic.client.CosmicCpmBridge;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordRenderer;
+import net.seep.odd.abilities.ghostlings.GhostPackets;
+import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
+import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
+import net.seep.odd.abilities.ghostlings.screen.client.GhostManageScreen;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
@@ -62,6 +67,7 @@ import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 import net.seep.odd.particles.client.OddParticlesClient;
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
+import net.seep.odd.abilities.ghostlings.client.GhostlingRenderer;
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
@@ -175,7 +181,14 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Cosmic Sword (Client)
         CosmicPower.Client.init();
-        CosmicNet.registerClient();
+        CosmicNet.register();
+        CosmicCpmBridge.init();
+
+        // Ghostling (Client)
+
+        EntityRendererRegistry.register(ModEntities.GHOSTLING, GhostlingRenderer::new);
+        net.seep.odd.abilities.ghostlings.GhostPackets.registerS2CClient();
+        HandledScreens.register(GhostScreens.GHOST_MANAGE_HANDLER, GhostManageScreen::new);
 
 
 
@@ -209,10 +222,8 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.TAME_BALL, TameBallRenderer::new);
         EntityRendererRegistry.register(ModEntities.RIDER_CAR, RiderCarRenderer::new);
         EntityRendererRegistry.register(ModEntities.HOMING_COSMIC_SWORD, HomingCosmicSwordRenderer::new);
-        EntityRendererRegistry.register(
-                net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL,
-                net.seep.odd.abilities.voids.client.VoidPortalRenderer::new
-        );
+        EntityRendererRegistry.register(net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL, net.seep.odd.abilities.voids.client.VoidPortalRenderer::new);
+        EntityRendererRegistry.register(ModEntities.GHOSTLING, GhostlingRenderer::new);
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }

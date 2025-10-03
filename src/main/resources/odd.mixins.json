@@ -23,6 +23,7 @@
     "ItemEntityMixin",
     "MobEntityAccessorMixin",
     "MobEntityTamerDataMixin",
+    "access.CropBlockInvoker",
     "spectral.PlayerSpectralNoclipMixin"
   ],
   "injectors": {

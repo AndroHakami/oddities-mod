@@ -19,6 +19,8 @@ import net.seep.odd.entity.misty.MistyBubbleEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
+import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
+
 
 public final class ModEntities {
     private ModEntities() {}
@@ -40,6 +42,9 @@ public final class ModEntities {
     // Cosmic Katana
     public static final Identifier HOMING_COSMIC_SWORD_ID = new Identifier(Oddities.MOD_ID, "homing_cosmic_sword");
 
+    // Ghost
+    public static final Identifier GHOSTLING_ID = new Identifier(Oddities.MOD_ID, "ghostling");
+
 
     /** Assigned in {@link #register()} during mod init. */
     public static EntityType<CreepyEntity>             CREEPY;
@@ -58,6 +63,8 @@ public final class ModEntities {
 
     // Cosmic Katana
     public static EntityType<HomingCosmicSwordEntity> HOMING_COSMIC_SWORD;
+
+    public static EntityType<GhostlingEntity> GHOSTLING;
 
     public static void register() {
         // Creepy
@@ -132,6 +139,21 @@ public final class ModEntities {
                             .trackedUpdateRate(10)
                             .build()
             );
+        }
+        if (GHOSTLING == null) {
+            GHOSTLING = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    GHOSTLING_ID,
+                    FabricEntityTypeBuilder.create(
+                                    SpawnGroup.CREATURE,
+                                    (EntityType<GhostlingEntity> type, World world) -> new GhostlingEntity(type, world)
+                            )
+                            .dimensions(EntityDimensions.fixed(0.6f, 1.5f))
+                            .trackRangeBlocks(96)
+                            .trackedUpdateRate(3)
+                            .build()
+            );
+            FabricDefaultAttributeRegistry.register(GHOSTLING, GhostlingEntity.createAttributes());
         }
 
         if (BREW_BOTTLE == null) {

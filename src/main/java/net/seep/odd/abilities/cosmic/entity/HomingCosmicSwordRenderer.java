@@ -7,11 +7,13 @@ import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.util.Identifier;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
+import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
 
 public class HomingCosmicSwordRenderer extends GeoEntityRenderer<HomingCosmicSwordEntity> {
     public HomingCosmicSwordRenderer(EntityRendererFactory.Context ctx) {
         super(ctx, new HomingCosmicSwordModel());
         this.shadowRadius = 0.15f;
+        this.addRenderLayer(new AutoGlowingGeoLayer<>(this));
     }
 
     @Override

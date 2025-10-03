@@ -1,4 +1,16 @@
 {
-  "parent": "minecraft:item/generated",
-  "textures": { "layer0": "odd:item/cosmic_katana" }
-}
+  "parent": "minecraft:item/handheld",
+  "textures": { "layer0": "odd:item/cosmic_katana" },
+  "display": {
+    "firstperson_righthand": {
+      "rotation": [0, -88, 18],
+      "translation": [1.5, 3.5, -2.5],
+      "scale": [1.25, 1.25, 1.25]
+    },
+    "firstperson_lefthand": {
+      "rotation": [0, 88, -18],
+      "translation": [1.5, 3.5, -2.5],
+      "scale": [1.25, 1.25, 1.25]
+
+  }
+}}

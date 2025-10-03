@@ -24,6 +24,7 @@ import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
@@ -87,6 +88,7 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.UFO_SAUCER, UfoSaucerEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.RIDER_CAR, RiderCarEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.GHOSTLING, GhostlingEntity.createAttributes());
 
 		// GeckoLib (common entrypoint)
 		GeckoLib.initialize();
@@ -104,6 +106,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new SpectralPhasePower());
 		Powers.register(new RiderPower());
 		Powers.register(new CosmicPower());
+		Powers.register(new GhostlingsPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -212,6 +215,10 @@ public final class Oddities implements ModInitializer {
 
 		// Cosmic Sword
 		CosmicNet.register();
+
+		// Ghostlings
+		net.seep.odd.abilities.ghostlings.registry.GhostScreens.register();
+		net.seep.odd.abilities.ghostlings.GhostPackets.registerC2S();
 
 
 
