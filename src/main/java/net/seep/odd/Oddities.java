@@ -16,6 +16,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.ActionResult;
 
+import net.minecraft.util.Identifier;
 import net.seep.odd.abilities.AbilityServerTicks;
 import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.PowerCommands;
@@ -25,6 +26,7 @@ import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
+import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
@@ -219,6 +221,10 @@ public final class Oddities implements ModInitializer {
 		// Ghostlings
 		net.seep.odd.abilities.ghostlings.registry.GhostScreens.register();
 		net.seep.odd.abilities.ghostlings.GhostPackets.registerC2S();
+		GhostCargoScreenHandler.TYPE = net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry.registerSimple(
+				new Identifier("odd","ghost_cargo"), GhostCargoScreenHandler::new);
+
+
 
 
 

@@ -5,18 +5,21 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.screen.ScreenHandler;
+import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
 
 public class GhostManageScreenHandler extends ScreenHandler {
     public final int ghostEntityId;
+    public final GhostlingEntity.Job ghostJob;   // <-- job from server
 
     public GhostManageScreenHandler(int syncId, PlayerInventory inv, PacketByteBuf buf) {
-        this(syncId, inv, buf.readVarInt());
+        this(syncId, inv, buf.readVarInt(), buf.readEnumConstant(GhostlingEntity.Job.class));
     }
 
-    public GhostManageScreenHandler(int syncId, PlayerInventory inv, int ghostEntityId) {
+    public GhostManageScreenHandler(int syncId, PlayerInventory inv, int ghostEntityId, GhostlingEntity.Job ghostJob) {
         super(GhostScreens.GHOST_MANAGE_HANDLER, syncId);
         this.ghostEntityId = ghostEntityId;
+        this.ghostJob = ghostJob;
     }
 
     @Override

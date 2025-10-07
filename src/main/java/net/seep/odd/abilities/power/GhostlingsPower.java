@@ -105,21 +105,29 @@ public final class GhostlingsPower implements Power {
 
     @Override
     public void activate(ServerPlayerEntity player) {
-        GhostlingEntity g = raycastGhost(player, 6.0);
-        if (g == null) { player.sendMessage(Text.literal("Look at your Ghostling to manage it."), true); return; }
-        if (!g.isOwner(player.getUuid())) { player.sendMessage(Text.literal("That's not your Ghostling."), true); return; }
+        GhostlingEntity g = raycastGhost(player, 7.0);
+        if (g == null) {
+            player.sendMessage(Text.literal("Look at your Ghostling to manage it (or use Secondary for Dashboard)."), true);
+            return;
+        }
+        if (!g.isOwner(player.getUuid())) {
+            player.sendMessage(Text.literal("That's not your Ghostling."), true);
+            return;
+        }
+
+        // Primary = open the per-ghost Manage screen (job-specific controls live there)
         GhostPackets.openManageServer(player, g);
     }
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
+        // Secondary = open the dashboard listing all of the player's Ghostlings
         GhostPackets.openDashboardServer(player);
     }
 
-    public static void serverTick(ServerPlayerEntity player) { /* entity handles the work */ }
-
+    /* ---------- helper (unchanged but included so you have the exact version) ---------- */
     private static GhostlingEntity raycastGhost(ServerPlayerEntity p, double range) {
-        Vec3d eye = p.getCameraPosVec(1f);
+        Vec3d eye  = p.getCameraPosVec(1f);
         Vec3d look = p.getRotationVec(1f);
         Vec3d end  = eye.add(look.multiply(range));
         Box sweep  = p.getBoundingBox().stretch(look.multiply(range)).expand(1.0);
@@ -127,8 +135,9 @@ public final class GhostlingsPower implements Power {
         var hit = net.minecraft.entity.projectile.ProjectileUtil.raycast(
                 p, eye, end, sweep,
                 e -> e instanceof GhostlingEntity && e.isAlive() && !e.isSpectator(),
-                range * range);
-        Entity e = hit != null ? hit.getEntity() : null;
-        return (e instanceof GhostlingEntity g) ? g : null;
+                range * range
+        );
+        var e = hit != null ? hit.getEntity() : null;
+        return (e instanceof GhostlingEntity ge) ? ge : null;
     }
 }

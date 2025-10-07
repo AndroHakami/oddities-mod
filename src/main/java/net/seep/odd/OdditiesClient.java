@@ -28,6 +28,8 @@ import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
 import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
 import net.seep.odd.abilities.ghostlings.screen.client.GhostManageScreen;
+import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreen;
+import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
@@ -189,6 +191,9 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.GHOSTLING, GhostlingRenderer::new);
         net.seep.odd.abilities.ghostlings.GhostPackets.registerS2CClient();
         HandledScreens.register(GhostScreens.GHOST_MANAGE_HANDLER, GhostManageScreen::new);
+        HandledScreens.register(GhostScreens.COURIER_PAY_HANDLER, net.seep.odd.abilities.ghostlings.screen.client.courier.CourierPayScreen::new);
+        net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry.register(
+                GhostCargoScreenHandler.TYPE, GhostCargoScreen::new);
 
 
 
