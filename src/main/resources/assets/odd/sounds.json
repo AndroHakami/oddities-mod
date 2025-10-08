@@ -17,6 +17,13 @@
       "odd:saucer_attack"
     ]
   },
+  "ice_spell": {
+    "subtitle": "odd.ice_spell",
+    "sounds": [
+      "odd:ice_spell"
+    ]
+  },
+
   "saucer_hurt": {
     "subtitle": "odd.saucer_hurt",
     "sounds": [

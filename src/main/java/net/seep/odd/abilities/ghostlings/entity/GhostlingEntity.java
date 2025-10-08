@@ -1,3 +1,4 @@
+// FILE: net/seep/odd/abilities/ghostlings/entity/GhostlingEntity.java
 package net.seep.odd.abilities.ghostlings.entity;
 
 import net.minecraft.block.Block;
@@ -23,6 +24,7 @@ import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
+import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.mob.PathAwareEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -61,15 +63,19 @@ import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
+import net.seep.odd.sound.ModSounds;
 
 import net.minecraft.entity.projectile.thrown.SnowballEntity;
 
 import java.util.*;
 
 import net.seep.odd.mixin.access.CropBlockInvoker;
+// >>> ADD: your mod sound registry (adjust package/name if yours differs)
+
 
 public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     public enum Job { NONE, FIGHTER, MINER, FARMER, COURIER }
+    public enum BehaviorMode { NORMAL, FOLLOW, GUARD }
 
     /* ---- Client-synced animation pose ---- */
     public enum WorkPose { NONE, REPLANT, MINING, HAPPY, DEPRESSED }
@@ -105,12 +111,16 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
     private Job job = Job.NONE;
+    private BehaviorMode behavior = BehaviorMode.NORMAL;
+
     private UUID owner;
     private boolean working = false;
 
     private BlockPos workOrigin = null;
     private boolean stayWithinRange = false;
     private static final int STAY_RANGE = 16;
+
+    private BlockPos guardCenter = null;
 
     private BlockPos homePos = null;
     private boolean homeInitialized = false;
@@ -149,11 +159,15 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     private ChunkPos travelTicketPos = null;
     private static final int TICKET_LEVEL = 31;
 
+    // >>> ADD: light SFX state to avoid spam
+    private boolean wasDepressed = false;
+    private int hoverSfxCooldown = 0;
+    private int depressedSfxCooldown = 0;
+
     /* ===== ctor & navigation ===== */
     public GhostlingEntity(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
         this.experiencePoints = 0;
-        this.setCanPickUpLoot(true);
         this.setPersistent();
         this.moveControl = new FlightMoveControl(this, 20, true);
     }
@@ -178,12 +192,18 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         this.dataTracker.startTracking(MOOD, 0.75f); // start fairly happy
     }
 
-    private void setWorkPose(WorkPose p){ this.dataTracker.set(POSE_IDX, poseToInt(p)); }
+    private void setWorkPose(WorkPose p){
+        this.dataTracker.set(POSE_IDX, poseToInt(p));
+    }
     private WorkPose getWorkPose(){ return intToPose(this.dataTracker.get(POSE_IDX)); }
     private void setTimedPose(WorkPose p, int ticks){
         setWorkPose(p);
         if (this.getWorld() instanceof ServerWorld sw) {
             poseUntilTick = (int) sw.getTime() + Math.max(1, ticks);
+            // >>> ADD: play a happy chirp when entering HAPPY pose (works for feed & any other triggers)
+            if (p == WorkPose.HAPPY) {
+                this.playSound(SoundEvents.ENTITY_ALLAY_ITEM_GIVEN, 0.8f, 0.95f + this.getWorld().random.nextFloat()*0.1f);
+            }
         }
     }
 
@@ -201,10 +221,12 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     /* ------------------ attributes ------------------ */
     public static DefaultAttributeContainer.Builder createAttributes() {
         return MobEntity.createMobAttributes()
-                .add(EntityAttributes.GENERIC_MAX_HEALTH, 80.0)
+                .add(EntityAttributes.GENERIC_MAX_HEALTH, 40.0)
                 .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, BASE_MOVE)
                 .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 32.0)
-                .add(EntityAttributes.GENERIC_FLYING_SPEED, 2.0)
+                .add(EntityAttributes.GENERIC_FLYING_SPEED, 8.0)
+                .add(EntityAttributes.GENERIC_ATTACK_DAMAGE, 8.0)
+                .add(EntityAttributes.GENERIC_ATTACK_SPEED, 1.0)
                 .add(EntityAttributes.GENERIC_KNOCKBACK_RESISTANCE, 0.4);
     }
 
@@ -213,6 +235,7 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     public void setOwner(UUID uuid) { this.owner = uuid; }
     public boolean isWorking() { return working; }
     public Job getJob() { return job; }
+    public BehaviorMode getBehavior() { return behavior; }
 
     public void setWorkOrigin(BlockPos pos) { this.workOrigin = pos; }
     public void toggleStayWithinRange() { this.stayWithinRange = !this.stayWithinRange; }
@@ -221,6 +244,18 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
 
     public BlockPos getHome() { return homePos; }
     public void setHome(BlockPos pos) { this.homePos = pos; }
+
+    /* Behavior control (called via packets) */
+    public void setFollowMode(boolean enable) {
+        if (enable) behavior = BehaviorMode.FOLLOW;
+        else if (behavior == BehaviorMode.FOLLOW) behavior = BehaviorMode.NORMAL;
+    }
+    public void setGuardCenter(@Nullable BlockPos pos) {
+        guardCenter = pos;
+        if (pos == null) { if (behavior == BehaviorMode.GUARD) behavior = BehaviorMode.NORMAL; }
+        else behavior = BehaviorMode.GUARD;
+    }
+    public @Nullable BlockPos getGuardCenter() { return guardCenter; }
 
     /* farmer deposit */
     public void setFarmerDepositChest(BlockPos pos) { this.farmerDepositChest = pos; }
@@ -232,15 +267,13 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
 
     /* tool for renderer + logic */
     public ItemStack getToolStack() { return this.tool.getStack(0); }
-    @Override public ItemStack getMainHandStack() { return this.tool.getStack(0); }
+    @Override public ItemStack getMainHandStack() { return getDisplayedTool(); }
 
-    /* ------------------ inventory UI (3×3 cargo + tool slot using vanilla 9×2) ------------------ */
+    /* ------------------ inventory UI (3×3 cargo + tool slot via 9×2) ------------------ */
     public NamedScreenHandlerFactory getCargoFactory() {
         return new SimpleNamedScreenHandlerFactory(
                 (syncId, playerInv, player) -> {
-                    // Build the 18-slot adapter each time the UI opens:
                     Inventory combined = new CargoWithToolInventory(this, this.cargo, this.tool);
-                    // Use the ctor that takes (type, syncId, playerInv, inventory, rows)
                     return new GenericContainerScreenHandler(
                             ScreenHandlerType.GENERIC_9X2, syncId, playerInv, combined, 2
                     );
@@ -254,7 +287,6 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         private final GhostlingEntity owner;
         private final SimpleInventory cargo;
         private final SimpleInventory tool;
-        // we keep a tiny side inventory for the “disabled” row; if players put items there, we drop them on close
         private final SimpleInventory disabled = new SimpleInventory(8);
 
         CargoWithToolInventory(GhostlingEntity owner, SimpleInventory cargo, SimpleInventory tool) {
@@ -262,46 +294,38 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         }
 
         @Override public int size() { return 18; }
-
         @Override public boolean isEmpty() {
             for (int i=0;i<9;i++) if (!cargo.getStack(i).isEmpty()) return false;
             if (!tool.getStack(0).isEmpty()) return false;
             for (int i=0;i<8;i++) if (!disabled.getStack(i).isEmpty()) return false;
             return true;
         }
-
         @Override public ItemStack getStack(int slot) {
             if (slot < 9) return cargo.getStack(slot);
             if (slot == 9) return tool.getStack(0);
             return disabled.getStack(slot - 10);
         }
-
         @Override public ItemStack removeStack(int slot, int amount) {
             if (slot < 9) return cargo.removeStack(slot, amount);
             if (slot == 9) return tool.removeStack(0, amount);
             return disabled.removeStack(slot - 10, amount);
         }
-
         @Override public ItemStack removeStack(int slot) {
             if (slot < 9) return cargo.removeStack(slot);
             if (slot == 9) return tool.removeStack(0);
             return disabled.removeStack(slot - 10);
         }
-
         @Override public void setStack(int slot, ItemStack stack) {
             if (slot < 9) cargo.setStack(slot, stack);
             else if (slot == 9) tool.setStack(0, stack);
-            else disabled.setStack(slot - 10, stack); // visually present but “not kept”
+            else disabled.setStack(slot - 10, stack);
             markDirty();
         }
-
         @Override public void markDirty() { cargo.markDirty(); tool.markDirty(); disabled.markDirty(); }
         @Override public boolean canPlayerUse(PlayerEntity player) { return owner.isAlive(); }
         @Override public void clear() { cargo.clear(); tool.clear(); disabled.clear(); }
-
         @Override public void onOpen(PlayerEntity player) {}
         @Override public void onClose(PlayerEntity player) {
-            // ensure disabled row never “stores” items
             for (int i = 0; i < 8; i++) {
                 ItemStack s = disabled.getStack(i);
                 if (!s.isEmpty()) {
@@ -319,7 +343,7 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         this.goalSelector.add(8, new LookAtEntityGoal(this, PlayerEntity.class, 8.0f));
     }
 
-    /* ------------------ core tick (flight, noclip pref, mood) ------------------ */
+    /* ------------------ core tick ------------------ */
     @Override
     public void tick() {
         super.tick();
@@ -343,7 +367,7 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
             }
         }
 
-        // mood drain & movement mult
+        // mood drain & speed modulation
         if (!this.getWorld().isClient && this.age % 40 == 0) {
             float m = getMood();
             float drain = 0.0015f; // natural
@@ -368,9 +392,39 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
             EntityAttributeInstance ai = getAttributeInstance(EntityAttributes.GENERIC_MOVEMENT_SPEED);
             if (ai != null) ai.setBaseValue(BASE_MOVE * mult);
         }
+
+        // >>> ADD: sound logic (server only)
+        if (!this.getWorld().isClient) {
+            boolean dep = isDepressed();
+
+            // transition into depressed: one-shot
+            if (dep && !wasDepressed) {
+                this.playSound(SoundEvents.ENTITY_ALLAY_ITEM_TAKEN, 0.8f, 0.9f + this.getWorld().random.nextFloat()*0.2f);
+                depressedSfxCooldown = 80 + this.getWorld().random.nextInt(60);
+            }
+            wasDepressed = dep;
+
+            if (hoverSfxCooldown > 0) hoverSfxCooldown--;
+            if (depressedSfxCooldown > 0) depressedSfxCooldown--;
+
+            // ambient hover while moving/floating (disabled when depressed)
+            boolean hovering = isTravelling()
+                    || this.getVelocity().lengthSquared() > 0.01
+                    || (this.working && this.getPose() == net.minecraft.entity.EntityPose.STANDING);
+            if (!dep && hovering && hoverSfxCooldown == 0) {
+                this.playSound(SoundEvents.ENTITY_ALLAY_AMBIENT_WITH_ITEM, 0.5f, 0.95f + this.getWorld().random.nextFloat()*0.1f);
+                hoverSfxCooldown = 50 + this.getWorld().random.nextInt(30);
+            }
+
+            // occasional depressed whimper
+            if (dep && depressedSfxCooldown == 0) {
+                this.playSound(SoundEvents.ENTITY_ALLAY_ITEM_TAKEN, 0.7f, 0.95f + this.getWorld().random.nextFloat()*0.1f);
+                depressedSfxCooldown = 120 + this.getWorld().random.nextInt(80);
+            }
+        }
     }
 
-    /* --------- immunity to wall damage while noclipping --------- */
+    /* --------- no wall damage while noclipping --------- */
     @Override
     public boolean isInvulnerableTo(DamageSource source) {
         if (this.noClip && source.isOf(DamageTypes.IN_WALL)) return true;
@@ -407,17 +461,16 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         this.noClip = false;
     }
 
-    // ghosts don't take fall damage
     @Override
     public boolean handleFallDamage(float distance, float damageMultiplier, DamageSource damageSource) { return false; }
 
-    /* ------------------ interact (+10% mood on feed) ------------------ */
+    /* ------------------ interact (assign roles only; tools live in cargo/tool slot) ------------------ */
     @Override
     protected ActionResult interactMob(PlayerEntity player, Hand hand) {
         if (this.getWorld().isClient) return ActionResult.SUCCESS;
         ItemStack stack = player.getStackInHand(hand);
 
-        // Feed: +10% mood + heal
+        // Feed: +10% mood + heal (+happy sfx)
         if (stack.isOf(Items.GHAST_TEAR) || stack.isOf(Items.PHANTOM_MEMBRANE)) {
             this.heal(12f);
             setMood(getMood() + 0.10f);
@@ -426,7 +479,9 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
             if (this.getWorld() instanceof ServerWorld sw) {
                 sw.spawnParticles(ParticleTypes.HEART, getX(), getY()+1.2, getZ(), 6, 0.3,0.3,0.3, 0.01);
             }
-            playSound(SoundEvents.ENTITY_VILLAGER_CELEBRATE, 1f, 1.0f);
+            // keep vanilla celebrate, add custom happy
+
+            this.playSound(SoundEvents.ENTITY_ALLAY_ITEM_GIVEN, 0.9f, 0.95f + this.getWorld().random.nextFloat()*0.1f);
             return ActionResult.CONSUME;
         }
 
@@ -436,14 +491,16 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
             return ActionResult.SUCCESS;
         }
 
-        // Equip/replace tool (owner only) — goes to visible tool slot
+        // Role assign from hand (owner only); DO NOT consume item — uses tools from inventories
         if (isOwner(player.getUuid())) {
-            if (stack.getItem() instanceof HoeItem || stack.getItem() instanceof MiningToolItem || stack.getItem() instanceof SwordItem || stack.getItem() instanceof AxeItem || stack.getItem() instanceof ShovelItem) {
-                tool.setStack(0, stack.copyWithCount(1));
-                if (!player.getAbilities().creativeMode) stack.decrement(1);
-                player.sendMessage(Text.literal("Equipped: " + tool.getStack(0).getItem().getName().getString()), true);
-                if (job == Job.NONE) job = toolToJob(tool.getStack(0));
-                return ActionResult.SUCCESS;
+            Item item = stack.getItem();
+            if (item instanceof SwordItem || item instanceof HoeItem || item instanceof MiningToolItem || item instanceof AxeItem || item instanceof ShovelItem || stack.isOf(Items.CHEST)) {
+                Job newJob = toolToJob(stack);
+                if (newJob != Job.NONE) {
+                    this.job = newJob;
+                    player.sendMessage(Text.literal("Assigned job: " + newJob.name() + " (uses tools from cargo/tool slot)"), true);
+                    return ActionResult.SUCCESS;
+                }
             }
         }
 
@@ -499,10 +556,12 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         super.writeCustomDataToNbt(nbt);
         if (owner != null) nbt.putUuid("Owner", owner);
         nbt.putString("Job", job.name());
+        nbt.putString("Behavior", behavior.name());
         if (workOrigin != null) nbt.putLong("WorkOrigin", workOrigin.asLong());
         nbt.putBoolean("StayRange", stayWithinRange);
         if (homePos != null) nbt.putLong("HomePos", homePos.asLong());
         nbt.putBoolean("HomeInit", homeInitialized);
+        if (guardCenter != null) nbt.putLong("GuardCenter", guardCenter.asLong());
 
         nbt.putInt("PoseIdx", poseToInt(getWorkPose()));
         nbt.putInt("PoseUntil", poseUntilTick);
@@ -566,10 +625,12 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         super.readCustomDataFromNbt(nbt);
         if (nbt.containsUuid("Owner")) owner = nbt.getUuid("Owner");
         if (nbt.contains("Job")) job = Job.valueOf(nbt.getString("Job"));
+        if (nbt.contains("Behavior")) behavior = BehaviorMode.valueOf(nbt.getString("Behavior"));
         workOrigin = nbt.contains("WorkOrigin") ? BlockPos.fromLong(nbt.getLong("WorkOrigin")) : null;
         stayWithinRange = nbt.getBoolean("StayRange");
         homePos = nbt.contains("HomePos") ? BlockPos.fromLong(nbt.getLong("HomePos")) : null;
         homeInitialized = nbt.getBoolean("HomeInit");
+        guardCenter = nbt.contains("GuardCenter") ? BlockPos.fromLong(nbt.getLong("GuardCenter")) : null;
 
         setWorkPose(intToPose(nbt.getInt("PoseIdx")));
         poseUntilTick = nbt.getInt("PoseUntil");
@@ -638,6 +699,9 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
 
     boolean hasWorkToDo() {
         if (isDepressed()) return false;
+        if (behavior == BehaviorMode.FOLLOW) return true;
+        if (behavior == BehaviorMode.GUARD && guardCenter != null && !getBlockPos().isWithinDistance(guardCenter, STAY_RANGE)) return true;
+
         if (isTravelling() || pendingTeleport != null || postTeleportDelay > 0 || pendingDeposit) return true;
         if (stayWithinRange && workOrigin != null && !getBlockPos().isWithinDistance(workOrigin, STAY_RANGE)) {
             return true;
@@ -666,10 +730,11 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         return false;
     }
 
+    /** Hostiles only */
     private LivingEntity findFighterTarget() {
         return this.getWorld().getClosestEntity(
-                LivingEntity.class, TargetPredicate.DEFAULT, this,
-                getX(), getY(), getZ(), getBoundingBox().expand(10));
+                HostileEntity.class, TargetPredicate.DEFAULT, this,
+                getX(), getY(), getZ(), getBoundingBox().expand(12));
     }
 
     void tickWork() {
@@ -681,7 +746,26 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
             return;
         }
 
-        // deferred courier arrival / deposit handling
+        // FOLLOW/GUARD layer
+        if (behavior == BehaviorMode.FOLLOW) {
+            PlayerEntity p = getOwnerPlayer();
+            if (p != null) {
+                double d = this.distanceTo(p);
+                if (d > 2.4) {
+                    flyTo(p.getX(), p.getY() + 1.0, p.getZ(), 1.15);
+                    working = true;
+                    return;
+                }
+            } else behavior = BehaviorMode.NORMAL;
+        } else if (behavior == BehaviorMode.GUARD && guardCenter != null) {
+            if (!getBlockPos().isWithinDistance(guardCenter, STAY_RANGE)) {
+                flyTo(guardCenter, 1.05);
+                working = true;
+                return;
+            }
+        }
+
+        // courier steps
         if (pendingTeleport != null && this.getWorld() instanceof ServerWorld sw) {
             ChunkPos cp = new ChunkPos(pendingTeleport);
             if (sw.isChunkLoaded(cp.x, cp.z)) {
@@ -731,6 +815,32 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     }
 
     /* ------------------ fighter ------------------ */
+    private ItemStack getBestWeapon() {
+        ItemStack t = tool.getStack(0);
+        if (isWeapon(t)) return t;
+
+        ItemStack best = ItemStack.EMPTY;
+        for (int i=0;i<cargo.size();i++) {
+            ItemStack s = cargo.getStack(i);
+            if (isWeapon(s)) {
+                if (best.isEmpty() || weaponScore(s) > weaponScore(best)) best = s;
+            }
+        }
+        return best;
+    }
+    private boolean isWeapon(ItemStack s) {
+        if (s == null || s.isEmpty()) return false;
+        return s.getItem() instanceof SwordItem || s.getItem() instanceof AxeItem || s.getItem() instanceof ShovelItem || s.getItem() instanceof PickaxeItem;
+    }
+    private float weaponScore(ItemStack s) {
+        Item it = s.getItem();
+        if (it instanceof SwordItem sw) return 6f + sw.getAttackDamage();
+        if (it instanceof AxeItem ax)   return 5f + (float)ax.getMaterial().getAttackDamage();
+        if (it instanceof PickaxeItem)  return 3.5f;
+        if (it instanceof ShovelItem)   return 3.0f;
+        return 1f;
+    }
+
     private void tickFighter() {
         working = false;
         PlayerEntity ownerPlayer = getOwnerPlayer();
@@ -739,16 +849,23 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         LivingEntity target = findFighterTarget();
         if (target == null || target == ownerPlayer || target == this || !target.isAlive() || !target.isAttackable()) return;
 
+        ItemStack weap = getBestWeapon();
+        boolean melee = isWeapon(weap);
+
         working = true;
-        ItemStack weap = tool.getStack(0);
-        boolean melee = weap.getItem() instanceof SwordItem || weap.getItem() instanceof AxeItem;
 
         if (melee) {
             flyTo(target.getX(), target.getY() + 0.3, target.getZ(), 1.10);
             if (this.distanceTo(target) < 2.6f && this.age % 12 == 0) {
-                float dmg = 3.0f + EnchantmentHelper.getAttackDamage(weap, target.getGroup());
+                float base = 3.0f;
+                if (weap.getItem() instanceof SwordItem sw) base = 4.0f + sw.getAttackDamage();
+                else if (weap.getItem() instanceof AxeItem ax) base = 4.0f + (float)ax.getMaterial().getAttackDamage();
+                else if (weap.getItem() instanceof PickaxeItem) base = 3.5f;
+                else if (weap.getItem() instanceof ShovelItem)  base = 3.0f;
+
+                float dmg = base + EnchantmentHelper.getAttackDamage(weap, target.getGroup());
                 target.damage(getDamageSources().mobAttack(this), dmg);
-                playSound(SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.6f, 1.0f);
+                playSound(SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP, 0.8f, 1.0f);
             }
         } else {
             if (age % 30 == 0) {
@@ -762,7 +879,24 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         }
     }
 
-    /* ------------------ miner ------------------ */
+    /* ------------------ miner / farmer / courier ------------------ */
+    private ItemStack getEffectiveMiningTool(BlockState state) {
+        ItemStack best = tool.getStack(0);
+        float bestSpeed = miningSpeed(best, state);
+        for (int i=0;i<cargo.size();i++) {
+            ItemStack s = cargo.getStack(i);
+            float sp = miningSpeed(s, state);
+            if (sp > bestSpeed) { best = s; bestSpeed = sp; }
+        }
+        return best.isEmpty() ? new ItemStack(Items.AIR) : best;
+    }
+    private float miningSpeed(ItemStack s, BlockState st) {
+        if (s.isEmpty()) return 1f;
+        Item it = s.getItem();
+        if (it instanceof MiningToolItem mti) return Math.max(1f, mti.getMiningSpeedMultiplier(s, st));
+        return 1f;
+    }
+
     public void beginMinerJob(List<BlockSnapshot> snapshots) {
         this.job = Job.MINER;
         this.minerTargets.clear();
@@ -847,9 +981,10 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
             if (!state.isAir() && state.getBlock() == target.state().getBlock()) {
                 sw.syncWorldEvent(2001, p, Block.getRawIdFromState(state));
 
+                ItemStack useTool = getEffectiveMiningTool(state);
                 LootContextParameterSet.Builder ctx = new LootContextParameterSet.Builder(sw)
                         .add(LootContextParameters.ORIGIN, Vec3d.ofCenter(p))
-                        .add(LootContextParameters.TOOL, tool.getStack(0));
+                        .add(LootContextParameters.TOOL, useTool.isEmpty() ? ItemStack.EMPTY : useTool);
                 java.util.List<ItemStack> drops = state.getBlock().getDroppedStacks(state, ctx);
 
                 sw.setBlockState(p, net.minecraft.block.Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
@@ -870,14 +1005,23 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
     }
 
     private int computeMineTicks(BlockState state) {
-        ItemStack t = tool.getStack(0);
-        float speed = 1f;
-        if (t.getItem() instanceof MiningToolItem mti) speed = mti.getMiningSpeedMultiplier(t, state);
+        ItemStack t = getEffectiveMiningTool(state);
+        float speed = miningSpeed(t, state);
         int base = 30;
         return Math.max(10, Math.round(base / Math.max(1f, speed)));
     }
 
-    /* ------------------ farmer ------------------ */
+    private boolean hasHoe() {
+        if (!tool.getStack(0).isEmpty() && tool.getStack(0).getItem() instanceof HoeItem) return true;
+        for (int i=0;i<cargo.size();i++) if (cargo.getStack(i).getItem() instanceof HoeItem) return true;
+        return false;
+    }
+    private ItemStack getAnyHoe() {
+        if (!tool.getStack(0).isEmpty() && tool.getStack(0).getItem() instanceof HoeItem) return tool.getStack(0);
+        for (int i=0;i<cargo.size();i++) if (cargo.getStack(i).getItem() instanceof HoeItem) return cargo.getStack(i);
+        return ItemStack.EMPTY;
+    }
+
     private void tickFarmer() {
         working = false;
 
@@ -887,6 +1031,7 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         }
 
         if (!hasHoe()) return;
+        ItemStack hoeTool = getAnyHoe();
         BlockPos center = (workOrigin != null) ? workOrigin : getBlockPos();
         BlockPos.Mutable m = new BlockPos.Mutable();
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
@@ -911,7 +1056,7 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
                     sw.syncWorldEvent(2001, m, Block.getRawIdFromState(state));
                     LootContextParameterSet.Builder ctx = new LootContextParameterSet.Builder(sw)
                             .add(LootContextParameters.ORIGIN, Vec3d.ofCenter(m))
-                            .add(LootContextParameters.TOOL, tool.getStack(0));
+                            .add(LootContextParameters.TOOL, hoeTool.isEmpty() ? ItemStack.EMPTY : hoeTool);
                     java.util.List<ItemStack> drops = state.getBlock().getDroppedStacks(state, ctx);
                     sw.setBlockState(m, net.minecraft.block.Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
 
@@ -955,12 +1100,6 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         }
     }
 
-    private boolean hasHoe() {
-        ItemStack t = tool.getStack(0);
-        return !t.isEmpty() && t.getItem() instanceof HoeItem;
-    }
-
-    /* ------------------ deposit helper used by farmer+miner ------------------ */
     private void depositToSpecificChest(BlockPos chestPos) {
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
         flyTo(chestPos, 0.92);
@@ -1135,13 +1274,11 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
 
     private ItemStack insertStack(Inventory inv, ItemStack src) {
         if (src.isEmpty()) return ItemStack.EMPTY;
-
         // Merge
         for (int slot = 0; slot < inv.size(); slot++) {
             ItemStack cur = inv.getStack(slot);
             if (cur.isEmpty()) continue;
             if (!ItemStack.canCombine(cur, src)) continue;
-
             int max = Math.min(cur.getMaxCount(), inv.getMaxCountPerStack());
             int canMove = Math.min(src.getCount(), max - cur.getCount());
             if (canMove > 0) {
@@ -1187,5 +1324,16 @@ public class GhostlingEntity extends PathAwareEntity implements GeoEntity {
         @Override public boolean canStart() { return g.hasWorkToDo(); }
         @Override public boolean shouldContinue() { return g.hasWorkToDo(); }
         @Override public void tick() { g.tickWork(); }
+    }
+
+    /* === helpers for renderer === */
+    private ItemStack getDisplayedTool() {
+        ItemStack t = tool.getStack(0);
+        if (!t.isEmpty()) return t;
+        for (int i=0;i<cargo.size();i++){
+            ItemStack s = cargo.getStack(i);
+            if (s.getItem() instanceof ToolItem) return s;
+        }
+        return ItemStack.EMPTY;
     }
 }

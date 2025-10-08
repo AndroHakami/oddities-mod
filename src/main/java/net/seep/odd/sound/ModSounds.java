@@ -50,6 +50,9 @@ public class ModSounds {
     public static final SoundEvent RADIO_TRACK3 = registerSoundEvent("radio_ryan");
     public static final SoundEvent RADIO_TRACK4 = registerSoundEvent("radio_light");
 
+    // Glacier
+    public static final SoundEvent ICE_SPELL = registerSoundEvent("ice_spell");
+
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
             ModSounds.SOUND_BLOCK_BREAK,

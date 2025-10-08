@@ -27,6 +27,11 @@ import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
+import net.seep.odd.abilities.icewitch.IceSpellAreaEntity;
+import net.seep.odd.abilities.icewitch.IceWitchInit;
+import net.seep.odd.abilities.icewitch.IceWitchPackets;
+import net.seep.odd.abilities.icewitch.client.IceSpellAreaRenderer;
+import net.seep.odd.abilities.icewitch.client.IceWitchHud;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
@@ -92,6 +97,7 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.RIDER_CAR, RiderCarEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.GHOSTLING, GhostlingEntity.createAttributes());
 
+
 		// GeckoLib (common entrypoint)
 		GeckoLib.initialize();
 
@@ -109,6 +115,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new RiderPower());
 		Powers.register(new CosmicPower());
 		Powers.register(new GhostlingsPower());
+		Powers.register(new IceWitchPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -223,6 +230,14 @@ public final class Oddities implements ModInitializer {
 		net.seep.odd.abilities.ghostlings.GhostPackets.registerC2S();
 		GhostCargoScreenHandler.TYPE = net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry.registerSimple(
 				new Identifier("odd","ghost_cargo"), GhostCargoScreenHandler::new);
+
+		// Ice Witch
+		IceWitchPackets.registerServer();
+		IceWitchInit.registerCommon();
+
+
+
+
 
 
 

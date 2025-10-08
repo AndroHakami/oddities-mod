@@ -17,6 +17,7 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.ghostlings.screen.client.GhostDashboardScreen;
+import net.seep.odd.abilities.ghostlings.screen.client.fighter.FighterControlScreen;
 import net.seep.odd.abilities.ghostlings.screen.client.courier.CourierConfirmScreen;
 import net.seep.odd.abilities.ghostlings.screen.client.courier.CourierTargetScreen;
 import net.seep.odd.abilities.ghostlings.screen.courier.CourierPayScreenHandler;
@@ -33,6 +34,7 @@ public final class GhostPackets {
     /* ======= PKT IDs ======= */
     // manage/dashboard
     public static final Identifier S2C_OPEN_DASHBOARD    = new Identifier(MODID, "s2c_open_dashboard");
+
     public static final Identifier C2S_OPEN_MANAGE       = new Identifier(MODID, "c2s_open_manage"); // keep for completeness
     public static final Identifier C2S_SET_WORK_ORIGIN   = new Identifier(MODID, "c2s_set_work_origin");
     public static final Identifier C2S_TOGGLE_STAY_RANGE = new Identifier(MODID, "c2s_toggle_stay_range");
@@ -50,6 +52,13 @@ public final class GhostPackets {
     public static final Identifier S2C_COURIER_OPEN_CONFIRM    = new Identifier(MODID, "s2c_courier_open_confirm");    // ghostId, pos, distance, tears
     public static final Identifier C2S_COURIER_OPEN_PAYMENT    = new Identifier(MODID, "c2s_courier_open_payment");    // ghostId
     public static final Identifier C2S_COURIER_PAY_START       = new Identifier(MODID, "c2s_courier_pay_start");       // ghostId
+
+    // fighter control
+    public static final Identifier C2S_FIGHTER_OPEN_CTRL   = new Identifier(MODID, "c2s_fighter_open_ctrl"); // ghostId
+    public static final Identifier S2C_FIGHTER_OPEN_CTRL   = new Identifier(MODID, "s2c_fighter_open_ctrl"); // ghostId, mode, hasGuard, guardPos
+    public static final Identifier C2S_FIGHTER_SET_FOLLOW  = new Identifier(MODID, "c2s_fighter_set_follow"); // ghostId, enable
+    public static final Identifier C2S_FIGHTER_SET_GUARD   = new Identifier(MODID, "c2s_fighter_set_guard");  // ghostId, pos
+    public static final Identifier C2S_FIGHTER_CLEAR_MODE  = new Identifier(MODID, "c2s_fighter_clear_mode"); // ghostId
 
     /* ======= server state for pending courier ======= */
     private static final Map<UUID, PendingCourier> PENDING = new HashMap<>();
@@ -153,7 +162,6 @@ public final class GhostPackets {
                             m.set(x,y,z);
                             BlockState st = sw.getBlockState(m);
                             if (!st.isAir()) {
-                                // take a snapshot now; later we only break if *same* block is still there
                                 list.add(new GhostlingEntity.BlockSnapshot(m.toImmutable(), st));
                             }
                         }
@@ -220,16 +228,70 @@ public final class GhostPackets {
                 player.closeHandledScreen();
             });
         });
+
+        /* ===== fighter control ===== */
+        ServerPlayNetworking.registerGlobalReceiver(C2S_FIGHTER_OPEN_CTRL, (server, player, handler, buf, response) -> {
+            int id = buf.readVarInt();
+            server.execute(() -> {
+                var e = player.getWorld().getEntityById(id);
+                if (!(e instanceof GhostlingEntity g) || !g.isOwner(player.getUuid())) return;
+
+                PacketByteBuf out = PacketByteBufs.create();
+                out.writeVarInt(id);
+                out.writeEnumConstant(g.getBehavior());
+                boolean hasGuard = g.getGuardCenter() != null;
+                out.writeBoolean(hasGuard);
+                if (hasGuard) out.writeBlockPos(g.getGuardCenter());
+                ServerPlayNetworking.send(player, S2C_FIGHTER_OPEN_CTRL, out);
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(C2S_FIGHTER_SET_FOLLOW, (server, player, handler, buf, response) -> {
+            int id = buf.readVarInt();
+            boolean enable = buf.readBoolean();
+            server.execute(() -> {
+                var e = player.getWorld().getEntityById(id);
+                if (e instanceof GhostlingEntity g && g.isOwner(player.getUuid())) {
+                    g.setFollowMode(enable);
+                    player.sendMessage(Text.literal(enable ? "Following enabled" : "Following disabled"), true);
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(C2S_FIGHTER_SET_GUARD, (server, player, handler, buf, response) -> {
+            int id = buf.readVarInt();
+            BlockPos pos = buf.readBlockPos();
+            server.execute(() -> {
+                var e = player.getWorld().getEntityById(id);
+                if (e instanceof GhostlingEntity g && g.isOwner(player.getUuid())) {
+                    g.setGuardCenter(pos);
+                    player.sendMessage(Text.literal("Guard area set @ " + pos.toShortString()), true);
+                }
+            });
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(C2S_FIGHTER_CLEAR_MODE, (server, player, handler, buf, response) -> {
+            int id = buf.readVarInt();
+            server.execute(() -> {
+                var e = player.getWorld().getEntityById(id);
+                if (e instanceof GhostlingEntity g && g.isOwner(player.getUuid())) {
+                    g.setFollowMode(false);
+                    g.setGuardCenter(null);
+                    player.sendMessage(Text.literal("Mode set to Normal"), true);
+                }
+            });
+        });
     }
 
     /* ===================== CLIENT REG ===================== */
 
     // — selection state for “right-click in world” picking —
-    private enum SelectMode { NONE, FARMER_DEPOSIT, MINER_DEPOSIT, MINER_AREA_A, MINER_AREA_B }
+    private enum SelectMode { NONE, FARMER_DEPOSIT, MINER_DEPOSIT, MINER_AREA_A, MINER_AREA_B, GUARD_CENTER }
     private static SelectMode SELECT_MODE = SelectMode.NONE;
     private static int SELECT_GHOST_ID = -1;
     private static BlockPos MINER_CORNER_A = null;
     private static boolean SELECTION_EVENT_WIRED = false;
+
     public static void minerBegin(int ghostId, BlockPos a, BlockPos b) {
         PacketByteBuf out = PacketByteBufs.create();
         out.writeVarInt(ghostId);
@@ -246,6 +308,30 @@ public final class GhostPackets {
         ClientPlayNetworking.send(C2S_MINER_SET_DEPOSIT, out);
     }
 
+    // Fighter helpers
+    public static void openFighterControl(int ghostId) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeVarInt(ghostId);
+        ClientPlayNetworking.send(C2S_FIGHTER_OPEN_CTRL, out);
+    }
+    public static void setFollow(int ghostId, boolean enable) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeVarInt(ghostId);
+        out.writeBoolean(enable);
+        ClientPlayNetworking.send(C2S_FIGHTER_SET_FOLLOW, out);
+    }
+    public static void setGuard(int ghostId, BlockPos center) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeVarInt(ghostId);
+        out.writeBlockPos(center);
+        ClientPlayNetworking.send(C2S_FIGHTER_SET_GUARD, out);
+    }
+    public static void clearMode(int ghostId) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeVarInt(ghostId);
+        ClientPlayNetworking.send(C2S_FIGHTER_CLEAR_MODE, out);
+    }
+
     public static void registerS2CClient() {
         // dashboard open
         ClientPlayNetworking.registerGlobalReceiver(S2C_OPEN_DASHBOARD, (client, handler, buf, response) -> {
@@ -260,11 +346,11 @@ public final class GhostPackets {
                 float hp = buf.readFloat();
                 float max = buf.readFloat();
                 boolean working = buf.readBoolean();
-                // NEW fields:
                 String status = buf.readString();
                 float progress = buf.readFloat();
-                float mood = buf.readFloat(); // NEW: mood 0..1
-                arr[i] = new GhostDashboardScreen.GhostSummary(uuid, entityId, name, job, pos, hp, max, working, status, progress, mood);
+                float mood = buf.readFloat();                 // NEW
+                String behavior = buf.readString();           // NEW (NORMAL/FOLLOW/GUARD)
+                arr[i] = new GhostDashboardScreen.GhostSummary(uuid, entityId, name, job, pos, hp, max, working, status, progress, mood, behavior);
             }
             client.execute(() -> client.setScreen(new GhostDashboardScreen(arr)));
         });
@@ -278,13 +364,22 @@ public final class GhostPackets {
             client.execute(() -> client.setScreen(new CourierConfirmScreen(ghostId, pos, dist, tears)));
         });
 
+        // fighter control open
+        ClientPlayNetworking.registerGlobalReceiver(S2C_FIGHTER_OPEN_CTRL, (client, handler, buf, response) -> {
+            int ghostId = buf.readVarInt();
+            GhostlingEntity.BehaviorMode mode = buf.readEnumConstant(GhostlingEntity.BehaviorMode.class);
+            boolean hasGuard = buf.readBoolean();
+            BlockPos guard = hasGuard ? buf.readBlockPos() : null;
+            client.execute(() -> client.setScreen(new FighterControlScreen(ghostId, mode, guard)));
+        });
+
         // Wire the world right-click picker once
         if (!SELECTION_EVENT_WIRED) {
             UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
                 if (!world.isClient()) return ActionResult.PASS;
                 if (SELECT_MODE == SelectMode.NONE) return ActionResult.PASS;
 
-                BlockPos pos = hit.getBlockPos(); // hit is already a BlockHitResult
+                BlockPos pos = hit.getBlockPos();
 
                 switch (SELECT_MODE) {
                     case FARMER_DEPOSIT -> {
@@ -294,7 +389,7 @@ public final class GhostPackets {
                         ClientPlayNetworking.send(C2S_FARMER_SET_DEPOSIT, out);
                         toastClient("Farmer deposit chest set: " + pos.toShortString());
                         clearSelection();
-                        return ActionResult.SUCCESS; // consume so the chest doesn't open
+                        return ActionResult.SUCCESS;
                     }
                     case MINER_DEPOSIT -> {
                         PacketByteBuf out = PacketByteBufs.create();
@@ -321,8 +416,14 @@ public final class GhostPackets {
                         out.writeVarInt(SELECT_GHOST_ID);
                         out.writeBlockPos(MINER_CORNER_A);
                         out.writeBlockPos(pos);
-                        ClientPlayNetworking.send(C2S_MINER_BEGIN, out); // <-- fixed id
+                        ClientPlayNetworking.send(C2S_MINER_BEGIN, out);
                         toastClient("Area set: " + MINER_CORNER_A.toShortString() + " → " + pos.toShortString());
+                        clearSelection();
+                        return ActionResult.SUCCESS;
+                    }
+                    case GUARD_CENTER -> {
+                        setGuard(SELECT_GHOST_ID, pos);
+                        toastClient("Guard center set: " + pos.toShortString());
                         clearSelection();
                         return ActionResult.SUCCESS;
                     }
@@ -335,16 +436,13 @@ public final class GhostPackets {
         }
     }
 
-    /* ===================== PUBLIC HELPERS (used by power/UI) ===================== */
-
+    /* ===================== SERVER PUSH HELPERS ===================== */
     /** Open per-ghost Manage UI from the server (Primary). */
     public static void openManageServer(ServerPlayerEntity player, GhostlingEntity g) {
         player.openHandledScreen(g.getManageFactory());
     }
-
-    /** Build the dashboard server-side and push to client (Secondary). */
+    /** Build the dashboard server-side and push to client. */
     public static void openDashboardServer(ServerPlayerEntity player) {
-        // Huge radius so distant/travelling ghostlings still show up
         double HUGE = 1_000_000.0;
         List<GhostlingEntity> mine = player.getWorld().getEntitiesByClass(
                 GhostlingEntity.class, player.getBoundingBox().expand(HUGE),
@@ -365,13 +463,16 @@ public final class GhostPackets {
 
             String status;
             float progress = 0f;
-            if (ge.getJob() == GhostlingEntity.Job.COURIER) {
-                if (ge.isTravelling()) {
-                    status = "In transit";
-                    progress = ge.getTravelProgress();
-                } else {
-                    status = "Idle";
-                }
+
+            if (ge.getMood() <= 0.10f) {
+                status = "Depressed";
+            } else if (ge.getBehavior() == GhostlingEntity.BehaviorMode.FOLLOW) {
+                status = "Following";
+            } else if (ge.getBehavior() == GhostlingEntity.BehaviorMode.GUARD) {
+                status = "Guarding";
+            } else if (ge.getJob() == GhostlingEntity.Job.COURIER) {
+                if (ge.isTravelling()) { status = "In transit"; progress = ge.getTravelProgress(); }
+                else status = "Idle";
             } else if (ge.getJob() == GhostlingEntity.Job.MINER) {
                 status = ge.isWorking() ? "Mining" : "Idle";
                 progress = ge.getJobProgress();
@@ -382,9 +483,11 @@ public final class GhostPackets {
             } else {
                 status = "Unassigned";
             }
+
             out.writeString(status);
             out.writeFloat(progress);
-            out.writeFloat(ge.getMood()); // NEW: include mood 0..1
+            out.writeFloat(ge.getMood());                               // NEW mood for bar
+            out.writeString(ge.getBehavior().name());                   // NEW behavior text
         }
         ServerPlayNetworking.send(player, S2C_OPEN_DASHBOARD, out);
     }
@@ -431,6 +534,11 @@ public final class GhostPackets {
         SELECT_MODE = SelectMode.MINER_AREA_A;
         MINER_CORNER_A = null;
         toastClient("Right-click Corner A, then Corner B (right-click again to confirm).");
+    }
+    public static void beginGuardPick(int ghostId) {
+        SELECT_GHOST_ID = ghostId;
+        SELECT_MODE = SelectMode.GUARD_CENTER;
+        toastClient("Right-click a block to set guard center.");
     }
 
     private static void clearSelection() {

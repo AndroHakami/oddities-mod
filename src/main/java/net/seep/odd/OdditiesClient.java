@@ -30,6 +30,11 @@ import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
 import net.seep.odd.abilities.ghostlings.screen.client.GhostManageScreen;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreen;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
+import net.seep.odd.abilities.icewitch.IceWitchInit;
+import net.seep.odd.abilities.icewitch.IceWitchPackets;
+import net.seep.odd.abilities.icewitch.client.IceProjectileRenderer;
+import net.seep.odd.abilities.icewitch.client.IceSpellAreaRenderer;
+import net.seep.odd.abilities.icewitch.client.IceWitchHud;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
@@ -195,6 +200,12 @@ public final class OdditiesClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry.register(
                 GhostCargoScreenHandler.TYPE, GhostCargoScreen::new);
 
+        // Ice Witch (Client)
+
+        IceWitchPackets.registerClient();
+
+
+
 
 
 
@@ -229,6 +240,10 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.HOMING_COSMIC_SWORD, HomingCosmicSwordRenderer::new);
         EntityRendererRegistry.register(net.seep.odd.abilities.voids.VoidRegistry.VOID_PORTAL, net.seep.odd.abilities.voids.client.VoidPortalRenderer::new);
         EntityRendererRegistry.register(ModEntities.GHOSTLING, GhostlingRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ICE_SPELL_AREA, IceSpellAreaRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ICE_PROJECTILE, IceProjectileRenderer::new);
+
+
 
         Oddities.LOGGER.info("OdditiesClient initialized (renderers, HUD, client packets).");
     }

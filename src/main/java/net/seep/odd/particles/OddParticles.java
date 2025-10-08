@@ -10,9 +10,11 @@ import net.minecraft.util.Identifier;
 
 public final class OddParticles {
     public static final DefaultParticleType SPECTRAL_BURST = FabricParticleTypes.simple();
+    public static final DefaultParticleType ICE_FLAKE = FabricParticleTypes.simple();
 
     public static void register() {
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "spectral_burst"), SPECTRAL_BURST);
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "ice_flake"), ICE_FLAKE);
     }
 
     private OddParticles() {}

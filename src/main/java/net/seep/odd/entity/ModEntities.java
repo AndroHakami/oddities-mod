@@ -8,8 +8,10 @@ import net.minecraft.entity.SpawnGroup;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
-import net.minecraft.world.World; // typed lambdas
+import net.minecraft.world.World;
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.icewitch.IceProjectileEntity;
+import net.seep.odd.abilities.icewitch.IceSpellAreaEntity;
 import net.seep.odd.abilities.tamer.entity.VillagerEvoEntity;
 import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
@@ -20,7 +22,7 @@ import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
-
+import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -45,6 +47,12 @@ public final class ModEntities {
     // Ghost
     public static final Identifier GHOSTLING_ID = new Identifier(Oddities.MOD_ID, "ghostling");
 
+    // Ice Witch
+    public static final Identifier ICE_SPELL_AREA_ID = new Identifier(Oddities.MOD_ID, "ice_spell_area");
+    public static final Identifier ICE_PROJECTILE_ID  = new Identifier(Oddities.MOD_ID, "ice_projectile");
+
+    // Spotted Phantom
+    public static final Identifier PHANTOM_BUDDY_ID   = new Identifier(Oddities.MOD_ID, "phantom_buddy");
 
     /** Assigned in {@link #register()} during mod init. */
     public static EntityType<CreepyEntity>             CREEPY;
@@ -56,15 +64,22 @@ public final class ModEntities {
 
     // NEW: UFO Saucer
     public static EntityType<UfoSaucerEntity>          UFO_SAUCER;
-    public static EntityType<OuterManEntity>          OUTERMAN;
+    public static EntityType<OuterManEntity>           OUTERMAN;
 
     // Car
     public static EntityType<RiderCarEntity>           RIDER_CAR;
 
     // Cosmic Katana
-    public static EntityType<HomingCosmicSwordEntity> HOMING_COSMIC_SWORD;
+    public static EntityType<HomingCosmicSwordEntity>  HOMING_COSMIC_SWORD;
 
-    public static EntityType<GhostlingEntity> GHOSTLING;
+    public static EntityType<GhostlingEntity>          GHOSTLING;
+
+    // Ice Witch
+    public static EntityType<IceSpellAreaEntity>       ICE_SPELL_AREA;
+    public static EntityType<IceProjectileEntity>      ICE_PROJECTILE;
+
+    // Spotted Phantom
+    public static EntityType<PhantomBuddyEntity>       PHANTOM_BUDDY;
 
     public static void register() {
         // Creepy
@@ -111,7 +126,7 @@ public final class ModEntities {
             );
         }
 
-        // Villager Evo 1 — tanky GeckoLib mob (needs attributes registered)
+        // Villager Evo
         if (VILLAGER_EVO == null) {
             VILLAGER_EVO = Registry.register(
                     Registries.ENTITY_TYPE,
@@ -140,6 +155,7 @@ public final class ModEntities {
                             .build()
             );
         }
+
         if (GHOSTLING == null) {
             GHOSTLING = Registry.register(
                     Registries.ENTITY_TYPE,
@@ -154,6 +170,38 @@ public final class ModEntities {
                             .build()
             );
             FabricDefaultAttributeRegistry.register(GHOSTLING, GhostlingEntity.createAttributes());
+        }
+
+        // Ice Spell Area
+        if (ICE_SPELL_AREA == null) {
+            ICE_SPELL_AREA = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    ICE_SPELL_AREA_ID,
+                    FabricEntityTypeBuilder.create(
+                                    SpawnGroup.MISC,
+                                    (EntityType<IceSpellAreaEntity> type, World world) -> new IceSpellAreaEntity(type, world)
+                            )
+                            .dimensions(EntityDimensions.fixed(0.1f, 0.1f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(1)
+                            .build()
+            );
+        }
+
+        // Ice Projectile
+        if (ICE_PROJECTILE == null) {
+            ICE_PROJECTILE = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    ICE_PROJECTILE_ID,
+                    FabricEntityTypeBuilder.<IceProjectileEntity>create(
+                                    SpawnGroup.MISC,
+                                    (EntityType<IceProjectileEntity> type, World world) -> new IceProjectileEntity(type, world)
+                            )
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(10)
+                            .build()
+            );
         }
 
         if (BREW_BOTTLE == null) {
@@ -171,6 +219,7 @@ public final class ModEntities {
                             .build()
             );
         }
+
         if (RIDER_CAR == null) {
             RIDER_CAR = Registry.register(
                     Registries.ENTITY_TYPE,
@@ -179,13 +228,14 @@ public final class ModEntities {
                                     SpawnGroup.MISC,
                                     (EntityType<RiderCarEntity> type, World world) -> new RiderCarEntity(type, world)
                             )
-                            .dimensions(EntityDimensions.fixed(3.6f, 1.2f)) // tweak to your model
+                            .dimensions(EntityDimensions.fixed(3.6f, 1.2f))
                             .trackRangeBlocks(96)
                             .trackedUpdateRate(2)
                             .build()
             );
             FabricDefaultAttributeRegistry.register(RIDER_CAR, RiderCarEntity.createAttributes());
         }
+
         // Cosmic: Homing Sword projectile
         if (HOMING_COSMIC_SWORD == null) {
             HOMING_COSMIC_SWORD = Registry.register(
@@ -195,13 +245,13 @@ public final class ModEntities {
                                     SpawnGroup.MISC,
                                     HomingCosmicSwordEntity::new)
                             .dimensions(EntityDimensions.fixed(0.5f, 0.5f))
-                            .trackRangeBlocks(96)   // smooth tracking at range
-                            .trackedUpdateRate(1)   // update every tick for clean homing
+                            .trackRangeBlocks(96)
+                            .trackedUpdateRate(1)
                             .build()
             );
         }
 
-        // NEW: UFO Saucer (hostile flying mob; for now we test via /summon so group=MISC is fine)
+        // NEW: UFO Saucer
         if (UFO_SAUCER == null) {
             UFO_SAUCER = Registry.register(
                     Registries.ENTITY_TYPE,
@@ -210,13 +260,14 @@ public final class ModEntities {
                                     SpawnGroup.MISC,
                                     (EntityType<UfoSaucerEntity> type, World world) -> new UfoSaucerEntity(type, world)
                             )
-                            .dimensions(EntityDimensions.fixed(1.8f, 0.9f)) // tweak to your model
+                            .dimensions(EntityDimensions.fixed(1.8f, 0.9f))
                             .trackRangeBlocks(96)
                             .trackedUpdateRate(1)
                             .build()
             );
             FabricDefaultAttributeRegistry.register(UFO_SAUCER, UfoSaucerEntity.createAttributes());
         }
+
         if (OUTERMAN == null) {
             OUTERMAN = Registry.register(
                     Registries.ENTITY_TYPE,
@@ -225,12 +276,29 @@ public final class ModEntities {
                                     SpawnGroup.MONSTER,
                                     (EntityType<OuterManEntity> type, World world) -> new OuterManEntity(type, world)
                             )
-                            .dimensions(EntityDimensions.fixed(0.6f, 1.25f)) // small alien
+                            .dimensions(EntityDimensions.fixed(0.6f, 1.25f))
                             .trackRangeBlocks(64)
                             .trackedUpdateRate(1)
                             .build()
             );
             FabricDefaultAttributeRegistry.register(OUTERMAN, OuterManEntity.createAttributes());
+        }
+
+        // === Spotted Phantom: Phantom Buddy ===
+        if (PHANTOM_BUDDY == null) {
+            PHANTOM_BUDDY = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    PHANTOM_BUDDY_ID,
+                    FabricEntityTypeBuilder.create(
+                                    SpawnGroup.CREATURE,
+                                    (EntityType<PhantomBuddyEntity> type, World world) -> new PhantomBuddyEntity(type, world)
+                            )
+                            .dimensions(EntityDimensions.fixed(0.8f, 0.9f)) // tweak to model
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(2)
+                            .build()
+            );
+            FabricDefaultAttributeRegistry.register(PHANTOM_BUDDY, PhantomBuddyEntity.createAttributes());
         }
     }
 }

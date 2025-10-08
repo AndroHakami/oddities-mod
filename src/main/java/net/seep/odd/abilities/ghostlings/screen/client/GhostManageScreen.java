@@ -67,6 +67,12 @@ public class GhostManageScreen extends HandledScreen<GhostManageScreenHandler> {
             ).dimensions(cx - 100, row - 10, 200, 20).build());
             row += 25;
         }
+        if (handler.ghostJob == GhostlingEntity.Job.FIGHTER) {
+            addDrawableChild(ButtonWidget.builder(Text.of("Fighter: Select Mode"), b ->
+                    GhostPackets.openFighterControl(handler.ghostEntityId)
+            ).dimensions(cx - 100, row - 10, 200, 20).build());
+            row += 25;
+        }
 
         // Farmer-only: go into "select a chest" mode with the next right-click
         if (handler.ghostJob == GhostlingEntity.Job.FARMER) {
