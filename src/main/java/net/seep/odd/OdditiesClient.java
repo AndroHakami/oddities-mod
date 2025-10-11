@@ -4,6 +4,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -41,12 +42,14 @@ import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
 import net.seep.odd.abilities.power.CosmicPower;
 import net.seep.odd.abilities.power.SpectralPhasePower;
+import net.seep.odd.abilities.power.SpottedPhantomPower;
 import net.seep.odd.abilities.rider.RiderClientInput;
 import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralClientState;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
+import net.seep.odd.abilities.spotted.SpottedNet;
 import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
@@ -59,6 +62,8 @@ import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
 
+import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
+import net.seep.odd.abilities.zerosuit.client.ZeroSuitCpmBridge;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
@@ -69,9 +74,13 @@ import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
+import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 
+import net.seep.odd.entity.zerosuit.ZeroBeamRenderer;
+import net.seep.odd.particles.OddParticles;
 import net.seep.odd.particles.client.OddParticlesClient;
+import net.seep.odd.particles.client.SpottedStepsParticle;
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
 import net.seep.odd.abilities.ghostlings.client.GhostlingRenderer;
@@ -204,6 +213,22 @@ public final class OdditiesClient implements ClientModInitializer {
 
         IceWitchPackets.registerClient();
 
+        // Spotted Phantom
+        SpottedPhantomPower.Client.init();
+        SpottedNet.initClient();
+        ParticleFactoryRegistry.getInstance()
+                .register(OddParticles.SPOTTED_STEPS, SpottedStepsParticle.Factory::new);
+        net.minecraft.client.gui.screen.ingame.HandledScreens.register(
+                net.seep.odd.abilities.spotted.SpottedScreens.PHANTOM_BUDDY,
+                net.seep.odd.abilities.spotted.PhantomBuddyScreen::new
+        );
+
+
+        // Zero Gravity
+        net.seep.odd.abilities.zerosuit.ZeroSuitNet.initClient();
+        net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.init();
+        ZeroSuitCpmBridge.init();
+
 
 
 
@@ -242,6 +267,8 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.GHOSTLING, GhostlingRenderer::new);
         EntityRendererRegistry.register(ModEntities.ICE_SPELL_AREA, IceSpellAreaRenderer::new);
         EntityRendererRegistry.register(ModEntities.ICE_PROJECTILE, IceProjectileRenderer::new);
+        EntityRendererRegistry.register(ModEntities.PHANTOM_BUDDY, PhantomBuddyRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ZERO_BEAM, ZeroBeamRenderer::new);
 
 
 

@@ -20,6 +20,11 @@ public final class OddParticlesClient {
                 OddParticles.ICE_FLAKE,
                 (FabricSpriteProvider sp) -> new IceFlakeParticle.Factory(sp)
         );
+        ParticleFactoryRegistry.getInstance().register(
+                OddParticles.SPOTTED_STEPS,
+                (FabricSpriteProvider sp) -> new SpottedStepsParticle.Factory(sp)
+        );
+
 
 
 

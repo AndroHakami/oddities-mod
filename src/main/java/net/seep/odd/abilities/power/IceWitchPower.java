@@ -39,8 +39,13 @@ public final class IceWitchPower implements Power {
     @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
     @Override public long cooldownTicks() { return 0; }
     @Override public long secondaryCooldownTicks() { return 2 * 20; }
-    @Override public Identifier iconTexture(String slot) {
-        return new Identifier("odd", "textures/gui/abilities/ice_witch_" + slot + ".png");
+    @Override
+    public Identifier iconTexture(String slot) {
+        return switch (slot) {
+            case "primary"   -> new Identifier("odd", "textures/gui/abilities/glacier_soar.png");
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/glacier_area.png"); // set this texture
+            default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
+        };
     }
 
     @Override public String slotLongDescription(String slot) {

@@ -41,6 +41,7 @@ import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
+import net.seep.odd.abilities.spotted.SpottedNet;
 import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.abilities.tamer.TamerMoves;
 import net.seep.odd.abilities.voids.VoidRegistry;
@@ -116,6 +117,8 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new CosmicPower());
 		Powers.register(new GhostlingsPower());
 		Powers.register(new IceWitchPower());
+		Powers.register(new SpottedPhantomPower());
+		Powers.register(new ZeroSuitPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -234,6 +237,15 @@ public final class Oddities implements ModInitializer {
 		// Ice Witch
 		IceWitchPackets.registerServer();
 		IceWitchInit.registerCommon();
+
+		//Spotted Phantom
+		SpottedNet.initCommon();
+		net.seep.odd.abilities.spotted.SpottedScreens.register();
+
+		// Zero Gravity
+
+		net.seep.odd.abilities.zerosuit.ZeroSuitNet.initCommon();
+
 
 
 

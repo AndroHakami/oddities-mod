@@ -54,6 +54,9 @@ public final class ModEntities {
     // Spotted Phantom
     public static final Identifier PHANTOM_BUDDY_ID   = new Identifier(Oddities.MOD_ID, "phantom_buddy");
 
+    // Zero Gravity
+    public static final Identifier ZERO_BEAM_ID = new Identifier(Oddities.MOD_ID, "zero_beam");
+
     /** Assigned in {@link #register()} during mod init. */
     public static EntityType<CreepyEntity>             CREEPY;
     public static EntityType<MistyBubbleEntity>        MISTY_BUBBLE;
@@ -80,6 +83,9 @@ public final class ModEntities {
 
     // Spotted Phantom
     public static EntityType<PhantomBuddyEntity>       PHANTOM_BUDDY;
+
+    // Zero Gravity
+    public static EntityType<net.seep.odd.entity.zerosuit.ZeroBeamEntity> ZERO_BEAM;
 
     public static void register() {
         // Creepy
@@ -141,6 +147,19 @@ public final class ModEntities {
                             .build()
             );
             FabricDefaultAttributeRegistry.register(VILLAGER_EVO, VillagerEvoEntity.createAttributes());
+        }
+        if (ZERO_BEAM == null) {
+            ZERO_BEAM = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    ZERO_BEAM_ID,
+                    FabricEntityTypeBuilder
+                            .<net.seep.odd.entity.zerosuit.ZeroBeamEntity>create(SpawnGroup.MISC,
+                                    (EntityType<net.seep.odd.entity.zerosuit.ZeroBeamEntity> t, World w) -> new net.seep.odd.entity.zerosuit.ZeroBeamEntity(t, w))
+                            .dimensions(EntityDimensions.fixed(0.1f, 0.1f))
+                            .trackRangeBlocks(128)
+                            .trackedUpdateRate(1)
+                            .build()
+            );
         }
 
         if (TAME_BALL == null) {
