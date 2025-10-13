@@ -77,6 +77,15 @@ dependencies {
 	modImplementation("maven.modrinth:voiceattackapi:1.7-1.20.1")
 	compileOnly "com.tom5454.cpm:CustomPlayerModels-API:${project.cpm_api_version}"
 	modRuntimeOnly "com.tom5454.cpm:CustomPlayerModels-Fabric-${project.cpm_mc_version}:${project.cpm_runtime_version}"
+	// Pehkui as a required dependency
+	modImplementation("maven.modrinth:pehkui:3.8.1+1.14.4-1.20.6")
+	modImplementation("com.github.Virtuoel:KanosConfig:0.4.1")
+
+	modImplementation("maven.modrinth:identity-fix:2.8.8-1.20.1")
+
+// Required library
+	modImplementation("maven.modrinth:architectury-api:9.1.12+fabric")
+
 
 
 // Required by VoiceAttackAPI

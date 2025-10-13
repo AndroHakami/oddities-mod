@@ -4,13 +4,14 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseBlockCallback;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.sound.MovingSoundInstance;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
@@ -19,13 +20,13 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
+import net.minecraft.world.explosion.Explosion;
 
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.PowerAPI;
@@ -33,57 +34,52 @@ import net.seep.odd.abilities.zerosuit.ZeroSuitCPM;
 import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.zerosuit.ZeroBeamEntity;
+import net.seep.odd.sound.ModSounds;
 
 import java.util.*;
 
-/** Zero Suit: Zero-G toggle, Gravity Force cone (push/pull), chargeable Blast. */
+/** Zero Suit: Zero-G toggle + chargeable piercing beam (Secondary). */
 public final class ZeroSuitPower implements Power {
 
     /* ======================= config ======================= */
-    // Primary
-    private static final int ZERO_G_HIT_DEGRAV_TICKS = 20 * 6; // 6s
+    private static final int ZERO_G_HIT_DEGRAV_TICKS = 20 * 6;
 
-    // Force cone
-    private static final int FORCE_AWAIT_MAX_TICKS = 20 * 4;  // wait up to 4s for LMB/RMB
-    private static final double FORCE_RANGE = 5.0;            // meters
-    private static final double FORCE_CONE_COS = Math.cos(Math.toRadians(25)); // tight cone ~25°
-    private static final double FORCE_STRENGTH = 1.55;        // initial velocity burst
-    private static final int FORCE_COOLDOWN_T = 20 * 3;       // 3s
+    private static final int   BLAST_CHARGE_MAX_T  = 20 * 8;
+    private static final float BLAST_FULL_DAMAGE   = 25.0f;
+    private static final int   BLAST_RANGE_BLOCKS  = 48;
+    private static final int   BLAST_VIS_TICKS     = 20;
 
-    // Blast
-    private static final int   BLAST_CHARGE_MAX_T = 20 * 10;  // 10s to full power
-    private static final float BLAST_FULL_DAMAGE  = 20.0f;    // 10 hearts
-    private static final int   BLAST_RANGE_BLOCKS = 48;       // stops on blocks
-    private static final double BLAST_CORE_RADIUS = 0.35;     // direct-hit core (knockback)
-    private static final double BLAST_WIDTH       = 1.00;     // requested 1 block wide
-    private static final int   BLAST_VIS_TICKS    = 10;       // beam visual lifetime
+    private static final double BLAST_RADIUS_MIN    = 0.25;
+    private static final double BLAST_RADIUS_MAX    = 1.40;
+    private static final double BLAST_CORE_FRACTION = 0.55;
 
     private static final int HUD_SYNC_EVERY = 2;
 
-    /* ======================= power meta ======================= */
+    private static final float SHAKE_THRESHOLD = 0.60f;
+    private static final float EXPLOSION_BASE  = 2.0f;
+    private static final float EXPLOSION_MAX   = 4.0f;
+
+    /* ======================= meta ======================= */
     @Override public String id() { return "zero_suit"; }
-    @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot) || "third".equals(slot); }
+    @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
     @Override public long cooldownTicks() { return 0; }
-    @Override public long secondaryCooldownTicks() { return FORCE_COOLDOWN_T; }
+    @Override public long secondaryCooldownTicks() { return 0; }
     @Override public long thirdCooldownTicks() { return 0; }
 
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
             case "primary"   -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_primary.png");
-            case "secondary" -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_force.png");
-            case "third"     -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_blast.png");
+            case "secondary" -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_blast.png");
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
     }
-    @Override public String longDescription() {
-        return "Zero-G mobility with air-swimming, cone push/pull force, and a chargeable piercing beam.";
-    }
+
+    @Override public String longDescription() { return "Zero-G mobility with air-swimming and a chargeable piercing beam."; }
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary"   -> "Toggle Zero-G: float & swim in air. Enemies you hit lose gravity for 6s.";
-            case "secondary" -> "Gravity Force (3s cd): hold stance up to 4s; LMB Push / RMB Pull in a tight 5m cone.";
-            case "third"     -> "Blast: Hold to charge (up to 10s). HUD circle shows %. LMB to fire a piercing beam.";
+            case "secondary" -> "Blast: Hold to charge (up to 8s). HUD circle shows %. LMB to fire a piercing beam.";
             default          -> "";
         };
     }
@@ -91,21 +87,10 @@ public final class ZeroSuitPower implements Power {
 
     /* ======================= per-player state ======================= */
     private static final class St {
-        // Primary
         boolean zeroG;
-
-        // Who we’ve de-gravitied and until when
         final Map<UUID, Integer> noGravUntil = new HashMap<>();
-
-        // Secondary (stance wait for LMB/RMB)
-        boolean forceAwait;
-        int     forceAwaitAge;
-
-        // Third (charging)
         boolean charging;
-        int     chargeTicks; // 0..BLAST_CHARGE_MAX_T
-
-        // Client HUD dedupe
+        int     chargeTicks;
         int lastHudCharge = -1;
         boolean lastHudActive = false;
     }
@@ -123,7 +108,6 @@ public final class ZeroSuitPower implements Power {
         if (!isCurrent(p)) return;
         St st = S(p);
         st.zeroG = !st.zeroG;
-
         if (st.zeroG) enterZeroG(p);
         else          exitZeroG(p);
     }
@@ -132,33 +116,19 @@ public final class ZeroSuitPower implements Power {
     public void activateSecondary(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
         St st = S(p);
-
-        st.forceAwait = true;
-        st.forceAwaitAge = p.age;
-
-        ZeroSuitCPM.playStance(p); // "force_stance"
-        p.sendMessage(Text.literal("Gravity Force: LMB Push • RMB Pull (4s)"), true);
-        p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 0.8f, 1.2f);
-    }
-
-    @Override
-    public void activateThird(ServerPlayerEntity p) {
-        if (!isCurrent(p)) return;
-        St st = S(p);
-
-        // Toggle charge (hold-to-fire with LMB; client sends C2S when you click)
         if (!st.charging) {
             st.charging = true;
             st.chargeTicks = 0;
-            p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 20 * 30, 0, true, false, false));
+            p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 20 * 30, 2, true, false, false));
             ZeroSuitCPM.playBlastCharge(p);
             p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BEACON_AMBIENT, SoundCategory.PLAYERS, 0.55f, 0.75f);
         } else {
             stopCharge(p, st, false);
         }
     }
+    @Override public void activateThird(ServerPlayerEntity p) { /* no-op */ }
 
-    /* ======================= server tick (called from ZeroSuitNet) ======================= */
+    /* ======================= server tick ======================= */
     public static void serverTick(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
         World w = p.getWorld();
@@ -166,47 +136,82 @@ public final class ZeroSuitPower implements Power {
 
         St st = S(p);
 
-        // Maintain Zero-G
+        // Zero-G upkeep
         if (st.zeroG) {
             p.setNoGravity(true);
             p.fallDistance = 0f;
-            if (!p.isSubmergedInWater()) {
-                p.setSwimming(true);
-            }
+            if (!p.isSubmergedInWater()) p.setSwimming(true);
         } else {
             p.setNoGravity(false);
             if (p.isSwimming()) p.setSwimming(false);
         }
 
-        // Expire de-gravity on victims
+        // expire de-gravity
         if (!st.noGravUntil.isEmpty()) {
             Iterator<Map.Entry<UUID, Integer>> it = st.noGravUntil.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<UUID, Integer> e = it.next();
-                UUID id = e.getKey();
-                int until = e.getValue();
-                if (p.age >= until) {
-                    Entity ent = sw.getEntity(id);
+                if (p.age >= e.getValue()) {
+                    Entity ent = sw.getEntity(e.getKey());
                     if (ent != null) ent.setNoGravity(false);
                     it.remove();
                 }
             }
         }
 
-        // Secondary awaiting decision
-        if (st.forceAwait && p.age - st.forceAwaitAge > FORCE_AWAIT_MAX_TICKS) {
-            st.forceAwait = false;
-            ZeroSuitCPM.stopStance(p);
-            p.sendMessage(Text.literal("Gravity Force: Cancelled"), true);
-        }
-
-        // Charging
+        // Charging loop (incl. subtle front-cone spiral WAX_ON)
         if (st.charging) {
             if (st.chargeTicks < BLAST_CHARGE_MAX_T) st.chargeTicks++;
 
-            // Refresh slowness while charging
             if ((p.age % 15) == 0) {
                 p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 0, true, false, false));
+            }
+
+            // --- FRONT CONE SPIRAL (SUBTLE) ---
+            if ((p.age % 2) == 0) {
+                float ratio = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
+
+                // core (chest)
+                Vec3d core = new Vec3d(p.getX(), p.getY() + 1.0, p.getZ());
+                Vec3d look = p.getRotationVector().normalize();
+
+                // build right/up basis
+                Vec3d worldUp = Math.abs(look.y) < 0.99 ? new Vec3d(0, 1, 0) : new Vec3d(0, 0, 1);
+                Vec3d right = look.crossProduct(worldUp).normalize();
+                Vec3d up    = right.crossProduct(look).normalize();
+
+                // cone depth collapses as ratio grows
+                double Lfar0 = 1.35, Lnear = 0.32;
+                double Lfar  = MathHelper.lerp(ratio, Lfar0, 0.70);
+
+                // radius shrinks with depth; overall tightens with ratio
+                double Rfar0 = 0.55, Rnear = 0.08;
+                double tighten = MathHelper.lerp(ratio, 1.0, 0.65);
+
+                // spiral phase
+                double base = (p.age * 0.30) + (ratio * 8.0);
+
+                int spokes = 4; // subtle
+                for (int i = 0; i < spokes; i++) {
+                    double a01 = (i + (p.age & 1) * 0.33) / spokes; // 0..1
+                    double L   = MathHelper.lerp(a01, Lfar, Lnear);
+                    double r   = MathHelper.lerp((L - Lnear) / Math.max(0.0001, (Lfar - Lnear)), Rfar0, Rnear) * tighten;
+                    double ang = base + a01 * (Math.PI * 2.0);
+
+                    Vec3d off = right.multiply(Math.cos(ang) * r).add(up.multiply(Math.sin(ang) * r));
+                    Vec3d pos = core.add(look.multiply(L)).add(off);
+
+                    // tiny bias toward the core to hint motion (won't be exact velocity but reads okay)
+                    double vx = (core.x - pos.x) * 0.15;
+                    double vy = (core.y - pos.y) * 0.15;
+                    double vz = (core.z - pos.z) * 0.15;
+
+                    sw.spawnParticles(net.minecraft.particle.ParticleTypes.WAX_ON,
+                            pos.x, pos.y, pos.z,
+                            1,
+                            vx, vy, vz,
+                            0.02); // very subtle
+                }
             }
 
             // HUD sync
@@ -228,14 +233,13 @@ public final class ZeroSuitPower implements Power {
     private static void enterZeroG(ServerPlayerEntity p) {
         p.setNoGravity(true);
         p.setSwimming(true);
-        p.sendMessage(Text.literal("Zero-G: ON"), true);
+        p.sendMessage(net.minecraft.text.Text.literal("Zero-G: ON"), true);
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PHANTOM_FLAP, SoundCategory.PLAYERS, 0.6f, 1.2f);
     }
-
     private static void exitZeroG(ServerPlayerEntity p) {
         p.setNoGravity(false);
         if (p.isSwimming()) p.setSwimming(false);
-        p.sendMessage(Text.literal("Zero-G: OFF"), true);
+        p.sendMessage(net.minecraft.text.Text.literal("Zero-G: OFF"), true);
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_PHANTOM_FLAP, SoundCategory.PLAYERS, 0.6f, 0.8f);
     }
 
@@ -250,150 +254,119 @@ public final class ZeroSuitPower implements Power {
         ZeroSuitNet.sendHud(p, false, 0, BLAST_CHARGE_MAX_T);
     }
 
-    /** Apply push or pull to entities in a tight cone in front of the player. */
-    private static void doForceCone(ServerPlayerEntity src, boolean push) {
-        ServerWorld sw = (ServerWorld) src.getWorld();
-        Vec3d eye = src.getEyePos();
-        Vec3d look = src.getRotationVector().normalize();
-
-        double range = FORCE_RANGE;
-        Box box = new Box(eye, eye).expand(range, range, range);
-
-        List<Entity> list = sw.getOtherEntities(src, box, e -> e.isAlive() && e instanceof LivingEntity);
-        for (Entity e : list) {
-            Vec3d to = e.getBoundingBox().getCenter().subtract(eye);
-            double dist = to.length();
-            if (dist > range || dist < 0.01) continue;
-
-            Vec3d dir = to.normalize();
-            double dot = dir.dotProduct(look);
-            if (dot < FORCE_CONE_COS) continue; // outside the cone
-
-            Vec3d impulse;
-            if (push) impulse = look.multiply(FORCE_STRENGTH);
-            else      impulse = eye.subtract(e.getBoundingBox().getCenter()).normalize().multiply(FORCE_STRENGTH);
-
-            e.addVelocity(impulse.x, impulse.y, impulse.z);
-            e.velocityModified = true;
-        }
-
-        src.getWorld().playSound(null, src.getBlockPos(),
-                push ? SoundEvents.ENTITY_BLAZE_SHOOT : SoundEvents.ENTITY_ENDERMAN_SCREAM,
-                SoundCategory.PLAYERS, 0.8f, push ? 1.2f : 0.6f);
-
-        if (push) ZeroSuitCPM.playForcePush(src); else ZeroSuitCPM.playForcePull(src);
-    }
-
-    /** Fire a piercing beam based on current charge; damages along ray, stops on blocks. */
+    /** Fire the beam; damages along ray; stops on blocks; impact explosion. */
     private static void fireBlast(ServerPlayerEntity src, St st) {
         ServerWorld sw = (ServerWorld) src.getWorld();
 
-        float ratio = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
-        float dmg = BLAST_FULL_DAMAGE * ratio;
+        float ratio  = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
+        float growth = (float)Math.pow(ratio, 1.35);
+        float dmg    = BLAST_FULL_DAMAGE * ratio;
 
-        Vec3d eye = src.getEyePos();
+        double radius     = MathHelper.lerp(growth, BLAST_RADIUS_MIN, BLAST_RADIUS_MAX);
+        double hitRadius  = radius;
+        double coreRadius = radius * BLAST_CORE_FRACTION;
+
+        Vec3d eye  = src.getEyePos();
         Vec3d look = src.getRotationVector().normalize();
+        Vec3d start = eye.add(look.multiply(0.35)).add(0, -0.35, 0);
 
-        // Block ray
         double max = BLAST_RANGE_BLOCKS;
-        BlockHitResult bhr = sw.raycast(new RaycastContext(eye, eye.add(look.multiply(max)),
-                RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, src));
-        double hitDist = bhr.getType() == BlockHitResult.Type.MISS ? max : eye.distanceTo(Vec3d.ofCenter(bhr.getBlockPos()));
+        BlockHitResult bhr = sw.raycast(new RaycastContext(
+                start, start.add(look.multiply(max)),
+                RaycastContext.ShapeType.COLLIDER,
+                RaycastContext.FluidHandling.NONE,
+                src));
+        double hitDist = (bhr.getType() == BlockHitResult.Type.MISS)
+                ? max
+                : start.distanceTo(Vec3d.ofCenter(bhr.getBlockPos()));
+        Vec3d impact = start.add(look.multiply(hitDist));
 
-        // Pierce mobs along line, stop at block
+        // damage pass
         Set<UUID> hitOnce = new HashSet<>();
-        Box sweep = new Box(eye, eye.add(look.multiply(hitDist))).expand(BLAST_WIDTH * 0.5);
+        Box sweep = new Box(start, start.add(look.multiply(hitDist))).expand(hitRadius);
         List<LivingEntity> mobs = sw.getEntitiesByClass(LivingEntity.class, sweep, e -> e.isAlive() && e != src);
         for (LivingEntity e : mobs) {
             Vec3d c = e.getBoundingBox().getCenter();
-            double t = MathHelper.clamp(eye.relativize(c).dotProduct(look), 0.0, hitDist);
-            Vec3d closest = eye.add(look.multiply(t));
-            double dist = c.distanceTo(closest);
-            if (dist <= BLAST_WIDTH * 0.5) {
-                if (hitOnce.add(e.getUuid())) {
-                    e.damage(src.getDamageSources().playerAttack(src), dmg);
-                    if (dist <= BLAST_CORE_RADIUS) {
-                        Vec3d kb = look.multiply(1.0 + 1.25 * ratio);
-                        e.addVelocity(kb.x, kb.y * 0.25, kb.z);
-                        e.velocityModified = true;
-                    }
+            double t = MathHelper.clamp(start.relativize(c).dotProduct(look), 0.0, hitDist);
+            Vec3d closest = start.add(look.multiply(t));
+            double dist   = c.distanceTo(closest);
+            if (dist <= hitRadius && hitOnce.add(e.getUuid())) {
+                e.damage(src.getDamageSources().playerAttack(src), dmg);
+                if (dist <= coreRadius) {
+                    Vec3d kb = look.multiply(0.8 + 1.4 * ratio);
+                    e.addVelocity(kb.x, kb.y * 0.25, kb.z);
+                    e.velocityModified = true;
                 }
             }
         }
 
-        // Visual beam entity
+        // visual entity
         ZeroBeamEntity beam = ModEntities.ZERO_BEAM.create(sw);
         if (beam != null) {
-            beam.init(src, eye, look, hitDist, BLAST_WIDTH, BLAST_VIS_TICKS);
+            beam.init(src, start, look, hitDist, radius, BLAST_VIS_TICKS, ratio);
             sw.spawnEntity(beam);
         }
 
-        src.getWorld().playSound(null, src.getBlockPos(), SoundEvents.ENTITY_WARDEN_SONIC_BOOM, SoundCategory.PLAYERS, 0.8f, 1.0f);
-        ZeroSuitCPM.playBlastFire(src);
+        // impact explosion (player-owned)
+        float strength = MathHelper.lerp(ratio, EXPLOSION_BASE, EXPLOSION_MAX);
+        if (ratio > 0.05f) {
+            Explosion.DestructionType mode =
+                    (ratio >= 0.999f) ? Explosion.DestructionType.DESTROY
+                            : Explosion.DestructionType.KEEP;
 
+            Explosion ex = new Explosion(
+                    sw,
+                    src,         // owner (so damage is credited to shooter)
+                    null,        // DamageSource (null => built from owner)
+                    null,        // ExplosionBehavior
+                    impact.x, impact.y, impact.z,
+                    strength,
+                    false,       // createFire
+                    mode
+            );
+            ex.collectBlocksAndDamageEntities();
+            ex.affectWorld(true);
+        }
+
+        // extra readability at impact
+        sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLASH, impact.x, impact.y, impact.z, 1, 0, 0, 0, 0);
+        sw.spawnParticles(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, impact.x, impact.y, impact.z, 16, 0.25, 0.25, 0.25, 0.08);
+
+        // recoil
+        Vec3d selfImpulse = look.multiply(-(0.35 + 1.10 * ratio));
+        src.addVelocity(selfImpulse.x, selfImpulse.y, selfImpulse.z);
+        src.velocityModified = true;
+
+        src.getWorld().playSound(null, src.getBlockPos(), ModSounds.ZERO_BLAST, SoundCategory.PLAYERS, 1.0f, 1.0f);
+        ZeroSuitCPM.playBlastFire(src);
         stopCharge(src, st, true);
     }
 
-    /** Called by the server when it receives the C2S FIRE packet. */
     public static void onClientRequestedFire(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
         St st = S(p);
         if (st.charging) fireBlast(p, st);
     }
 
-    /* ======================= interaction & inputs (server-side helpers) ======================= */
+    /* ======================= interaction hooks ======================= */
     static {
-        // LMB while in Force stance: PUSH. (Beam firing is now done by C2S packet from client.)
         AttackEntityCallback.EVENT.register((player, world, hand, target, hit) -> {
             if (!(player instanceof ServerPlayerEntity sp) || !isCurrent(sp)) return ActionResult.PASS;
             St st = S(sp);
-            if (st.forceAwait) {
-                st.forceAwait = false;
-                doForceCone(sp, true);
-                return ActionResult.FAIL;
-            }
-            // Normal attack: if Zero-G active, remove gravity from the thing you hit
             if (st.zeroG && target != null) {
                 target.setNoGravity(true);
                 st.noGravUntil.put(target.getUuid(), sp.age + ZERO_G_HIT_DEGRAV_TICKS);
             }
             return ActionResult.PASS;
         });
+
         AttackBlockCallback.EVENT.register((player, world, hand, pos, dir) -> {
             if (!(player instanceof ServerPlayerEntity sp) || !isCurrent(sp)) return ActionResult.PASS;
-            St st = S(sp);
-            if (st.forceAwait) {
-                st.forceAwait = false;
-                doForceCone(sp, true);
-                return ActionResult.FAIL;
-            }
-            return ActionResult.PASS;
-        });
-
-        // RMB while in Force stance: PULL
-        UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-            if (!(player instanceof ServerPlayerEntity sp) || !isCurrent(sp)) return ActionResult.PASS;
-            St st = S(sp);
-            if (st.forceAwait) {
-                st.forceAwait = false;
-                doForceCone(sp, false);
-                return ActionResult.FAIL;
-            }
-            return ActionResult.PASS;
-        });
-        UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
-            if (!(player instanceof ServerPlayerEntity sp) || !isCurrent(sp)) return ActionResult.PASS;
-            St st = S(sp);
-            if (st.forceAwait) {
-                st.forceAwait = false;
-                doForceCone(sp, false);
-                return ActionResult.FAIL;
-            }
             return ActionResult.PASS;
         });
     }
 
-    /* ======================= CLIENT HUD ======================= */
+    /* ======================= CLIENT HUD + SOUND + SCREEN SHAKE ======================= */
     @Environment(EnvType.CLIENT)
     public static final class ClientHud {
         private ClientHud() {}
@@ -402,10 +375,23 @@ public final class ZeroSuitPower implements Power {
         private static int charge;
         private static int max;
 
-        public static void onHud(boolean s, int c, int m) { show = s; charge = c; max = m; }
+        private static ChargeLoopSound loop;
+
+        public static void onHud(boolean s, int c, int m) {
+            show = s; charge = c; max = m;
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc.player == null || mc.getSoundManager() == null) return;
+
+            if (show && (loop == null || loop.isDone())) {
+                loop = new ChargeLoopSound(mc.player);
+                mc.getSoundManager().play(loop);
+            } else if (!show && loop != null) {
+                loop.stopNow();
+            }
+        }
+        public static void stopLoopNow() { if (loop != null) loop.stopNow(); }
         public static boolean isCharging() { return show; }
 
-        // edge detector for the C2S fire (consumed by ZeroSuitNet client tick)
         private static boolean lastAttackDown = false;
         public static boolean consumeAttackEdge() {
             boolean now = MinecraftClient.getInstance().options.attackKey.isPressed();
@@ -414,26 +400,63 @@ public final class ZeroSuitPower implements Power {
             return edge;
         }
 
+        // ===== Screen Shake =====
+        private static final class ScreenShake {
+            private static float strength;
+            private static int   ticks;
+            private static long  seed = 1337L;
+
+            static void kick(float s, int dur) { strength = Math.max(strength, s); ticks = Math.max(ticks, dur); seed ^= (System.nanoTime() + dur); }
+            static boolean active() { return ticks > 0 && strength > 0f; }
+            private static float noise(long n) {
+                n = (n << 13) ^ n;
+                return (1.0f - ((n * (n * n * 15731L + 789221L) + 1376312589L) & 0x7fffffff) / 1073741824.0f);
+            }
+            static void applyTransform(WorldRenderContext ctx) {
+                if (!active()) return;
+                float td = ctx.tickDelta();
+                var mc = MinecraftClient.getInstance();
+                long tBase = (mc != null && mc.player != null) ? mc.player.age : 0L;
+                long t = tBase + (long) td;
+                float n1 = noise(seed + t * 3L) * 0.5f;
+                float n2 = noise(seed ^ (t * 5L)) * 0.5f;
+                float s = strength * 0.015f;
+                ctx.matrixStack().translate(n1 * s, n2 * s, 0.0f);
+                ticks--;
+                strength *= 0.92f;
+                if (ticks <= 0 || strength < 0.02f) { ticks = 0; strength = 0f; }
+            }
+        }
+
+        public static void shakeIfClose(Vec3d worldPos, double radius, float strength, int durationTicks) {
+            var mc = MinecraftClient.getInstance();
+            if (mc == null || mc.player == null) return;
+            Vec3d cam = mc.gameRenderer.getCamera().getPos();
+            if (cam.squaredDistanceTo(worldPos) <= (radius * radius)) {
+                ScreenShake.kick(strength, durationTicks);
+            }
+        }
+
         public static void init() {
             HudRenderCallback.EVENT.register((DrawContext ctx, float tickDelta) -> {
                 if (!show || max <= 0) return;
                 MinecraftClient mc = MinecraftClient.getInstance();
                 int sw = mc.getWindow().getScaledWidth();
                 int sh = mc.getWindow().getScaledHeight();
-
                 float pct = MathHelper.clamp(charge / (float)max, 0f, 1f);
                 drawRing(ctx, sw/2, sh/2, 16, 24, pct, 64, 0xAAFFFFFF, 0x33FFFFFF);
                 String label = (int)(pct * 100) + "%";
                 int w = mc.textRenderer.getWidth(label);
                 ctx.drawText(mc.textRenderer, label, sw/2 - w/2, sh/2 - 4, 0xFFFFFFFF, true);
             });
+
+            WorldRenderEvents.START.register(ScreenShake::applyTransform);
         }
 
         private static void drawRing(DrawContext ctx, int cx, int cy, int rInner, int rOuter, float pct, int steps, int colorFill, int colorBg) {
             drawArc(ctx, cx, cy, rInner, rOuter, 0f, 1f, steps, colorBg);
             drawArc(ctx, cx, cy, rInner, rOuter, 0f, pct, steps, colorFill);
         }
-
         private static void drawArc(DrawContext ctx, int cx, int cy, int rIn, int rOut, float from, float to, int steps, int color) {
             to = Math.max(to, from);
             int segs = Math.max(1, Math.round(steps * (to - from)));
@@ -447,6 +470,27 @@ public final class ZeroSuitPower implements Power {
                 ctx.fill(Math.min(x0i,x1o), Math.min(y0i,y1o), Math.max(x0i,x1o), Math.max(y0i,y1o), color);
                 ctx.fill(Math.min(x1i,x1o), Math.min(y1i,y1o), Math.max(x1i,x1o), Math.max(y1i,y1o), color);
             }
+        }
+
+        private static final class ChargeLoopSound extends MovingSoundInstance {
+            private final net.minecraft.entity.player.PlayerEntity player;
+            private boolean stopped = false;
+            ChargeLoopSound(net.minecraft.entity.player.PlayerEntity player) {
+                super(ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS, net.minecraft.util.math.random.Random.create());
+                this.player = player;
+                this.repeat = true; this.repeatDelay = 0;
+                this.volume = 0.15f; this.pitch  = 0.95f;
+                this.x = player.getX(); this.y = player.getY(); this.z = player.getZ();
+            }
+            @Override public void tick() {
+                if (player == null || player.isRemoved() || !ClientHud.isCharging()) { stopped = true; return; }
+                this.x = player.getX(); this.y = player.getY(); this.z = player.getZ();
+                float pct = (max > 0) ? MathHelper.clamp(charge / (float)max, 0f, 1f) : 0f;
+                this.volume = 0.15f + 0.85f * pct;
+                this.pitch  = 0.95f + 0.35f * pct;
+            }
+            @Override public boolean isDone() { return stopped; }
+            void stopNow() { stopped = true; }
         }
     }
 }

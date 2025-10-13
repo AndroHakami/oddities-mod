@@ -23,6 +23,18 @@
       "odd:ice_spell"
     ]
   },
+  "zero_blast": {
+    "subtitle": "odd.zero_blast",
+    "sounds": [
+      "odd:zero_blast"
+    ]
+  },
+  "zero_charge": {
+    "subtitle": "odd.zero_charge",
+    "sounds": [
+      "odd:zero_charge"
+    ]
+  },
 
   "saucer_hurt": {
     "subtitle": "odd.saucer_hurt",

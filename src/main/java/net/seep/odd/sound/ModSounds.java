@@ -53,6 +53,11 @@ public class ModSounds {
     // Glacier
     public static final SoundEvent ICE_SPELL = registerSoundEvent("ice_spell");
 
+    // Zero Suit
+    public static final SoundEvent ZERO_CHARGE = registerSoundEvent("zero_charge");
+    public static final SoundEvent ZERO_BLAST = registerSoundEvent("zero_blast");
+
+
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
             ModSounds.SOUND_BLOCK_BREAK,

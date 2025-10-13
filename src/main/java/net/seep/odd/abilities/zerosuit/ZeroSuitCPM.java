@@ -15,5 +15,5 @@ public final class ZeroSuitCPM {
     public static void playForcePush(ServerPlayerEntity p)  { ZeroSuitNet.broadcastAnim(p, "force_push"); }
     public static void playForcePull(ServerPlayerEntity p)  { ZeroSuitNet.broadcastAnim(p, "force_pull"); }
 
-    public static void playBlastFire(ServerPlayerEntity p)  { ZeroSuitNet.broadcastAnim(p, "blast_fire"); }
+    public static void playBlastFire(ServerPlayerEntity p)  { ZeroSuitNet.broadcastAnim(p, "zero_blast"); }
 }

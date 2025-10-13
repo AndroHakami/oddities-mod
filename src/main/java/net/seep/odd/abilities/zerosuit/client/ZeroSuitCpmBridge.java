@@ -68,7 +68,6 @@ public final class ZeroSuitCpmBridge {
     }
 
     public static void playBlastFire() {
-        CpmHooks.stop("zero_blast");
         CpmHooks.play("zero_blast");
         blastHoldTicks = BLAST_HOLD_DEFAULT;
     }
