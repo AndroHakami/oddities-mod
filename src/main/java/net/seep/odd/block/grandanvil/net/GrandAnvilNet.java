@@ -21,24 +21,22 @@ public final class GrandAnvilNet {
         ServerPlayNetworking.registerGlobalReceiver(START, (server, player, handler, buf, rs) -> {
             final BlockPos pos = buf.readBlockPos();
             server.execute(() -> {
-                if (player == null || !player.isAlive()) return; // player is already ServerPlayerEntity here
-                Object be = player.getWorld().getBlockEntity(pos);
-                if (be instanceof GrandAnvilBlockEntity) {
-                    GrandAnvilBlockEntity anvil = (GrandAnvilBlockEntity) be;
+                if (player == null || !player.isAlive()) return;
+                var be = player.getWorld().getBlockEntity(pos);
+                if (be instanceof GrandAnvilBlockEntity anvil) {
                     anvil.startQte();
                 }
             });
         });
 
-        // Hit (SPACE)
+        // Hit (SPACE) — use lag-comped judge
         ServerPlayNetworking.registerGlobalReceiver(HIT, (server, player, handler, buf, rs) -> {
             final BlockPos pos = buf.readBlockPos();
             server.execute(() -> {
                 if (player == null || !player.isAlive()) return;
-                Object be = player.getWorld().getBlockEntity(pos);
-                if (be instanceof GrandAnvilBlockEntity) {
-                    GrandAnvilBlockEntity anvil = (GrandAnvilBlockEntity) be;
-                    anvil.hit();
+                var be = player.getWorld().getBlockEntity(pos);
+                if (be instanceof GrandAnvilBlockEntity anvil) {
+                    anvil.hitFromNet(player); // <-- uses player ping on server
                 }
             });
         });

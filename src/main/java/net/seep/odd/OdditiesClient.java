@@ -3,6 +3,7 @@ package net.seep.odd;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
@@ -10,10 +11,13 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
+import net.minecraft.client.item.ModelPredicateProviderRegistry;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
+import net.minecraft.text.MutableText;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
@@ -38,11 +42,14 @@ import net.seep.odd.abilities.icewitch.client.IceSpellAreaRenderer;
 import net.seep.odd.abilities.icewitch.client.IceWitchHud;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
+import net.seep.odd.abilities.looker.LookerClient;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
 import net.seep.odd.abilities.power.CosmicPower;
 import net.seep.odd.abilities.power.SpectralPhasePower;
 import net.seep.odd.abilities.power.SpottedPhantomPower;
+
+import net.seep.odd.abilities.power.SuperChargePower;
 import net.seep.odd.abilities.rider.RiderClientInput;
 import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralClientState;
@@ -50,6 +57,8 @@ import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
 import net.seep.odd.abilities.spotted.SpottedNet;
+import net.seep.odd.abilities.supercharge.SuperChargeNet;
+import net.seep.odd.abilities.supercharge.SuperHud;
 import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
@@ -69,12 +78,14 @@ import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
 
 import net.seep.odd.client.audio.RiderRadioClient;
+import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
+import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 
 import net.seep.odd.entity.zerosuit.ZeroBeamRenderer;
@@ -95,6 +106,7 @@ public final class OdditiesClient implements ClientModInitializer {
         ClientPowerNetworking.registerReceiver(ClientPowerHolder::set, PowerNetworking.SYNC);
         ClientCooldowns.registerTicker();
         ClientPowerNetworking.registerCooldownReceiver();
+        ClientPowerNetworking.registerChargesReceiver();
         OddParticlesClient.register();
 
         // Keybinds + HUDs (client)
@@ -171,10 +183,10 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // --- Artificer (client) ---
         ArtificerHud.register();
-        net.seep.odd.abilities.artificer.condenser.ArtificerCreateInit.registerClient();
+ // if you still keep this path
         ArtificerCondenserRegistry.registerClient();
-        ArtificerFluidsClient.registerClient();
-        ArtificerMixerRegistry.registerClient();
+        net.seep.odd.abilities.artificer.fluid.client.ArtificerFluidsClient.registerClient();
+        ArtificerMixerRegistry.Client.register();
         // Item tint (overlay layer index 1)
 
         // HUD overlay for mixer
@@ -197,13 +209,14 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Cosmic Sword (Client)
         CosmicPower.Client.init();
-        CosmicNet.register();
+        net.seep.odd.abilities.cosmic.CosmicNet.Client.register();
         CosmicCpmBridge.init();
 
         // Ghostling (Client)
+        net.seep.odd.abilities.ghostlings.registry.GhostScreens.register();
 
         EntityRendererRegistry.register(ModEntities.GHOSTLING, GhostlingRenderer::new);
-        net.seep.odd.abilities.ghostlings.GhostPackets.registerS2CClient();
+        GhostPackets.Client.register();
         HandledScreens.register(GhostScreens.GHOST_MANAGE_HANDLER, GhostManageScreen::new);
         HandledScreens.register(GhostScreens.COURIER_PAY_HANDLER, net.seep.odd.abilities.ghostlings.screen.client.courier.CourierPayScreen::new);
         net.fabricmc.fabric.api.client.screenhandler.v1.ScreenRegistry.register(
@@ -228,6 +241,39 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.zerosuit.ZeroSuitNet.initClient();
         net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.init();
         ZeroSuitCpmBridge.init();
+
+
+
+        // Looker (Client)
+        LookerClient.init();
+
+
+        // Supercharge (Client)
+        SuperHud.init();
+        SuperChargeNet.initClient();
+
+        // renderer for thrown items
+
+
+        // model predicate: lets JSON switch to an overlayed model when supercharged
+        ModelPredicateProviderRegistry.register(
+                new Identifier(Oddities.MOD_ID, "supercharged"),
+                (stack, world, entity, seed) -> SuperChargePower.isSupercharged(stack) ? 1.0F : 0.0F
+        );
+        ItemTooltipCallback.EVENT.register((stack, ctx, lines) -> {
+            if (!SuperChargePower.isSupercharged(stack)) return;
+            if (!lines.isEmpty()) {
+                MutableText title = lines.get(0).copy().styled(s -> s.withColor(0xFFAA00)); // bright orange
+                lines.set(0, title);
+            }
+        });
+        net.seep.odd.client.SuperchargeClientFX.init();
+
+        EntityRendererRegistry.register(SuperEntities.THROWN_ITEM, SuperThrownItemEntityRenderer::new);
+
+        // Gamble
+        net.seep.odd.abilities.gamble.item.GambleRevolverItem.initClientHooks();
+
 
 
 
@@ -269,6 +315,8 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.ICE_PROJECTILE, IceProjectileRenderer::new);
         EntityRendererRegistry.register(ModEntities.PHANTOM_BUDDY, PhantomBuddyRenderer::new);
         EntityRendererRegistry.register(ModEntities.ZERO_BEAM, ZeroBeamRenderer::new);
+
+
 
 
 

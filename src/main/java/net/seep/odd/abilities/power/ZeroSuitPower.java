@@ -1,18 +1,23 @@
 package net.seep.odd.abilities.power;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.GameRenderer;
+import net.minecraft.client.render.Tessellator;
+import net.minecraft.client.render.VertexFormat;
+import net.minecraft.client.render.VertexFormats;
 import net.minecraft.client.sound.MovingSoundInstance;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
@@ -35,6 +40,7 @@ import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.zerosuit.ZeroBeamEntity;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.*;
 
@@ -42,12 +48,12 @@ import java.util.*;
 public final class ZeroSuitPower implements Power {
 
     /* ======================= config ======================= */
-    private static final int ZERO_G_HIT_DEGRAV_TICKS = 20 * 6;
+    private static final int ZERO_G_HIT_DEGRAV_TICKS = 20 * 6; // now driven by status effect
 
     private static final int   BLAST_CHARGE_MAX_T  = 20 * 8;
     private static final float BLAST_FULL_DAMAGE   = 25.0f;
     private static final int   BLAST_RANGE_BLOCKS  = 48;
-    private static final int   BLAST_VIS_TICKS     = 20;
+    private static final int   BLAST_VIS_TICKS     = 12;   // how long the visual beam lingers
 
     private static final double BLAST_RADIUS_MIN    = 0.25;
     private static final double BLAST_RADIUS_MAX    = 1.40;
@@ -56,8 +62,6 @@ public final class ZeroSuitPower implements Power {
     private static final int HUD_SYNC_EVERY = 2;
 
     private static final float SHAKE_THRESHOLD = 0.60f;
-    private static final float EXPLOSION_BASE  = 2.0f;
-    private static final float EXPLOSION_MAX   = 4.0f;
 
     /* ======================= meta ======================= */
     @Override public String id() { return "zero_suit"; }
@@ -69,7 +73,7 @@ public final class ZeroSuitPower implements Power {
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
-            case "primary"   -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_primary.png");
+            case "primary"   -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_gravity.png");
             case "secondary" -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_blast.png");
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
@@ -100,6 +104,20 @@ public final class ZeroSuitPower implements Power {
     private static boolean isCurrent(ServerPlayerEntity p) {
         var pow = Powers.get(PowerAPI.get(p));
         return pow instanceof ZeroSuitPower;
+    }
+
+    /* ======================= helpers: sound curves ======================= */
+    private static float pitchForBlast(float ratio) {
+        // 0% -> 1.15  … 100% -> 0.90 (stronger = lower, but not silly-low)
+        return MathHelper.lerp(MathHelper.clamp(ratio, 0f, 1f), 1.15f, 0.90f);
+    }
+    private static float pitchForCharge(float ratio) {
+        // 0% -> 1.20  … 100% -> 0.95
+        return MathHelper.lerp(MathHelper.clamp(ratio, 0f, 1f), 1.20f, 0.95f);
+    }
+    private static float volumeForCharge(float ratio) {
+        // a bit louder as it charges
+        return 0.35f + 0.45f * MathHelper.clamp(ratio, 0f, 1f);
     }
 
     /* ======================= inputs ======================= */
@@ -146,20 +164,7 @@ public final class ZeroSuitPower implements Power {
             if (p.isSwimming()) p.setSwimming(false);
         }
 
-        // expire de-gravity
-        if (!st.noGravUntil.isEmpty()) {
-            Iterator<Map.Entry<UUID, Integer>> it = st.noGravUntil.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<UUID, Integer> e = it.next();
-                if (p.age >= e.getValue()) {
-                    Entity ent = sw.getEntity(e.getKey());
-                    if (ent != null) ent.setNoGravity(false);
-                    it.remove();
-                }
-            }
-        }
-
-        // Charging loop (incl. subtle front-cone spiral WAX_ON)
+        // Charging upkeep + HUD sync
         if (st.charging) {
             if (st.chargeTicks < BLAST_CHARGE_MAX_T) st.chargeTicks++;
 
@@ -167,33 +172,37 @@ public final class ZeroSuitPower implements Power {
                 p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 0, true, false, false));
             }
 
-            // --- FRONT CONE SPIRAL (SUBTLE) ---
+            // === broadcast charge hum to nearby players (shooter hears client loop) ===
+            if ((p.age % 10) == 0) { // ~2x/second
+                float r = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
+                float vol = volumeForCharge(r);
+                float pit = pitchForCharge(r);
+                sw.playSound(
+                        p, // exclude shooter (they already have local loop)
+                        p.getX(), p.getY(), p.getZ(),
+                        ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS,
+                        vol, pit
+                );
+            }
+
+            // === 3D ribbon-hurricane charge (kept) ===
             if ((p.age % 2) == 0) {
                 float ratio = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
-
-                // core (chest)
                 Vec3d core = new Vec3d(p.getX(), p.getY() + 1.0, p.getZ());
                 Vec3d look = p.getRotationVector().normalize();
-
-                // build right/up basis
                 Vec3d worldUp = Math.abs(look.y) < 0.99 ? new Vec3d(0, 1, 0) : new Vec3d(0, 0, 1);
                 Vec3d right = look.crossProduct(worldUp).normalize();
                 Vec3d up    = right.crossProduct(look).normalize();
 
-                // cone depth collapses as ratio grows
-                double Lfar0 = 1.35, Lnear = 0.32;
+                double Lfar0 = 1.40, Lnear = 0.28;
                 double Lfar  = MathHelper.lerp(ratio, Lfar0, 0.70);
-
-                // radius shrinks with depth; overall tightens with ratio
-                double Rfar0 = 0.55, Rnear = 0.08;
-                double tighten = MathHelper.lerp(ratio, 1.0, 0.65);
-
-                // spiral phase
+                double Rfar0 = 0.58,  Rnear = 0.06;
+                double tighten = MathHelper.lerp(ratio, 1.0, 0.62);
                 double base = (p.age * 0.30) + (ratio * 8.0);
 
-                int spokes = 4; // subtle
+                int spokes = 5;
                 for (int i = 0; i < spokes; i++) {
-                    double a01 = (i + (p.age & 1) * 0.33) / spokes; // 0..1
+                    double a01 = (i + (p.age & 1) * 0.33) / spokes;
                     double L   = MathHelper.lerp(a01, Lfar, Lnear);
                     double r   = MathHelper.lerp((L - Lnear) / Math.max(0.0001, (Lfar - Lnear)), Rfar0, Rnear) * tighten;
                     double ang = base + a01 * (Math.PI * 2.0);
@@ -201,20 +210,18 @@ public final class ZeroSuitPower implements Power {
                     Vec3d off = right.multiply(Math.cos(ang) * r).add(up.multiply(Math.sin(ang) * r));
                     Vec3d pos = core.add(look.multiply(L)).add(off);
 
-                    // tiny bias toward the core to hint motion (won't be exact velocity but reads okay)
-                    double vx = (core.x - pos.x) * 0.15;
-                    double vy = (core.y - pos.y) * 0.15;
-                    double vz = (core.z - pos.z) * 0.15;
+                    double vx = (core.x - pos.x) * 0.18;
+                    double vy = (core.y - pos.y) * 0.18;
+                    double vz = (core.z - pos.z) * 0.18;
 
                     sw.spawnParticles(net.minecraft.particle.ParticleTypes.WAX_ON,
                             pos.x, pos.y, pos.z,
                             1,
                             vx, vy, vz,
-                            0.02); // very subtle
+                            0.015);
                 }
             }
 
-            // HUD sync
             if ((p.age % HUD_SYNC_EVERY) == 0) {
                 if (st.lastHudCharge != st.chargeTicks || !st.lastHudActive) {
                     st.lastHudCharge = st.chargeTicks;
@@ -254,7 +261,7 @@ public final class ZeroSuitPower implements Power {
         ZeroSuitNet.sendHud(p, false, 0, BLAST_CHARGE_MAX_T);
     }
 
-    /** Fire the beam; damages along ray; stops on blocks; impact explosion. */
+    /** Fire the beam; damages along ray; stops on blocks; spawns visual beam; visual-only pop at impact (real explosion only at 100%). */
     private static void fireBlast(ServerPlayerEntity src, St st) {
         ServerWorld sw = (ServerWorld) src.getWorld();
 
@@ -276,9 +283,10 @@ public final class ZeroSuitPower implements Power {
                 RaycastContext.ShapeType.COLLIDER,
                 RaycastContext.FluidHandling.NONE,
                 src));
-        double hitDist = (bhr.getType() == BlockHitResult.Type.MISS)
-                ? max
-                : start.distanceTo(Vec3d.ofCenter(bhr.getBlockPos()));
+
+        // Did we actually hit a BLOCK?
+        boolean hitBlock = (bhr.getType() != BlockHitResult.Type.MISS);
+        double hitDist = hitBlock ? start.distanceTo(Vec3d.ofCenter(bhr.getBlockPos())) : max;
         Vec3d impact = start.add(look.multiply(hitDist));
 
         // damage pass
@@ -287,7 +295,7 @@ public final class ZeroSuitPower implements Power {
         List<LivingEntity> mobs = sw.getEntitiesByClass(LivingEntity.class, sweep, e -> e.isAlive() && e != src);
         for (LivingEntity e : mobs) {
             Vec3d c = e.getBoundingBox().getCenter();
-            double t = MathHelper.clamp(start.relativize(c).dotProduct(look), 0.0, hitDist);
+            double t = MathHelper.clamp(c.subtract(start).dotProduct(look), 0.0, hitDist);
             Vec3d closest = start.add(look.multiply(t));
             double dist   = c.distanceTo(closest);
             if (dist <= hitRadius && hitOnce.add(e.getUuid())) {
@@ -300,44 +308,51 @@ public final class ZeroSuitPower implements Power {
             }
         }
 
-        // visual entity
-        ZeroBeamEntity beam = ModEntities.ZERO_BEAM.create(sw);
-        if (beam != null) {
-            beam.init(src, start, look, hitDist, radius, BLAST_VIS_TICKS, ratio);
-            sw.spawnEntity(beam);
+        // spawn the visual beam
+        if (hitDist > 0.1) {
+            ZeroBeamEntity beam = ModEntities.ZERO_BEAM.create(sw);
+            if (beam != null) {
+                beam.init(start, look, hitDist, radius, BLAST_VIS_TICKS);
+                sw.spawnEntity(beam);
+            }
         }
 
-        // impact explosion (player-owned)
-        float strength = MathHelper.lerp(ratio, EXPLOSION_BASE, EXPLOSION_MAX);
-        if (ratio > 0.05f) {
+        // === REAL EXPLOSION ON BLOCK HIT (scaled; non-destructive unless 100%) ===
+        if (ratio > 0.05f && hitBlock) {
+            float strength = (float) MathHelper.lerp(ratio, BLAST_RADIUS_MIN , BLAST_RADIUS_MAX);
             Explosion.DestructionType mode =
                     (ratio >= 0.999f) ? Explosion.DestructionType.DESTROY
                             : Explosion.DestructionType.KEEP;
 
             Explosion ex = new Explosion(
                     sw,
-                    src,         // owner (so damage is credited to shooter)
-                    null,        // DamageSource (null => built from owner)
-                    null,        // ExplosionBehavior
+                    src, null, null,
                     impact.x, impact.y, impact.z,
                     strength,
-                    false,       // createFire
+                    false,
                     mode
             );
             ex.collectBlocksAndDamageEntities();
             ex.affectWorld(true);
         }
 
-        // extra readability at impact
+        // impact readability
         sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLASH, impact.x, impact.y, impact.z, 1, 0, 0, 0, 0);
-        sw.spawnParticles(net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK, impact.x, impact.y, impact.z, 16, 0.25, 0.25, 0.25, 0.08);
 
         // recoil
         Vec3d selfImpulse = look.multiply(-(0.35 + 1.10 * ratio));
         src.addVelocity(selfImpulse.x, selfImpulse.y, selfImpulse.z);
         src.velocityModified = true;
 
-        src.getWorld().playSound(null, src.getBlockPos(), ModSounds.ZERO_BLAST, SoundCategory.PLAYERS, 1.0f, 1.0f);
+        // BLAST SFX: charge-scaled pitch, audible to nearby players
+        float pitchBlast = pitchForBlast(ratio);
+        sw.playSound(
+                null,
+                src.getX(), src.getY(), src.getZ(),
+                ModSounds.ZERO_BLAST, SoundCategory.PLAYERS,
+                1.0f, pitchBlast
+        );
+
         ZeroSuitCPM.playBlastFire(src);
         stopCharge(src, st, true);
     }
@@ -352,10 +367,8 @@ public final class ZeroSuitPower implements Power {
     static {
         AttackEntityCallback.EVENT.register((player, world, hand, target, hit) -> {
             if (!(player instanceof ServerPlayerEntity sp) || !isCurrent(sp)) return ActionResult.PASS;
-            St st = S(sp);
-            if (st.zeroG && target != null) {
-                target.setNoGravity(true);
-                st.noGravUntil.put(target.getUuid(), sp.age + ZERO_G_HIT_DEGRAV_TICKS);
+            if (S(sp).zeroG && target instanceof LivingEntity le) {
+                le.addStatusEffect(new StatusEffectInstance(ModStatusEffects.GRAVITY_SUSPEND, ZERO_G_HIT_DEGRAV_TICKS, 0, false, false, true), sp);
             }
             return ActionResult.PASS;
         });
@@ -370,16 +383,30 @@ public final class ZeroSuitPower implements Power {
     @Environment(EnvType.CLIENT)
     public static final class ClientHud {
         private ClientHud() {}
+        public static boolean consumeAttackEdge() {
+            boolean now = MinecraftClient.getInstance().options.attackKey.isPressed();
+            boolean edge = now && !lastAttackDown;
+            lastAttackDown = now;
+            return edge;
+        }
 
         private static boolean show;
         private static int charge;
         private static int max;
 
+        // Textured HUD assets
+        private static final Identifier HUD_TEX_BASE  =
+                new Identifier(Oddities.MOD_ID, "textures/gui/hud/zero_ring_base.png");
+        private static final Identifier HUD_TEX_FILL  =
+                new Identifier(Oddities.MOD_ID, "textures/gui/hud/zero_ring_fill.png");
+        private static final int TEX_W = 64, TEX_H = 64; // real texture size
+        private static final int HUD_SIZE = 64;          // draw at 64×64 exactly
+
         private static ChargeLoopSound loop;
 
         public static void onHud(boolean s, int c, int m) {
             show = s; charge = c; max = m;
-            MinecraftClient mc = MinecraftClient.getInstance();
+            MinecraftClient mc = MinecraftClient.getInstance(); 
             if (mc.player == null || mc.getSoundManager() == null) return;
 
             if (show && (loop == null || loop.isDone())) {
@@ -393,12 +420,7 @@ public final class ZeroSuitPower implements Power {
         public static boolean isCharging() { return show; }
 
         private static boolean lastAttackDown = false;
-        public static boolean consumeAttackEdge() {
-            boolean now = MinecraftClient.getInstance().options.attackKey.isPressed();
-            boolean edge = now && !lastAttackDown;
-            lastAttackDown = now;
-            return edge;
-        }
+
 
         // ===== Screen Shake =====
         private static final class ScreenShake {
@@ -407,6 +429,7 @@ public final class ZeroSuitPower implements Power {
             private static long  seed = 1337L;
 
             static void kick(float s, int dur) { strength = Math.max(strength, s); ticks = Math.max(ticks, dur); seed ^= (System.nanoTime() + dur); }
+
             static boolean active() { return ticks > 0 && strength > 0f; }
             private static float noise(long n) {
                 n = (n << 13) ^ n;
@@ -428,6 +451,7 @@ public final class ZeroSuitPower implements Power {
             }
         }
 
+        /** Local helper for renderers to request a shake when close to a given world pos. */
         public static void shakeIfClose(Vec3d worldPos, double radius, float strength, int durationTicks) {
             var mc = MinecraftClient.getInstance();
             if (mc == null || mc.player == null) return;
@@ -443,35 +467,75 @@ public final class ZeroSuitPower implements Power {
                 MinecraftClient mc = MinecraftClient.getInstance();
                 int sw = mc.getWindow().getScaledWidth();
                 int sh = mc.getWindow().getScaledHeight();
+
                 float pct = MathHelper.clamp(charge / (float)max, 0f, 1f);
-                drawRing(ctx, sw/2, sh/2, 16, 24, pct, 64, 0xAAFFFFFF, 0x33FFFFFF);
+
+                // center placement (exact 64×64)
+                int size = HUD_SIZE;
+                int x = sw / 2 - size / 2;
+                int y = sh / 2 - size / 2;
+
+                // 1) draw base ring (exact 64×64 pixels)
+                ctx.drawTexture(HUD_TEX_BASE, x, y, 0, 0, size, size, TEX_W, TEX_H);
+
+                // 2) draw radial fill slice from the fill texture
+                drawRadialFill(ctx, x + size / 2, y + size / 2, size / 2, pct);
+
+                // 3) numeric label (optional)
                 String label = (int)(pct * 100) + "%";
                 int w = mc.textRenderer.getWidth(label);
                 ctx.drawText(mc.textRenderer, label, sw/2 - w/2, sh/2 - 4, 0xFFFFFFFF, true);
             });
-
             WorldRenderEvents.START.register(ScreenShake::applyTransform);
         }
 
-        private static void drawRing(DrawContext ctx, int cx, int cy, int rInner, int rOuter, float pct, int steps, int colorFill, int colorBg) {
-            drawArc(ctx, cx, cy, rInner, rOuter, 0f, 1f, steps, colorBg);
-            drawArc(ctx, cx, cy, rInner, rOuter, 0f, pct, steps, colorFill);
-        }
-        private static void drawArc(DrawContext ctx, int cx, int cy, int rIn, int rOut, float from, float to, int steps, int color) {
-            to = Math.max(to, from);
-            int segs = Math.max(1, Math.round(steps * (to - from)));
-            for (int i = 0; i < segs; i++) {
-                float a0 = (from + (i    /(float)segs)) * (float)(Math.PI * 2);
-                float a1 = (from + ((i+1)/(float)segs)) * (float)(Math.PI * 2);
-                int x0o = cx + (int)(Math.cos(a0) * rOut), y0o = cy + (int)(Math.sin(a0) * rOut);
-                int x1o = cx + (int)(Math.cos(a1) * rOut), y1o = cy + (int)(Math.sin(a1) * rOut);
-                int x0i = cx + (int)(Math.cos(a0) * rIn ), y0i = cy + (int)(Math.sin(a0) * rIn );
-                int x1i = cx + (int)(Math.cos(a1) * rIn ), y1i = cy + (int)(Math.sin(a1) * rIn );
-                ctx.fill(Math.min(x0i,x1o), Math.min(y0i,y1o), Math.max(x0i,x1o), Math.max(y0i,y1o), color);
-                ctx.fill(Math.min(x1i,x1o), Math.min(y1i,y1o), Math.max(x1i,x1o), Math.max(y1i,y1o), color);
+        /** Draws a pie slice of HUD_TEX_FILL (0..pct of the circle). Assumes the ring is centered in a 64×64 texture. */
+        private static void drawRadialFill(DrawContext ctx, int cx, int cy, int radius, float pct) {
+            if (pct <= 0f) return;
+            pct = MathHelper.clamp(pct, 0f, 1f);
+
+            // GUI blend & depth state
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableDepthTest();
+            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+            RenderSystem.setShader(GameRenderer::getPositionTexProgram);
+            RenderSystem.setShaderTexture(0, HUD_TEX_FILL);
+
+            // start at -90° (top) and fill clockwise
+            float start = -90f * (float)(Math.PI/180.0);
+            float end   = start + pct * (float)(Math.PI * 2.0);
+
+            Tessellator tess = Tessellator.getInstance();
+            BufferBuilder bb = tess.getBuffer();
+            bb.begin(VertexFormat.DrawMode.TRIANGLE_FAN, VertexFormats.POSITION_TEXTURE);
+
+            var mat = ctx.getMatrices().peek().getPositionMatrix();
+
+            // center of the fan (UV center of texture)
+            bb.vertex(mat, (float)cx, (float)cy, 0f).texture(0.5f, 0.5f).next();
+
+            // arc points
+            int segs = Math.max(4, (int)Math.ceil(90 * pct)); // smooth enough
+            for (int i = 0; i <= segs; i++) {
+                float a = MathHelper.lerp(i / (float)segs, start, end);
+                float px = cx + (float)Math.cos(a) * radius;
+                float py = cy + (float)Math.sin(a) * radius;
+
+                // map circle to UVs (centered, 0.5 radius in texture space)
+                float ux = 0.5f + 0.5f * (float)Math.cos(a);
+                float uy = 0.5f + 0.5f * (float)Math.sin(a);
+
+                bb.vertex(mat, px, py, 0f).texture(ux, uy).next();
             }
+            tess.draw();
+
+            // restore
+            RenderSystem.enableDepthTest();
+            RenderSystem.disableBlend();
         }
 
+        // ======= client sound loop (unchanged) =======
         private static final class ChargeLoopSound extends MovingSoundInstance {
             private final net.minecraft.entity.player.PlayerEntity player;
             private boolean stopped = false;

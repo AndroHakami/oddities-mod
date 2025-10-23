@@ -63,13 +63,13 @@ public class GhostManageScreen extends HandledScreen<GhostManageScreenHandler> {
         // Courier-only
         if (handler.ghostJob == GhostlingEntity.Job.COURIER) {
             addDrawableChild(ButtonWidget.builder(Text.of("Courier: Set Target"), b ->
-                    GhostPackets.openTargetInput(handler.ghostEntityId)
+                    GhostPackets.Client.openTargetInput(handler.ghostEntityId)
             ).dimensions(cx - 100, row - 10, 200, 20).build());
             row += 25;
         }
         if (handler.ghostJob == GhostlingEntity.Job.FIGHTER) {
             addDrawableChild(ButtonWidget.builder(Text.of("Fighter: Select Mode"), b ->
-                    GhostPackets.openFighterControl(handler.ghostEntityId)
+                    GhostPackets.Client.openFighterControl(handler.ghostEntityId)
             ).dimensions(cx - 100, row - 10, 200, 20).build());
             row += 25;
         }
@@ -77,7 +77,7 @@ public class GhostManageScreen extends HandledScreen<GhostManageScreenHandler> {
         // Farmer-only: go into "select a chest" mode with the next right-click
         if (handler.ghostJob == GhostlingEntity.Job.FARMER) {
             addDrawableChild(ButtonWidget.builder(Text.of("Farmer: Select Deposit Chest (right-click in world)"), b -> {
-                GhostPackets.beginFarmerDepositPick(handler.ghostEntityId);
+                GhostPackets.Client.beginFarmerDepositPick(handler.ghostEntityId);
                 if (client != null) client.setScreen(null); // close UI so you can click in world
             }).dimensions(cx - 100, row - 10, 200, 20).build());
             row += 25;
@@ -86,13 +86,13 @@ public class GhostManageScreen extends HandledScreen<GhostManageScreenHandler> {
         // Miner-only: area (A then B) + deposit chest, both via right-click
         if (handler.ghostJob == GhostlingEntity.Job.MINER) {
             addDrawableChild(ButtonWidget.builder(Text.of("Miner: Select Area (A then B, right-click)"), b -> {
-                GhostPackets.beginMinerAreaPick(handler.ghostEntityId);
+                GhostPackets.Client.beginMinerAreaPick(handler.ghostEntityId);
                 if (client != null) client.setScreen(null);
             }).dimensions(cx - 100, row - 10, 200, 20).build());
             row += 25;
 
             addDrawableChild(ButtonWidget.builder(Text.of("Miner: Select Deposit Chest (right-click)"), b -> {
-                GhostPackets.beginMinerDepositPick(handler.ghostEntityId);
+                GhostPackets.Client.beginMinerDepositPick(handler.ghostEntityId);
                 if (client != null) client.setScreen(null);
             }).dimensions(cx - 100, row - 10, 200, 20).build());
             row += 25;

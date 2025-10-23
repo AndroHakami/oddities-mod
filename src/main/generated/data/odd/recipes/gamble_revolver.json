@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GGG",
+    "GR ",
+    "GX "
+  ],
+  "key": {
+    "G": { "item": "minecraft:iron_ingot" },
+    "X": { "item": "minecraft:redstone" },
+    "R": { "item": "minecraft:stone_button" }
+  },
+  "result": { "item": "odd:gamble_revolver", "count": 1 }
+}

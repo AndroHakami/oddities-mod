@@ -2,7 +2,6 @@ package net.seep.odd.abilities.init;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
@@ -22,9 +21,9 @@ import net.seep.odd.abilities.artificer.condenser.*;
 public final class ArtificerCondenserRegistry {
     private ArtificerCondenserRegistry() {}
 
-    // Prebuilt instances
+    // ==== instances (common-safe) ====
     public static final Block CONDENSER_BLOCK = new CondenserBlock(
-            FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).strength(3.0f).requiresTool()
+            FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).strength(3.0f).requiresTool().nonOpaque()
     );
     public static final BlockItem CONDENSER_ITEM = new BlockItem(CONDENSER_BLOCK, new Item.Settings());
 
@@ -34,42 +33,36 @@ public final class ArtificerCondenserRegistry {
     public static final ScreenHandlerType<CondenserScreenHandler> CONDENSER_SH =
             new ExtendedScreenHandlerType<>((syncId, inv, buf) -> {
                 BlockPos pos = buf.readBlockPos();
-                var be = (CondenserBlockEntity) inv.player.getWorld().getBlockEntity(pos);
+                CondenserBlockEntity be = null;
+                if (inv.player != null && inv.player.getWorld() != null) {
+                    var w = inv.player.getWorld();
+                    var e = w.getBlockEntity(pos);
+                    if (e instanceof CondenserBlockEntity cbe) be = cbe;
+                }
+                // be may be null client-side for a tick; handler copes because it only reads slots
                 return new CondenserScreenHandler(syncId, inv, be);
             });
 
     private static boolean REGISTERED_COMMON = false;
     private static boolean REGISTERED_CLIENT = false;
 
-    /** Backward-compatible, safe wrapper. */
-    public static void registerAll() {
-        registerCommon();
-        if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
-            registerClient();
-        }
-    }
-
     /** Server & client (common) registration only. */
     public static void registerCommon() {
         if (REGISTERED_COMMON) return;
 
-        // Block + item
-        if (!Registries.BLOCK.containsId(id("condenser"))) {
+        if (!Registries.BLOCK.containsId(id("condenser")))
             Registry.register(Registries.BLOCK, id("condenser"), CONDENSER_BLOCK);
-        }
-        if (!Registries.ITEM.containsId(id("condenser"))) {
+
+        if (!Registries.ITEM.containsId(id("condenser")))
             Registry.register(Registries.ITEM,  id("condenser"), CONDENSER_ITEM);
-        }
 
-        // Block entity + screen handler type (no client screens here)
-        if (!Registries.BLOCK_ENTITY_TYPE.containsId(id("condenser_be"))) {
+        if (!Registries.BLOCK_ENTITY_TYPE.containsId(id("condenser_be")))
             Registry.register(Registries.BLOCK_ENTITY_TYPE, id("condenser_be"), CONDENSER_BE);
-        }
-        if (!Registries.SCREEN_HANDLER.containsId(id("condenser"))) {
-            Registry.register(Registries.SCREEN_HANDLER,   id("condenser"),    CONDENSER_SH);
-        }
 
-        // Server/common networking
+        if (!Registries.SCREEN_HANDLER.containsId(id("condenser")))
+            Registry.register(Registries.SCREEN_HANDLER, id("condenser"), CONDENSER_SH);
+
+        // C2S networking (common)
         CondenserNet.registerServer();
 
         REGISTERED_COMMON = true;
@@ -80,9 +73,22 @@ public final class ArtificerCondenserRegistry {
     public static void registerClient() {
         if (REGISTERED_CLIENT) return;
 
-        net.minecraft.client.gui.screen.ingame.HandledScreens.register(CONDENSER_SH, CondenserScreen::new);
-        CondenserNet.registerClient();
+        // Be explicit with generics to avoid inference failures
+        net.minecraft.client.gui.screen.ingame.HandledScreens.register(
+                CONDENSER_SH,
+                new net.minecraft.client.gui.screen.ingame.HandledScreens.Provider<
+                        CondenserScreenHandler,
+                        CondenserScreen>() {
+                    @Override
+                    public CondenserScreen create(CondenserScreenHandler handler,
+                                                  net.minecraft.entity.player.PlayerInventory inv,
+                                                  net.minecraft.text.Text title) {
+                        return new CondenserScreen(handler, inv, title);
+                    }
+                }
+        );
 
+        CondenserNet.registerClient();
         REGISTERED_CLIENT = true;
     }
 

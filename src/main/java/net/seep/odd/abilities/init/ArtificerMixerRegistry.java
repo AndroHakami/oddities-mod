@@ -2,30 +2,23 @@ package net.seep.odd.abilities.init;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
-import net.minecraft.item.ItemConvertible;
 import net.minecraft.recipe.RecipeSerializer;
 import net.minecraft.recipe.RecipeType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
 import net.seep.odd.abilities.artificer.mixer.*;
-import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
-
-import java.util.ArrayList;
-import java.util.List;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
 
 @SuppressWarnings("unused")
 public final class ArtificerMixerRegistry {
@@ -40,7 +33,6 @@ public final class ArtificerMixerRegistry {
     public static Item BREW_THROWABLE;
 
     private static boolean REGISTERED_COMMON = false;
-    private static boolean REGISTERED_CLIENT = false;
 
     public static void registerCommon() {
         if (REGISTERED_COMMON) return;
@@ -72,12 +64,20 @@ public final class ArtificerMixerRegistry {
         // Brew defaults
         net.seep.odd.abilities.artificer.mixer.brew.BrewEffects.registerDefaults();
 
-        // ScreenHandler
+        // ScreenHandler — inline factory so we don't need a static TYPE/factory() on the handler
         POTION_MIXER_SH = Registries.SCREEN_HANDLER.containsId(mixId)
                 ? (ScreenHandlerType<PotionMixerScreenHandler>) Registries.SCREEN_HANDLER.get(mixId)
                 : Registry.register(Registries.SCREEN_HANDLER, mixId,
-                new ExtendedScreenHandlerType<>(PotionMixerScreenHandler.factory()));
-        PotionMixerScreenHandler.TYPE = POTION_MIXER_SH;
+                new ExtendedScreenHandlerType<>((syncId, inv, buf) -> {
+                    BlockPos pos = buf.readBlockPos();
+                    PotionMixerBlockEntity be = null;
+                    if (inv.player != null && inv.player.getWorld() != null) {
+                        var w = inv.player.getWorld();
+                        var e = w.getBlockEntity(pos);
+                        if (e instanceof PotionMixerBlockEntity pbe) be = pbe;
+                    }
+                    return new PotionMixerScreenHandler(syncId, inv, be.getPos());
+                }));
 
         // Recipe Type + Serializer
         POTION_MIXING_TYPE = Registries.RECIPE_TYPE.containsId(mixTypeId)
@@ -110,34 +110,44 @@ public final class ArtificerMixerRegistry {
         REGISTERED_COMMON = true;
     }
 
-    @Environment(EnvType.CLIENT)
-    public static void registerClient() {
-        if (REGISTERED_CLIENT) return;
-
-        // Screen
-        net.minecraft.client.gui.screen.ingame.HandledScreens.register(
-                POTION_MIXER_SH,
-                (net.seep.odd.abilities.artificer.mixer.PotionMixerScreenHandler h,
-                 net.minecraft.entity.player.PlayerInventory inv,
-                 net.minecraft.text.Text title) ->
-                        new net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen(h, inv, title)
-        );
-
-        // Item tint registration — only if items exist
-        if (BREW_DRINKABLE != null && BREW_THROWABLE != null) {
-            ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
-                if (tintIndex == 1 && stack.hasNbt()) {
-                    return stack.getNbt().getInt("odd_brew_color");
-                }
-                return 0xFFFFFFFF;
-            }, BREW_DRINKABLE, BREW_THROWABLE);
-        }
-
-        // Client side of mixer net (no receivers; present for symmetry)
-        MixerNet.registerClient();
-
-        REGISTERED_CLIENT = true;
-    }
-
     private static Identifier id(String p) { return new Identifier("odd", p); }
+
+    /* ----------- client-only bits live here (never loaded on server) ----------- */
+    @Environment(EnvType.CLIENT)
+    public static final class Client {
+        private static boolean REGISTERED_CLIENT = false;
+
+        public static void register() {
+            if (REGISTERED_CLIENT) return;
+
+            // Be explicit with generics so type inference can't fail
+            net.minecraft.client.gui.screen.ingame.HandledScreens.register(
+                    POTION_MIXER_SH,
+                    new net.minecraft.client.gui.screen.ingame.HandledScreens.Provider<
+                            PotionMixerScreenHandler,
+                            net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen>() {
+                        @Override
+                        public net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen create(
+                                PotionMixerScreenHandler handler,
+                                net.minecraft.entity.player.PlayerInventory inv,
+                                net.minecraft.text.Text title) {
+                            return new net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen(handler, inv, title);
+                        }
+                    }
+            );
+
+            // Item tint (overlay layer index 1)
+            if (BREW_DRINKABLE != null && BREW_THROWABLE != null) {
+                net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
+                    if (tintIndex == 1 && stack.hasNbt()) return stack.getNbt().getInt("odd_brew_color");
+                    return 0xFFFFFFFF;
+                }, BREW_DRINKABLE, BREW_THROWABLE);
+            }
+
+            // Client side of mixer net
+            MixerNet.registerClient();
+
+            REGISTERED_CLIENT = true;
+        }
+    }
 }

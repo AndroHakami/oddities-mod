@@ -11,6 +11,7 @@ import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
+import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
 import net.seep.odd.abilities.tamer.item.TameBallItem;
 import net.seep.odd.item.custom.CosmicKatanaItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
@@ -28,6 +29,7 @@ public class ModItems {
     public static final Item EMERALD_SHURIKEN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "emerald_shuriken"), new Item(new Item.Settings()));
     public static final Item ICE_PROJECTILE = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "ice_projectile"), new Item(new Item.Settings()));
     public static final Item VACUUM = registerItem("vacuum", new ArtificerVacuumItem(new FabricItemSettings().maxCount(1)));
+    public static final Item GAMBLE_REVOLVER = registerItem("gamble_revolver", new GambleRevolverItem(new FabricItemSettings().maxCount(1)));
     public static final Item ALIEN_PEARL = registerItem("alien_pearl", new Item(new FabricItemSettings().food(ModFoodComponents.ALIEN_PEARL)));
     public static final Item COSMIC_KATANA =
             registerItem("cosmic_katana", new CosmicKatanaItem(new FabricItemSettings().maxCount(1).maxDamage(1561)));

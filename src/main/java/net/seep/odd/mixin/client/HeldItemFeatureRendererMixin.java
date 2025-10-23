@@ -4,6 +4,8 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.LivingEntity;
+import net.seep.odd.abilities.looker.LookerClient;
+import net.seep.odd.abilities.power.LookerPower;
 import net.seep.odd.abilities.spotted.SpottedClient;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,6 +19,9 @@ public class HeldItemFeatureRendererMixin {
                                    LivingEntity entity, float limbAngle, float limbDistance,
                                    float tickDelta, float customAngle, float headYaw, float headPitch,
                                    CallbackInfo ci) {
-        if (SpottedClient.isSpottedInvisible(entity)) ci.cancel();
+        if (SpottedClient.isSpottedInvisible(entity)
+                || LookerClient.isLookerInvisible(entity)) {
+            ci.cancel();
+        }
     }
 }

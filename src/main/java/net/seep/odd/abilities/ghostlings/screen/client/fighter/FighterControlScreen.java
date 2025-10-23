@@ -26,18 +26,18 @@ public class FighterControlScreen extends Screen {
         int y = height / 2 - 30;
 
         addDrawableChild(ButtonWidget.builder(Text.of("Follow Me"), b -> {
-            GhostPackets.setFollow(ghostId, true);
+            GhostPackets.Client.setFollow(ghostId, true);
             this.mode = GhostlingEntity.BehaviorMode.FOLLOW;
         }).dimensions(cx - 80, y, 160, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.of("Guard Area…"), b -> {
-            GhostPackets.beginGuardPick(ghostId);
+            GhostPackets.Client.beginGuardPick(ghostId);
             this.mode = GhostlingEntity.BehaviorMode.GUARD;
             this.close();
         }).dimensions(cx - 80, y + 24, 160, 20).build());
 
         addDrawableChild(ButtonWidget.builder(Text.of("Normal Mode"), b -> {
-            GhostPackets.clearMode(ghostId);
+            GhostPackets.Client.clearMode(ghostId);
             this.mode = GhostlingEntity.BehaviorMode.NORMAL;
         }).dimensions(cx - 80, y + 48, 160, 20).build());
     }

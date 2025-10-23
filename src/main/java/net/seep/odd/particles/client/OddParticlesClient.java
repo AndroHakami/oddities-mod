@@ -24,6 +24,10 @@ public final class OddParticlesClient {
                 OddParticles.SPOTTED_STEPS,
                 (FabricSpriteProvider sp) -> new SpottedStepsParticle.Factory(sp)
         );
+        ParticleFactoryRegistry.getInstance().register(
+                OddParticles.ZERO_GRAVITY,
+                (FabricSpriteProvider sp) -> new SpottedStepsParticle.Factory(sp)
+        );
 
 
 

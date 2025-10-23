@@ -82,7 +82,7 @@ public final class MinerSelectClient {
             if (depositMode) {
                 // Single-click sets the chest; don't let it open
                 BlockPos pos = hit.getBlockPos();
-                GhostPackets.minerSetDeposit(currentGhostId, pos);
+                GhostPackets.Client.minerSetDeposit(currentGhostId, pos);
                 toast("Miner deposit chest set: " + pos.toShortString());
                 clear();
                 return ActionResult.SUCCESS;
@@ -104,7 +104,7 @@ public final class MinerSelectClient {
                 return ActionResult.SUCCESS;
             } else {
                 // confirm
-                GhostPackets.minerBegin(currentGhostId, cornerA, cornerB);
+                GhostPackets.Client.minerBegin(currentGhostId, cornerA, cornerB);
                 toast("Miner: area confirmed. Beginning work.");
                 clear();
                 return ActionResult.SUCCESS;

@@ -15,6 +15,7 @@
  "item.odd.bucket_gaia": "Bucket of Gaia Essence",
  "item.odd.cosmic_katana": "Cosmic Katana",
  "item.odd.vacuum": "Dyson 3000",
+ "item.odd.gamble_revolver": "The Chancellor",
  "item.odd.tame_ball": "Tame Ball",
  "item.odd.emerald_shuriken": "",
  "brew.odd.shockwave": "Elixir Of Shockwave",
@@ -33,6 +34,7 @@
  "key.oddities.fourth_ability": "Fourth Ability",
  "key.categories_odd": "Rider Car Settings",
  "key.odd.honk": "Honk",
+ "effect.odd.gravity_suspend": "Zero Gravity",
 
 
  "tooltip.odd.metal_detector.tooltip": "Finds Valueables underground!",

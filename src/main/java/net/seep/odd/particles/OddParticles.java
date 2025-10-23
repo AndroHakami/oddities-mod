@@ -12,11 +12,13 @@ public final class OddParticles {
     public static final DefaultParticleType SPECTRAL_BURST = FabricParticleTypes.simple();
     public static final DefaultParticleType ICE_FLAKE = FabricParticleTypes.simple();
     public static final DefaultParticleType SPOTTED_STEPS = FabricParticleTypes.simple();
+    public static final DefaultParticleType ZERO_GRAVITY = FabricParticleTypes.simple();
 
     public static void register() {
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "spectral_burst"), SPECTRAL_BURST);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "ice_flake"), ICE_FLAKE);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "spotted_steps"), SPOTTED_STEPS);
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "zero_gravity"), ZERO_GRAVITY);
 
     }
 

@@ -1,200 +1,234 @@
 package net.seep.odd.entity.zerosuit;
 
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.*;
 import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
-import net.seep.odd.Oddities;
+import net.seep.odd.entity.zerosuit.ZeroBeamEntity;
 import org.joml.Matrix4f;
 
-/** Beacon-like square beam: filled core using the beacon texture + sealed square caps, plus a faint additive halo. */
-public final class ZeroBeamRenderer extends EntityRenderer<ZeroBeamEntity> {
-    // Vanilla beacon beam texture for the core look
-    private static final Identifier TEX_BEACON = new Identifier("textures/entity/beacon_beam.png");
-    // Optional subtle outer glow
-    private static final Identifier TEX_HALO   = new Identifier(Oddities.MOD_ID, "textures/effects/zero_beam_shell.png");
+public class ZeroBeamRenderer extends EntityRenderer<ZeroBeamEntity> {
 
-    private static final float U_REPEAT = 0.35f; // texture repeats per block of length
-    private static final float HALO_SCALE = 1.18f; // halo slightly larger than core
-    private static final float EPS = 0.0006f; // tiny separation to avoid coplanar z shimmer
-
-    // Core: translucent textured (beacon look), depth-write ON, cull OFF (so inside looks filled), caps drawn
-    private static final RenderLayer CORE = RenderLayer.of(
-            "odd_zero_beam_core_beacon",
-            VertexFormats.POSITION_COLOR_TEXTURE,
+    private static final RenderLayer LAYER = RenderLayer.of(
+            "odd_zero_beam",
+            VertexFormats.POSITION_COLOR,
             VertexFormat.DrawMode.QUADS,
-            512, false, true,
+            256, false, true,
             RenderLayer.MultiPhaseParameters.builder()
-                    .program(new RenderPhase.ShaderProgram(GameRenderer::getPositionColorTexProgram))
-                    .texture(new RenderPhase.Texture(TEX_BEACON, false, false))
-                    .transparency(RenderPhase.TRANSLUCENT_TRANSPARENCY)
-                    .cull(RenderPhase.DISABLE_CULLING)       // draw both sides so inside doesn't look hollow
-                    .lightmap(RenderPhase.DISABLE_LIGHTMAP)
-                    .depthTest(RenderPhase.LEQUAL_DEPTH_TEST)
-                    .writeMaskState(RenderPhase.ALL_MASK)     // write depth (fixes face fighting)
+                    .program(new RenderPhase.ShaderProgram(GameRenderer::getPositionColorProgram))
+                    .transparency(RenderLayer.ADDITIVE_TRANSPARENCY)
+                    .cull(RenderLayer.DISABLE_CULLING)
+                    .depthTest(RenderLayer.LEQUAL_DEPTH_TEST)
+                    .writeMaskState(RenderLayer.COLOR_MASK)
                     .build(false)
     );
 
-    // Halo: additive, faint, depth-write ON, cull ON
-    private static final RenderLayer HALO = RenderLayer.of(
-            "odd_zero_beam_halo",
-            VertexFormats.POSITION_COLOR_TEXTURE,
-            VertexFormat.DrawMode.QUADS,
-            512, false, true,
-            RenderLayer.MultiPhaseParameters.builder()
-                    .program(new RenderPhase.ShaderProgram(GameRenderer::getPositionColorTexProgram))
-                    .texture(new RenderPhase.Texture(TEX_HALO, false, false))
-                    .transparency(RenderPhase.ADDITIVE_TRANSPARENCY)
-                    .cull(RenderPhase.ENABLE_CULLING)
-                    .lightmap(RenderPhase.DISABLE_LIGHTMAP)
-                    .depthTest(RenderPhase.LEQUAL_DEPTH_TEST)
-                    .writeMaskState(RenderPhase.ALL_MASK)
-                    .build(false)
-    );
+    // timing
+    private static final float TRAVEL_TICKS  = 2.5f; // reach impact quickly
+    private static final float RETRACT_TICKS = 4.0f; // width-only retract window
+    private static final float IMPACT_TICKS  = 5.0f; // flash duration after impact
 
-    public ZeroBeamRenderer(EntityRendererFactory.Context ctx) {
-        super(ctx);
-        this.shadowRadius = 0f;
-    }
+    // spawn/retract radius shaping
+    private static final float SPAWN_THIN   = 0.05f; // start at 25% radius
+    private static final float RETRACT_THIN = 0.05f; // end at 5% radius
 
-    @Override public Identifier getTexture(ZeroBeamEntity e) { return TEX_BEACON; }
+    // server radius range (to infer charge for impact scale)
+    private static final float R_MIN = 0.25f;
+    private static final float R_MAX = 1.40f;
+
+    public ZeroBeamRenderer(EntityRendererFactory.Context ctx) { super(ctx); }
 
     @Override
-    public void render(ZeroBeamEntity beam, float yaw, float tickDelta,
-                       MatrixStack matrices, VertexConsumerProvider buffers, int light) {
-        Vec3d dir = beam.getDir().normalize();
-        float len = (float) beam.getBeamLength();
-        float baseR = (float) beam.getRadius();
-        if (len <= 0.01f || baseR <= 0f) return;
+    public void render(ZeroBeamEntity e, float yaw, float tickDelta,
+                       MatrixStack matrices, VertexConsumerProvider consumers, int light) {
 
-        // Straight, no wobble; thickness already scales with charge via radius provided by entity
-        float life = MathHelper.clamp(beam.getLifeAlpha(), 0f, 1f);
-        float coreAlpha = 0.95f * (life*life);   // bright, but not fully 1 to keep blending nice
-        float haloAlpha = 0.35f * (life*life);   // subtle glow
-
-        float rCore = baseR;                     // square half-width (core)
-        float rHalo = baseR * HALO_SCALE + EPS;  // slightly larger (avoid depth tie)
-
-        // Orient to beam direction
         matrices.push();
-        float yawRad   = (float)Math.atan2(dir.x, dir.z);
-        float pitchRad = (float)(-(Math.asin(dir.y)));
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotation(yawRad));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotation(pitchRad));
 
-        // Scrolling UV like a beacon
-        float tScroll = (beam.age + tickDelta) * 0.02f;
-        float u0 = tScroll;
-        float u1 = tScroll + len * U_REPEAT;
+        Vec3d start = Vec3d.ZERO;
+        Vec3d full  = new Vec3d(e.getDX(), e.getDY(), e.getDZ());
+        double fullLen = full.length();
+        if (fullLen <= 1.0e-6) { matrices.pop(); return; }
+        Vec3d dir = full.normalize();
 
-        // 1) Draw core (4 sides + 2 square caps) — FILLS the volume visually
-        VertexConsumer core = buffers.getBuffer(CORE);
-        Matrix4f m = matrices.peek().getPositionMatrix();
+        // billboard basis
+        Vec3d camPos = MinecraftClient.getInstance().gameRenderer.getCamera().getPos();
+        Vec3d toCam  = camPos.subtract(e.getX(), e.getY(), e.getZ()).normalize();
+        if (toCam.lengthSquared() < 1.0e-6) toCam = new Vec3d(0, 1, 0);
+        Vec3d right = dir.crossProduct(toCam).normalize();
+        if (right.lengthSquared() < 1.0e-6) right = dir.crossProduct(new Vec3d(0,1,0)).normalize();
+        Vec3d up = right.crossProduct(dir).normalize();
 
-        // Sides (X+ / X- / Y+ / Y-)
-        quadPosColTex(core, m,  rCore, -rCore, 0,  rCore,  rCore, 0,  u0, 0f, coreAlpha); // +X near
-        quadPosColTex(core, m,  rCore, -rCore, len,  rCore,  rCore, len,  u1, 1f, coreAlpha); // +X far
+        // time
+        float age  = e.age + tickDelta;
+        float life = e.getMaxLife();
+        float tw   = 0.85f + 0.15f * MathHelper.sin((e.age + tickDelta) * 0.6f);
 
-        quadPosColTex(core, m, -rCore, -rCore, 0, -rCore,  rCore, 0,  u0, 0f, coreAlpha); // -X near
-        quadPosColTex(core, m, -rCore, -rCore, len, -rCore,  rCore, len,  u1, 1f, coreAlpha); // -X far
+        // length travel (keep this!)
+        float head01 = MathHelper.clamp(age / TRAVEL_TICKS, 0f, 1f);
+        Vec3d b = dir.multiply(fullLen * head01);
+        boolean reachedImpact = head01 >= 0.999f;
 
-        quadPosColTex(core, m, -rCore,  rCore, 0,  rCore,  rCore, 0,  u0, 0f, coreAlpha); // +Y near (top)
-        quadPosColTex(core, m, -rCore,  rCore, len,  rCore,  rCore, len,  u1, 1f, coreAlpha); // +Y far
+        // width-only retract near end of life (NO length shrink)
+        float retract01 = 0f;
+        if (age >= life - RETRACT_TICKS) {
+            retract01 = MathHelper.clamp((age - (life - RETRACT_TICKS)) / RETRACT_TICKS, 0f, 1f);
+        }
 
-        quadPosColTex(core, m, -rCore, -rCore, 0,  rCore, -rCore, 0,  u0, 0f, coreAlpha); // -Y near (bottom)
-        quadPosColTex(core, m, -rCore, -rCore, len,  rCore, -rCore, len,  u1, 1f, coreAlpha); // -Y far
+        // overall alpha fade in/out
+        float alphaMul = 1.0f;
+        if (age < 2.0f) alphaMul *= MathHelper.clamp(age / 2.0f, 0f, 1f);
+        float tailLife = life - age;
+        if (tailLife < 3.0f) alphaMul *= MathHelper.clamp(tailLife / 3.0f, 0f, 1f);
 
-        // Caps (square covers) — start (z=0) and end (z=len)
-        quadCap(core, m, -rCore, -rCore, 0f,  rCore,  rCore, 0f, coreAlpha);     // start cap
-        quadCap(core, m, -rCore, -rCore, len, rCore,  rCore, len, coreAlpha);    // end cap
+        // radius shaping:
+        float baseR = e.getRadius();
+        // inflate from thin → full while head travels
+        float spawnInflate = mixSmooth(SPAWN_THIN, 1f, head01);        // 0..1
+        // thin down during retract (width only)
+        float retractThin  = MathHelper.lerp(retract01, 1f, RETRACT_THIN);
+        float widthScale   = spawnInflate * retractThin;
 
-        // 2) Draw faint halo shell (no caps → softer ends)
-        VertexConsumer halo = buffers.getBuffer(HALO);
-        drawBoxHalo(halo, m, len, rHalo, haloAlpha, u0, u1);
+        // head slightly fatter than tail to sell motion
+        float rTailCore = baseR * 0.65f * widthScale * 0.90f;
+        float rHeadCore = baseR * 0.65f * widthScale * 1.05f;
+        float rTailHalo = baseR * 1.35f * widthScale * 0.90f;
+        float rHeadHalo = baseR * 1.35f * widthScale * 1.05f;
+
+        // tail alpha fade behind the head (keeps “travel” feel)
+        float tailFadeGain = smooth01(Math.max(0f, head01 - 0.25f) / 0.75f);
+        float tailFactor    = MathHelper.lerp(1f, 0.18f, tailFadeGain);
+
+        int coreHeadA = (int)(255 * (0.78f * tw * alphaMul));
+        int coreTailA = (int)(coreHeadA * tailFactor);
+        int haloHeadA = (int)(255 * (0.35f * tw * alphaMul));
+        int haloTailA = (int)(haloHeadA * tailFactor);
+
+        VertexConsumer vc = consumers.getBuffer(LAYER);
+        Matrix4f mat = matrices.peek().getPositionMatrix();
+
+        // three crossed planes — unchanged look, now width-retract
+        for (int i = 0; i < 3; i++) {
+            double ang = i * (Math.PI / 3.0);
+            Vec3d r = right.multiply(Math.cos(ang)).add(up.multiply(Math.sin(ang))).normalize();
+
+            // inner hot core
+            drawBeamQuadGradientR(vc, mat, start, b, r,
+                    rTailCore, rHeadCore,
+                    255, 220, 120, coreTailA, coreHeadA);
+
+            // outer orange halo
+            drawBeamQuadGradientR(vc, mat, start, b, r,
+                    rTailHalo, rHeadHalo,
+                    255, 140, 30, haloTailA, haloHeadA);
+        }
+
+        // subtle caps so ends look clean (these also thin during retract)
+        drawDisk(vc, mat, start, right, up, Math.max(rTailHalo * 0.9f, 0.2f), 14,
+                255, 200, 120, (int)(255 * (0.35f * alphaMul)));
+        drawDisk(vc, mat, b, right, up, Math.max(rHeadHalo * 0.9f, 0.2f), 14,
+                255, 235, 180, (int)(255 * (0.55f * alphaMul)));
+
+        // ===== IMPACT FLASH (visual “explosion”, scales with charge) =====
+        if (reachedImpact) {
+            float tSinceImpact = age - TRAVEL_TICKS;
+            float impact01 = MathHelper.clamp(tSinceImpact / IMPACT_TICKS, 0f, 1f);
+            float fade = 1.0f - impact01;
+            if (fade > 0.001f) {
+                // infer charge from beam radius (server encodes charge into radius)
+                float charge01 = MathHelper.clamp((baseR - R_MIN) / (R_MAX - R_MIN), 0f, 1f);
+                float sizeBase = MathHelper.lerp(charge01, 0.85f, 1.80f);
+                float ringR = baseR * sizeBase * (1.00f + impact01 * 1.25f);
+                Vec3d impactPos = dir.multiply(fullLen);
+
+                // bright inner disk (hot white-orange)
+                drawDisk(vc, mat, impactPos, right, up, ringR * 0.75f, 22,
+                        255, 240, 180, (int)(255 * (0.55f * fade * alphaMul)));
+
+                // thin expanding ring (deep orange)
+                drawRing(vc, mat, impactPos, right, up, ringR, ringR * 1.16f, 28,
+                        255, 160, 60, (int)(255 * (0.42f * fade * alphaMul)));
+            }
+        }
 
         matrices.pop();
-        super.render(beam, yaw, tickDelta, matrices, buffers, light);
     }
 
-    /* ---------- helpers (build quads) ---------- */
+    /* ================= helpers ================= */
 
-    // Build side quads with UV along length like a beacon (two triangles per face)
-    private static void quadPosColTex(VertexConsumer vc, Matrix4f m,
-                                      float x0, float y0, float z0,
-                                      float x1, float y1, float z1,
-                                      float uLen0, float vMax, float a) {
-        // z0/z1 differ → along length; map V across thickness (0..1), U along length (uLen0..uLen1 set per call)
-        // We submit as two strips: near (z0) and far (z1)
-        // near strip (z0)
-        vc.vertex(m, x0, y0, z0).color(1f,1f,1f,a).texture(uLen0, 0f).next();
-        vc.vertex(m, x1, y0, z0).color(1f,1f,1f,a).texture(uLen0, vMax).next();
-        vc.vertex(m, x0, y1, z0).color(1f,1f,1f,a).texture(uLen0, 0f).next();
+    // radius + alpha gradient along the quad (tail -> head)
+    private static void drawBeamQuadGradientR(VertexConsumer vc, Matrix4f mat,
+                                              Vec3d a, Vec3d b, Vec3d axisR,
+                                              float rTail, float rHead,
+                                              int cr, int cg, int cb, int tailA, int headA) {
+        Vec3d dir = b.subtract(a).normalize();
+        Vec3d axisU = dir.crossProduct(axisR).normalize();
 
-        vc.vertex(m, x1, y0, z0).color(1f,1f,1f,a).texture(uLen0, vMax).next();
-        vc.vertex(m, x1, y1, z0).color(1f,1f,1f,a).texture(uLen0, vMax).next();
-        vc.vertex(m, x0, y1, z0).color(1f,1f,1f,a).texture(uLen0, 0f).next();
+        Vec3d a0 = a.add(axisR.multiply(-rTail)).add(axisU.multiply(-rTail));
+        Vec3d a1 = a.add(axisR.multiply(+rTail)).add(axisU.multiply(-rTail));
+        Vec3d b1 = b.add(axisR.multiply(+rHead)).add(axisU.multiply(+rHead));
+        Vec3d b0 = b.add(axisR.multiply(-rHead)).add(axisU.multiply(+rHead));
 
-        // far strip (z1) stitched from the same XY extent but using uLen1 is handled by caller using another call
+        vc.vertex(mat, (float)a0.x, (float)a0.y, (float)a0.z).color(cr, cg, cb, tailA).next();
+        vc.vertex(mat, (float)a1.x, (float)a1.y, (float)a1.z).color(cr, cg, cb, tailA).next();
+        vc.vertex(mat, (float)b1.x, (float)b1.y, (float)b1.z).color(cr, cg, cb, headA).next();
+        vc.vertex(mat, (float)b0.x, (float)b0.y, (float)b0.z).color(cr, cg, cb, headA).next();
     }
 
-    // Square cap with simple UVs (centered)
-    private static void quadCap(VertexConsumer vc, Matrix4f m,
-                                float x0, float y0, float z,
-                                float x1, float y1, float zSame,
-                                float a) {
-        float u0 = 0f, v0 = 0f, u1 = 1f, v1 = 1f;
-        vc.vertex(m, x0, y0, z).color(1f,1f,1f,a).texture(u0, v1).next();
-        vc.vertex(m, x0, y1, z).color(1f,1f,1f,a).texture(u0, v0).next();
-        vc.vertex(m, x1, y0, z).color(1f,1f,1f,a).texture(u1, v1).next();
-
-        vc.vertex(m, x0, y1, z).color(1f,1f,1f,a).texture(u0, v0).next();
-        vc.vertex(m, x1, y1, z).color(1f,1f,1f,a).texture(u1, v0).next();
-        vc.vertex(m, x1, y0, z).color(1f,1f,1f,a).texture(u1, v1).next();
+    private static void drawDisk(VertexConsumer vc, Matrix4f mat, Vec3d center, Vec3d right, Vec3d up,
+                                 float radius, int sides, int r, int g, int b, int a) {
+        if (radius <= 0f) return;
+        Vec3d prev = null;
+        for (int i = 0; i <= sides; i++) {
+            double ang = (i / (double)sides) * Math.PI * 2.0;
+            Vec3d p = center.add(right.multiply(Math.cos(ang) * radius)).add(up.multiply(Math.sin(ang) * radius));
+            if (prev != null) {
+                vc.vertex(mat, (float)center.x, (float)center.y, (float)center.z).color(r, g, b, a).next();
+                vc.vertex(mat, (float)prev.x,   (float)prev.y,   (float)prev.z  ).color(r, g, b, a).next();
+                vc.vertex(mat, (float)p.x,      (float)p.y,      (float)p.z     ).color(r, g, b, a).next();
+            }
+            prev = p;
+        }
     }
 
-    private static void drawBoxHalo(VertexConsumer vc, Matrix4f m,
-                                    float len, float r, float a, float u0, float u1) {
-        // +X
-        addPosColorTex(vc, m,  r, -r, 0,   1,1,1,a, u0, 0f);
-        addPosColorTex(vc, m,  r,  r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m,  r, -r, len, 1,1,1,a, u1, 0f);
-        addPosColorTex(vc, m,  r,  r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m,  r,  r, len, 1,1,1,a, u1, 1f);
-        addPosColorTex(vc, m,  r, -r, len, 1,1,1,a, u1, 0f);
-
-        // -X
-        addPosColorTex(vc, m, -r, -r, 0,   1,1,1,a, u0, 0f);
-        addPosColorTex(vc, m, -r, -r, len, 1,1,1,a, u1, 0f);
-        addPosColorTex(vc, m, -r,  r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m, -r,  r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m, -r, -r, len, 1,1,1,a, u1, 0f);
-        addPosColorTex(vc, m, -r,  r, len, 1,1,1,a, u1, 1f);
-
-        // +Y
-        addPosColorTex(vc, m, -r,  r, 0,   1,1,1,a, u0, 0f);
-        addPosColorTex(vc, m, -r,  r, len, 1,1,1,a, u1, 0f);
-        addPosColorTex(vc, m,  r,  r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m,  r,  r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m, -r,  r, len, 1,1,1,a, u1, 0f);
-        addPosColorTex(vc, m,  r,  r, len, 1,1,1,a, u1, 1f);
-
-        // -Y
-        addPosColorTex(vc, m, -r, -r, 0,   1,1,1,a, u0, 0f);
-        addPosColorTex(vc, m,  r, -r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m, -r, -r, len, 1,1,1,a, u1, 0f);
-        addPosColorTex(vc, m,  r, -r, 0,   1,1,1,a, u0, 1f);
-        addPosColorTex(vc, m,  r, -r, len, 1,1,1,a, u1, 1f);
-        addPosColorTex(vc, m, -r, -r, len, 1,1,1,a, u1, 0f);
+    private static void drawRing(VertexConsumer vc, Matrix4f mat, Vec3d center, Vec3d right, Vec3d up,
+                                 float rInner, float rOuter, int sides, int r, int g, int b, int a) {
+        if (rOuter <= rInner) return;
+        Vec3d[] inner = new Vec3d[sides];
+        Vec3d[] outer = new Vec3d[sides];
+        for (int i = 0; i < sides; i++) {
+            double ang = (i / (double)sides) * Math.PI * 2.0;
+            Vec3d ri = right.multiply(Math.cos(ang));
+            Vec3d ui = up.multiply(Math.sin(ang));
+            inner[i] = center.add(ri.multiply(rInner)).add(ui.multiply(rInner));
+            outer[i] = center.add(ri.multiply(rOuter)).add(ui.multiply(rOuter));
+        }
+        for (int i = 0; i < sides; i++) {
+            int j = (i + 1) % sides;
+            putQuad(vc, mat, inner[i], inner[j], outer[j], outer[i], r, g, b, a);
+        }
     }
 
-    private static void addPosColorTex(VertexConsumer vc, Matrix4f m,
-                                       float x, float y, float z,
-                                       float r, float g, float b, float a,
-                                       float u, float v) {
-        vc.vertex(m, x, y, z).color(r,g,b,a).texture(u,v).next();
+    private static void putQuad(VertexConsumer vc, Matrix4f mat,
+                                Vec3d a, Vec3d b, Vec3d c, Vec3d d, int r, int g, int bl, int aCol) {
+        vc.vertex(mat, (float)a.x, (float)a.y, (float)a.z).color(r, g, bl, aCol).next();
+        vc.vertex(mat, (float)b.x, (float)b.y, (float)b.z).color(r, g, bl, aCol).next();
+        vc.vertex(mat, (float)c.x, (float)c.y, (float)c.z).color(r, g, bl, aCol).next();
+        vc.vertex(mat, (float)d.x, (float)d.y, (float)d.z).color(r, g, bl, aCol).next();
     }
+
+    private static float smooth01(float t) {
+        t = MathHelper.clamp(t, 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
+
+    private static float mixSmooth(float lo, float hi, float t01) {
+        return lo + (hi - lo) * smooth01(t01);
+    }
+
+    @Override
+    public Identifier getTexture(ZeroBeamEntity entity) { return null; }
 }

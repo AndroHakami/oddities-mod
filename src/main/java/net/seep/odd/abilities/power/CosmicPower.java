@@ -24,6 +24,10 @@ import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.cosmic.ability.DimensionalSlashAbility;
 import net.seep.odd.abilities.cosmic.ability.OrbitingSwordsAbility;
 
+// NEW: start cooldown locally (replacement for PowerAPI.fire)
+import net.seep.odd.abilities.data.CooldownState;
+import net.seep.odd.abilities.net.PowerNetworking;
+
 import java.util.Map;
 import java.util.UUID;
 
@@ -100,7 +104,7 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
             CosmicNet.sendSlashPing(player);
             CosmicNet.sendCpmSlash(player, 10);              // ~0.5s hold on last frame
             PowerAPI.setHeld(player, "primary", false);
-            PowerAPI.fire(player, "primary");
+            startCooldown(player, "primary", PRIMARY_COOLDOWN_TICKS);
             return;
         }
 
@@ -135,7 +139,7 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
         CosmicNet.sendCpmSlash(player, 10);                  // play "cosmic_slash", hold a bit
 
         PowerAPI.setHeld(player, "primary", false);
-        PowerAPI.fire(player, "primary");
+        startCooldown(player, "primary", PRIMARY_COOLDOWN_TICKS);
     }
 
     @Override
@@ -152,7 +156,7 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
                 st.secFiredThisVolley = true;
                 ORBIT.releaseAndQueueFire(player);
                 PowerAPI.setHeld(player, "secondary", false);
-                PowerAPI.fire(player, "secondary");
+                startCooldown(player, "secondary", SECONDARY_COOLDOWN_TICKS);
             }
             return;
         }
@@ -183,7 +187,7 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
             st.secFiredThisVolley = true;
             ORBIT.releaseAndQueueFire(player);
             PowerAPI.setHeld(player, "secondary", false);
-            PowerAPI.fire(player, "secondary");
+            startCooldown(player, "secondary", SECONDARY_COOLDOWN_TICKS);
         }
     }
 
@@ -243,5 +247,25 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
             });
         }
         public static void pingSlash() { pingTicks = 6; }
+    }
+
+    /* =================== local helper =================== */
+    private static void startCooldown(ServerPlayerEntity player, String slot, int cooldownTicks) {
+        String id = PowerAPI.get(player);
+        if (id == null || id.isEmpty()) return;
+
+        long now = player.getWorld().getTime();
+        String key = id;
+        String lane = "primary";
+
+        switch (slot) {
+            case "secondary" -> { key = id + "#secondary"; lane = "secondary"; }
+            case "third"     -> { key = id + "#third";     lane = "third"; }
+            case "fourth"    -> { key = id + "#fourth";    lane = "fourth"; }
+            default -> { /* primary */ }
+        }
+
+        CooldownState.get(player.getServer()).setLastUse(player.getUuid(), key, now);
+        PowerNetworking.sendCooldown(player, lane, Math.max(0, cooldownTicks));
     }
 }

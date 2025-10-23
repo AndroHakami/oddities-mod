@@ -2,7 +2,6 @@ package net.seep.odd.abilities.power;
 
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.block.Blocks;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
@@ -18,32 +17,29 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
 
-import net.seep.odd.abilities.ghostlings.GhostPackets;
+import net.seep.odd.abilities.ghostlings.GhostPackets; // must be server-safe!
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
-// ⬇️ use YOUR ModEntities (adjust package if different)
 import net.seep.odd.entity.ModEntities;
 
 public final class GhostlingsPower implements Power {
     public static final String MODID = "odd";
 
-    // We do NOT register entities here. ModEntities handles that.
-    static {
-        // Packets are fine to hook here (or in your common init if you prefer).
-        GhostPackets.registerC2S();
+    /** Call this from Oddities.onInitialize() (server/common) */
+    public static void registerCommonHooks() {
+        // Only server-safe things here!
+        GhostPackets.registerC2S(); // MUST NOT reference any client classes internally
 
         // Build ritual: pumpkin atop two white wool -> spawn Ghostling
-        UseBlockCallback.EVENT.register((PlayerEntity player, World world, Hand hand, BlockHitResult hit) -> {
+        UseBlockCallback.EVENT.register((PlayerEntity player, net.minecraft.world.World world, Hand hand, BlockHitResult hit) -> {
             ItemStack held = player.getStackInHand(hand);
-            if (!held.isOf(Items.CARVED_PUMPKIN)) return ActionResult.PASS;
-            if (player.isSneaking()) return ActionResult.PASS;
+            if (!held.isOf(Items.CARVED_PUMPKIN) || player.isSneaking()) return ActionResult.PASS;
 
             BlockPos placeAt = hit.getBlockPos().offset(hit.getSide());
             BlockPos woolTop = placeAt.down();
             BlockPos woolBottom = placeAt.down(2);
 
-            // 1.20.1: canReplace needs a placement context
+            // canReplace needs a placement context (1.20.1)
             BlockHitResult adjustedHit = new BlockHitResult(Vec3d.ofCenter(placeAt), hit.getSide(), placeAt, false);
             ItemPlacementContext ctx = new ItemPlacementContext(new ItemUsageContext(player, hand, adjustedHit));
 
@@ -114,18 +110,14 @@ public final class GhostlingsPower implements Power {
             player.sendMessage(Text.literal("That's not your Ghostling."), true);
             return;
         }
-
-        // Primary = open the per-ghost Manage screen (job-specific controls live there)
-        GhostPackets.openManageServer(player, g);
+        GhostPackets.openManageServer(player, g); // server -> client packet
     }
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
-        // Secondary = open the dashboard listing all of the player's Ghostlings
-        GhostPackets.openDashboardServer(player);
+        GhostPackets.openDashboardServer(player); // server -> client packet
     }
 
-    /* ---------- helper (unchanged but included so you have the exact version) ---------- */
     private static GhostlingEntity raycastGhost(ServerPlayerEntity p, double range) {
         Vec3d eye  = p.getCameraPosVec(1f);
         Vec3d look = p.getRotationVec(1f);

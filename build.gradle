@@ -1,167 +1,160 @@
+
+
 plugins {
 	id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
 }
+java {
+	toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
 
 version = project.mod_version
-group = project.maven_group
+group   = project.maven_group
 
 base {
 	archivesName = project.archives_base_name
 }
 
+/* ── No environment source-set split ───────────────────────────────────────── */
+/* (We’ll keep everything in src/main and guard client refs at compile-time.)  */
+
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
 	mavenCentral()
-	maven { url = "https://api.modrinth.com/maven"
-
-
-	} // PlayerAnimator\
+	maven { url = "https://api.modrinth.com/maven" }
 
 	maven {
 		name = 'GeckoLib'
-		url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+		url  'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
 		content {
 			includeGroupByRegex("software\\.bernie.*")
 			includeGroup("com.eliotlash.mclib")
 		}
 	}
-	maven {
-		name = "tom5454 maven"
-		url = "https://raw.githubusercontent.com/tom5454/maven/main"
-	}
+
+	maven { name = "tom5454 maven"; url = "https://raw.githubusercontent.com/tom5454/maven/main" }
 	maven { url = "https://maven.fabricmc.net" }
 	maven { url = "https://maven.createmod.net" }
 	maven { url = "https://mvn.devos.one/releases" }
 	maven { url = "https://mvn.devos.one/snapshots" }
 	maven { url = "https://maven.tterrag.com" }
 	maven { url = "https://maven.terraformersmc.com/releases" }
-	maven { url = "https://modmaven.dev/com/jozufozu/flywheel/flywheel-fabric-1.20.1/0.6.11-4/" }
-	maven { url = "https://maven.jamieswhiteshirt.com/libs-release" } // Reach Entity Attributes
-	maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven" } // Forge Config API Port
 
-	maven { // Fabric ASM for Porting Lib
+	maven { url = "https://modmaven.dev/com/jozufozu/flywheel/flywheel-fabric-1.20.1/0.6.11-4/" }
+	maven { url = "https://maven.jamieswhiteshirt.com/libs-release" }                  // Reach Entity Attributes
+	maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven" }
+
+
+	maven {                                                                           // Fabric ASM / Porting Lib
 		url = "https://jitpack.io/"
 		content { includeGroupAndSubgroups("com.github") }
 	}
 
-	maven { url = "https://maven.shedaniel.me" } // Cloth Config, REI
+	maven { url = "https://maven.shedaniel.me" }  // Cloth Config, REI
 	maven { url = "https://maven.blamejared.com" } // JEI
 
-	maven { url = "https://maven.terraformersmc.com/releases" }
-
-
-	// 👇 add this
-	maven { url = "https://modmaven.dev" }
+	maven { url = "https://modmaven.dev" } // general ModMaven root
 }
 
-
-
+/* Optional Fabric API datagen helper (keep if you use it) */
 fabricApi {
-	configureDataGeneration {
-		client = true
-	}
+	configureDataGeneration { client = true }
 }
 
 dependencies {
-	// To change the versions see the gradle.properties file
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	// Core
+	minecraft  "com.mojang:minecraft:${project.minecraft_version}"
+	mappings   "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.2+1.20.1"
-	// VoiceAttackAPI (client-side mod)
-	modImplementation("maven.modrinth:voiceattackapi:1.7-1.20.1")
-	compileOnly "com.tom5454.cpm:CustomPlayerModels-API:${project.cpm_api_version}"
-	modRuntimeOnly "com.tom5454.cpm:CustomPlayerModels-Fabric-${project.cpm_mc_version}:${project.cpm_runtime_version}"
-	// Pehkui as a required dependency
-	modImplementation("maven.modrinth:pehkui:3.8.1+1.14.4-1.20.6")
-	modImplementation("com.github.Virtuoel:KanosConfig:0.4.1")
 
-	modImplementation("maven.modrinth:identity-fix:2.8.8-1.20.1")
-
-// Required library
-	modImplementation("maven.modrinth:architectury-api:9.1.12+fabric")
-
-
-
-// Required by VoiceAttackAPI
-	modImplementation("maven.modrinth:cloth-config:11.1.136+fabric")
-
-
-	// create
-	// Create - dependencies are added transitively
-	modImplementation("com.simibubi.create:create-fabric-$minecraft_version:$create_version")
-
-	// Development QOL
-	modLocalRuntime("com.terraformersmc:modmenu:$modmenu_version")
-
-	// lamma guy stuff??
-	include(implementation(annotationProcessor("io.github.llamalad7:mixinextras-fabric:0.5.0")))
-
-
-
-	// Recipe Viewers - Create Fabric supports JEI, REI, and EMI.
-	// See root gradle.properties to choose which to use at runtime.
-	switch (recipe_viewer.toLowerCase(Locale.ROOT)) {
-		case "jei": modLocalRuntime("mezz.jei:jei-$minecraft_version-fabric:$jei_version"); break
-		case "rei": modLocalRuntime("me.shedaniel:RoughlyEnoughItems-fabric:$rei_version"); break
-		case "emi": modLocalRuntime("dev.emi:emi-fabric:$emi_version"); break
-		case "disabled": break
-		default: println("Unknown recipe viewer specified: $recipe_viewer. Must be JEI, REI, EMI, or disabled.")
-	}
-
-
-
-
-	// GeckoLib Animations
-	modImplementation("software.bernie.geckolib:geckolib-fabric-${minecraft_version}:${geckolib_version}")
-	implementation("com.eliotlash.mclib:mclib:20")
-
-
-	// Fabric API. This is technically optional, but you probably want it anyway.
+	// Use ONE Fabric API coordinate
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-	modImplementation("maven.modrinth:voiceattackapi:${voiceattackapi_version}")
-	modImplementation("maven.modrinth:cloth-config:${cloth_config_version}")
 
+	// Create
+	modImplementation "com.simibubi.create:create-fabric-${minecraft_version}:${create_version}"
+
+	// Architectury (required by some deps)
+	modImplementation "maven.modrinth:architectury-api:9.1.12+fabric"
+
+	// VoiceAttack + Cloth Config
+	modImplementation "maven.modrinth:voiceattackapi:${voiceattackapi_version}"
+	modImplementation "maven.modrinth:cloth-config:${cloth_config_version}"
+
+	// CPM (Custom Player Models)
+	compileOnly    "com.tom5454.cpm:CustomPlayerModels-API:${project.cpm_api_version}"
+	modRuntimeOnly "com.tom5454.cpm:CustomPlayerModels-Fabric-${project.cpm_mc_version}:${project.cpm_runtime_version}"
+
+	// Pehkui + KanosConfig
+	modImplementation "maven.modrinth:pehkui:3.7.8+1.14.4-1.20.1"
+	modImplementation "com.github.Virtuoel:KanosConfig:0.4.1"
+
+	// Identity Fix
+	modImplementation "maven.modrinth:identity-fix:2.8.8-1.20.1"
+
+	// GeckoLib + mclib
+	modImplementation "software.bernie.geckolib:geckolib-fabric-${minecraft_version}:${geckolib_version}"
+	implementation  "com.eliotlash.mclib:mclib:20"
+
+	// Dev QoL
+	modLocalRuntime "com.terraformersmc:modmenu:$modmenu_version"
+
+	// MixinExtras (fixed include/annotationProcessor wiring)
+	implementation(include("io.github.llamalad7:mixinextras-fabric:0.5.0"))
+	annotationProcessor("io.github.llamalad7:mixinextras-fabric:0.5.0")
+
+	// Veil (Fabric loader side)
+	// pin an actual published version for 1.20.1 (update as you like)
+
+
+
+	// Recipe viewers (choose one at runtime via gradle.properties)
+	switch (recipe_viewer.toLowerCase(Locale.ROOT)) {
+		case "jei":
+			modLocalRuntime "mezz.jei:jei-$minecraft_version-fabric:$jei_version"; break
+		case "rei":
+			modLocalRuntime "me.shedaniel:RoughlyEnoughItems-fabric:$rei_version"; break
+		case "emi":
+			modLocalRuntime "dev.emi:emi-fabric:$emi_version"; break
+		case "disabled":
+			break
+		default:
+			println "Unknown recipe viewer specified: $recipe_viewer. Must be JEI, REI, EMI, or disabled."
+	}
 }
 
-
+/* ---------- Resource expansion ---------- */
 processResources {
 	inputs.property "version", project.version
-
 	filesMatching("fabric.mod.json") {
 		expand "version": inputs.properties.version
 	}
 }
 
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
-}
-
+/* ---------- Java toolchain + strict compile flags ---------- */
 java {
-	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
-	// if it is present.
-	// If you remove this line, sources will not be generated.
 	withSourcesJar()
-
 	sourceCompatibility = JavaVersion.VERSION_17
 	targetCompatibility = JavaVersion.VERSION_17
 }
 
-
-jar {
-	inputs.property "archivesName", project.base.archivesName
-
-	from("LICENSE") {
-		rename { "${it}_${inputs.properties.archivesName}"}
-	}
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 17
+	it.options.deprecation = true
+	it.options.compilerArgs += [
+			'-Xlint:all',   // includes 'unchecked'
+			'-Xlint:-path'  // mutes noisy classpath warnings
+			// add '-Werror' if you want warnings to fail the build
+	]
 }
 
-// configure the maven publication
+/* ---------- Safety check: prevent client API in common sources ---------- */
+
+
+/* ---------- Jar / publishing ---------- */
+jar {
+	inputs.property "archivesName", project.base.archivesName
+	from("LICENSE") { rename { "${it}_${inputs.properties.archivesName}" } }
+}
+
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {
@@ -169,12 +162,5 @@ publishing {
 			from components.java
 		}
 	}
-
-	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-	repositories {
-		// Add repositories to publish to here.
-		// Notice: This block does NOT have the same function as the block in the top level.
-		// The repositories here will be used for publishing your artifact, not for
-		// retrieving dependencies.
-	}
+	repositories { /* add if you publish */ }
 }

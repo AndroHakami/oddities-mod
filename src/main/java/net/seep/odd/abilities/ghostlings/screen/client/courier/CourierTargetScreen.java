@@ -79,7 +79,7 @@ public class CourierTargetScreen extends Screen {
             int y = Integer.parseInt(yField.getText().trim());
             int z = Integer.parseInt(zField.getText().trim());
             errorMsg = null;
-            GhostPackets.requestConfirm(ghostId, new BlockPos(x, y, z));
+            GhostPackets.Client.requestConfirm(ghostId, new BlockPos(x, y, z));
         } catch (NumberFormatException nfe) {
             errorMsg = "Type integers for X / Y / Z.";
         }

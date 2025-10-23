@@ -54,7 +54,7 @@ public class MinerSelectScreen extends Screen {
         addDrawableChild(ButtonWidget.builder(Text.of("Confirm & Start"), btn -> {
             if (a != null && b != null) {
                 // FIX: use the registered packet / helper
-                GhostPackets.minerBegin(ghostId, a, b);
+                GhostPackets.Client.minerBegin(ghostId, a, b);
                 close();
             } else {
                 toast("Pick both corners first.");

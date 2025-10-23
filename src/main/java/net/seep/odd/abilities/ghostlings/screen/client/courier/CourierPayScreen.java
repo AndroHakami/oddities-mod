@@ -18,7 +18,7 @@ public class CourierPayScreen extends HandledScreen<CourierPayScreenHandler> {
         super.init();
         int cx = x + backgroundWidth/2;
         addDrawableChild(ButtonWidget.builder(Text.of("Start Delivery"), b ->
-                GhostPackets.payAndStart(handler.ghostId)
+                GhostPackets.Client.payAndStart(handler.ghostId)
         ).dimensions(cx-50, y + 60, 100, 20).build());
     }
 

@@ -23,7 +23,7 @@ public class CourierConfirmScreen extends Screen {
 
     @Override protected void init() {
         int cx = width/2, cy = height/2;
-        addDrawableChild(ButtonWidget.builder(Text.of("Proceed to Payment"), b -> GhostPackets.openPayment(ghostId))
+        addDrawableChild(ButtonWidget.builder(Text.of("Proceed to Payment"), b -> GhostPackets.Client.openPayment(ghostId))
                 .dimensions(cx-80, cy+10, 160, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.of("Back"), b -> this.close())
                 .dimensions(cx-40, cy+35, 80, 20).build());

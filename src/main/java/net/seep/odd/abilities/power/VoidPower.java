@@ -1,5 +1,6 @@
 package net.seep.odd.abilities.power;
 
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import net.seep.odd.abilities.voids.VoidSystem;
@@ -24,4 +25,5 @@ public final class VoidPower implements Power {
 
     @Override public long cooldownTicks() { return 100; }
     @Override public long secondaryCooldownTicks() { return 0; }
+
 }

@@ -25,6 +25,7 @@ import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
 import net.seep.odd.abilities.icewitch.IceSpellAreaEntity;
@@ -37,6 +38,7 @@ import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
+import net.seep.odd.abilities.rat.PehkuiUtil;
 import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
@@ -60,6 +62,7 @@ import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.car.radio.RadioTracksInit;
 import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
+import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 
 import net.seep.odd.item.ModItemGroups;
@@ -69,6 +72,7 @@ import net.seep.odd.particles.OddParticles;
 import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sound.ModSounds;
 
+import net.seep.odd.status.ModStatusEffects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.GeckoLib;
@@ -84,6 +88,7 @@ public final class Oddities implements ModInitializer {
 		ModBlocks.registerModBlocks();
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
+		ModStatusEffects.init();
 
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
 		net.seep.odd.util.TickScheduler.init();
@@ -119,6 +124,10 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new IceWitchPower());
 		Powers.register(new SpottedPhantomPower());
 		Powers.register(new ZeroSuitPower());
+		Powers.register(new LookerPower());
+		Powers.register(new RatPower());
+		Powers.register(new SuperChargePower());
+		Powers.register(new GamblePower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -180,11 +189,12 @@ public final class Oddities implements ModInitializer {
 		VoidSystem.init();
 
 		// Artificer
-		ArtificerCondenserRegistry.registerCommon();
+		ArtificerCondenserRegistry.registerCommon();  // delegates to ArtificerCreateInit.register()
 		ArtificerFluids.registerAll();
 		ArtificerMixerRegistry.registerCommon();
 		MixerNet.registerServer();
 		net.seep.odd.util.CrystalTrapCleaner.init();
+
 
 		// Spectral Phase
 		net.seep.odd.abilities.spectral.SpectralNet.registerServer();
@@ -226,10 +236,12 @@ public final class Oddities implements ModInitializer {
 
 
 		// Cosmic Sword
-		CosmicNet.register();
+		CosmicNet.registerServer();
 
 		// Ghostlings
-		net.seep.odd.abilities.ghostlings.registry.GhostScreens.register();
+		net.seep.odd.abilities.power.GhostlingsPower.registerCommonHooks();
+		GhostPackets.registerC2S();
+
 		net.seep.odd.abilities.ghostlings.GhostPackets.registerC2S();
 		GhostCargoScreenHandler.TYPE = net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry.registerSimple(
 				new Identifier("odd","ghost_cargo"), GhostCargoScreenHandler::new);
@@ -245,6 +257,31 @@ public final class Oddities implements ModInitializer {
 		// Zero Gravity
 
 		net.seep.odd.abilities.zerosuit.ZeroSuitNet.initCommon();
+
+
+		// Looker
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
+			for (var p : server.getPlayerManager().getPlayerList()) {
+				net.seep.odd.abilities.power.LookerPower.serverTick(p);
+			}
+		});
+
+		net.seep.odd.abilities.power.LookerPower.installPersistHooks();
+
+		// Rat
+		RatPower.bootstrap();
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+				Power pow = Powers.get(/* PowerAPI.get(p) or your accessor */ PowerAPI.get(p));
+				if (pow instanceof RatPower)       RatPower.serverTick(p);
+
+				// …other powers…
+			}
+		});
+
+		// Supercharge
+		 SuperEntities.register();
+		 SuperChargePower.bootstrap();
 
 
 

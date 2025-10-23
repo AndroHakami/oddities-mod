@@ -3,24 +3,29 @@ package net.seep.odd.abilities;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+
 import net.seep.odd.abilities.data.CooldownState;
 import net.seep.odd.abilities.data.PowerState;
 import net.seep.odd.abilities.net.PowerNetworking;
+
 import net.seep.odd.abilities.power.DeferredCooldownPower;
 import net.seep.odd.abilities.power.SecondaryDuringCooldown;
 import net.seep.odd.abilities.power.Power;
 import net.seep.odd.abilities.power.Powers;
+
+// charge + hold/release
+import net.seep.odd.abilities.data.ChargeState;
+import net.seep.odd.abilities.power.ChargedPower;
+import net.seep.odd.abilities.power.HoldReleasePower;
 
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * Backwards-compatible PowerAPI with optional "defer cooldown until fire".
- * If a Power implements DeferredCooldownPower and returns true for a slot,
- * we DO NOT start cooldown in activate*(...), and expect the power to call
- * PowerAPI.fire(player, slot) when the action actually occurs.
+ * Non-deferred powers behave the same as before.
  *
- * Non-deferred powers are unaffected.
+ * Extended: charge-based slots + hold/release hooks.
  */
 public final class PowerAPI {
     private PowerAPI() {}
@@ -28,8 +33,8 @@ public final class PowerAPI {
     /* ================= in-use / held flags (lightweight, optional) ================= */
 
     private static final class UseFlags {
-        boolean primaryHeld, secondaryHeld, thirdHeld;
-        boolean primaryInUse, secondaryInUse, thirdInUse;
+        boolean primaryHeld, secondaryHeld, thirdHeld, fourthHeld;
+        boolean primaryInUse, secondaryInUse, thirdInUse, fourthInUse;
     }
     private static final Map<UUID, UseFlags> USE = new Object2ObjectOpenHashMap<>();
     private static UseFlags U(ServerPlayerEntity p) { return USE.computeIfAbsent(p.getUuid(), u -> new UseFlags()); }
@@ -38,9 +43,10 @@ public final class PowerAPI {
     public static void beginUse(ServerPlayerEntity player, String slot) {
         UseFlags f = U(player);
         switch (slot) {
-            case "primary"   -> f.primaryInUse = true;
+            case "primary"   -> f.primaryInUse   = true;
             case "secondary" -> f.secondaryInUse = true;
-            case "third"     -> f.thirdInUse = true;
+            case "third"     -> f.thirdInUse     = true;
+            case "fourth"    -> f.fourthInUse    = true;
         }
     }
     /** Mark that the button is being held (for UI/logic). */
@@ -50,48 +56,63 @@ public final class PowerAPI {
             case "primary"   -> f.primaryHeld   = held;
             case "secondary" -> f.secondaryHeld = held;
             case "third"     -> f.thirdHeld     = held;
+            case "fourth"    -> f.fourthHeld    = held;
         }
     }
-    /** Consumers if you need them. */
     public static boolean isHeld(ServerPlayerEntity p, String slot) {
         UseFlags f = U(p);
         return switch (slot) {
-            case "primary" -> f.primaryHeld;
+            case "primary"   -> f.primaryHeld;
             case "secondary" -> f.secondaryHeld;
-            case "third" -> f.thirdHeld;
+            case "third"     -> f.thirdHeld;
+            case "fourth"    -> f.fourthHeld;
             default -> false;
         };
     }
     public static boolean isInUse(ServerPlayerEntity p, String slot) {
         UseFlags f = U(p);
         return switch (slot) {
-            case "primary" -> f.primaryInUse;
+            case "primary"   -> f.primaryInUse;
             case "secondary" -> f.secondaryInUse;
-            case "third" -> f.thirdInUse;
+            case "third"     -> f.thirdInUse;
+            case "fourth"    -> f.fourthInUse;
             default -> false;
         };
     }
 
-    /** Called by a power when the action actually "fires": applies cooldown now. */
-    public static void fire(ServerPlayerEntity player, String slot) {
+    /* ================= HOLD / RELEASE (additive hooks) ================= */
+
+    /** Call from your client-side keybind when a slot starts being held (C2S). */
+    public static void holdStart(ServerPlayerEntity player, String slot) {
         String id = get(player);
         if (id == null || id.isEmpty()) return;
-        Power power = Powers.get(id);
-        if (power == null) return;
+        Power p = Powers.get(id);
+        if (p instanceof HoldReleasePower hr) hr.onHoldStart(player, slot);
+        beginUse(player, slot);
+        setHeld(player, slot, true);
+    }
 
-        long now = player.getWorld().getTime();
-        String key = id;
-        long cd = 0L;
-        String lane = "primary";
+    /** Call periodically while held (e.g., every client tick via C2S, or server tick count). */
+    public static void holdTick(ServerPlayerEntity player, String slot, int heldTicks) {
+        String id = get(player);
+        if (id == null || id.isEmpty()) return;
+        Power p = Powers.get(id);
+        if (p instanceof HoldReleasePower hr) hr.onHoldTick(player, slot, heldTicks);
+    }
 
+    /** Call when released (C2S). */
+    public static void holdRelease(ServerPlayerEntity player, String slot, int heldTicks, boolean canceled) {
+        String id = get(player);
+        if (id == null || id.isEmpty()) return;
+        Power p = Powers.get(id);
+        if (p instanceof HoldReleasePower hr) hr.onHoldRelease(player, slot, heldTicks, canceled);
+        setHeld(player, slot, false);
         switch (slot) {
-            case "secondary" -> { key = id + "#secondary"; cd = Math.max(0L, power.secondaryCooldownTicks()); lane = "secondary"; U(player).secondaryInUse = false; }
-            case "third"     -> { key = id + "#third";     cd = Math.max(0L, power.thirdCooldownTicks());     lane = "third";     U(player).thirdInUse     = false; }
-            default          -> {                            cd = Math.max(0L, power.cooldownTicks());         lane = "primary";   U(player).primaryInUse   = false; }
+            case "primary"   -> U(player).primaryInUse   = false;
+            case "secondary" -> U(player).secondaryInUse = false;
+            case "third"     -> U(player).thirdInUse     = false;
+            case "fourth"    -> U(player).fourthInUse    = false;
         }
-
-        CooldownState.get(player.getServer()).setLastUse(player.getUuid(), key, now);
-        PowerNetworking.sendCooldown(player, lane, cd);
     }
 
     /* ================= assignment & basic getters ================= */
@@ -102,7 +123,9 @@ public final class PowerAPI {
             Power p = Powers.get(id);
             if (p != null) p.onAssigned(player);
         }
+        // Sends id AND (now) charge snapshots for any charge slots
         PowerNetworking.syncTo(player, id);
+
         // clear use flags on swap
         USE.remove(player.getUuid());
     }
@@ -122,7 +145,41 @@ public final class PowerAPI {
         USE.remove(player.getUuid());
     }
 
-    /* ================= activations (with deferral, backward-compatible) ================= */
+    /* ================== charge helpers (additive) ================== */
+
+    private static boolean slotUsesCharges(Power power, String slot) {
+        return (power instanceof ChargedPower cp) && cp.usesCharges(slot);
+    }
+
+    /** Try to consume a charge for this slot; returns true if consumed and schedules its lane recharge. */
+    private static boolean tryConsumeCharge(ServerPlayerEntity player, Power power, String id, String slot) {
+        if (!(power instanceof ChargedPower cp) || !cp.usesCharges(slot)) return true; // not charge-based
+
+        int  max = Math.max(1, cp.maxCharges(slot));
+        long now = player.getWorld().getTime();
+        String key = id + "#" + slot;
+
+        // lazy regen on read
+        ChargeState cs = ChargeState.get(player.getServer());
+        cs.tick(key, player.getUuid(), max, now);
+
+        int have = cs.get(key, player.getUuid(), max);
+        if (have <= 0) {
+            player.sendMessage(Text.literal("No charges."), true);
+            return false;
+        }
+
+        long rt = Math.max(0L, cp.rechargeTicks(slot));
+        cs.consume(key, player.getUuid(), max, now, rt);
+
+        // send fresh snapshot so HUD drops immediately and knows nextReady
+        ChargeState.Snapshot snap = cs.snapshot(key, player.getUuid(), max, now);
+        PowerNetworking.sendCharges(player, slot, snap.have, snap.max, snap.recharge, snap.nextReady, snap.now);
+
+        return true;
+    }
+
+    /* ================= activations (with charges + deferral) ================= */
 
     /** Primary */
     public static void activate(ServerPlayerEntity player) {
@@ -137,6 +194,14 @@ public final class PowerAPI {
             return;
         }
 
+        // Charge-based primary: consume one and run without cooldown
+        if (slotUsesCharges(power, "primary")) {
+            if (!tryConsumeCharge(player, power, id, "primary")) return;
+            power.activate(player);
+            return;
+        }
+
+        // Original cooldown path
         long now = player.getWorld().getTime();
         long cd  = Math.max(0L, power.cooldownTicks());
 
@@ -173,6 +238,13 @@ public final class PowerAPI {
             return;
         }
 
+        // Charge-based secondary
+        if (slotUsesCharges(power, "secondary")) {
+            if (!tryConsumeCharge(player, power, id, "secondary")) return;
+            power.activateSecondary(player);
+            return;
+        }
+
         long now = player.getWorld().getTime();
         long cd  = Math.max(0L, power.secondaryCooldownTicks());
 
@@ -183,10 +255,9 @@ public final class PowerAPI {
 
         boolean defer = (power instanceof DeferredCooldownPower d) && d.deferSecondaryCooldown();
 
-        // Allow certain powers to RECEIVE presses during cooldown (e.g., recall)
         if (elapsed < cd) {
             if (power instanceof SecondaryDuringCooldown) {
-                power.activateSecondary(player); // power takes responsibility; no cooldown mutation here
+                power.activateSecondary(player);
                 return;
             }
             long remaining = cd - elapsed;
@@ -215,6 +286,13 @@ public final class PowerAPI {
             return;
         }
 
+        // Charge-based third
+        if (slotUsesCharges(power, "third")) {
+            if (!tryConsumeCharge(player, power, id, "third")) return;
+            power.activateThird(player);
+            return;
+        }
+
         long now = player.getWorld().getTime();
         long cd  = Math.max(0L, power.thirdCooldownTicks());
 
@@ -239,6 +317,46 @@ public final class PowerAPI {
         }
     }
 
+    /** Fourth */
+    public static void activateFourth(ServerPlayerEntity player) {
+        String id = get(player);
+        if (id == null || id.isEmpty()) {
+            player.sendMessage(Text.literal("You have no power assigned."), true);
+            return;
+        }
+        Power power = Powers.get(id);
+        if (power == null) {
+            player.sendMessage(Text.literal("Unknown power: " + id), true);
+            return;
+        }
+
+        // Charge-based fourth
+        if (slotUsesCharges(power, "fourth")) {
+            if (!tryConsumeCharge(player, power, id, "fourth")) return;
+            power.activateFourth(player);
+            return;
+        }
+
+        long now = player.getWorld().getTime();
+        long cd  = Math.max(0L, power.fourthCooldownTicks());
+
+        String cdKey = id + "#fourth";
+        CooldownState cds = CooldownState.get(player.getServer());
+        long last    = cds.getLastUse(player.getUuid(), cdKey);
+        long elapsed = now - last;
+
+        if (elapsed < cd) {
+            long remaining = cd - elapsed;
+            player.sendMessage(Text.literal(String.format("Fourth cooling: %.1fs", remaining / 20.0)), true);
+            return;
+        }
+
+        power.activateFourth(player);
+
+        cds.setLastUse(player.getUuid(), cdKey, now);
+        PowerNetworking.sendCooldown(player, "fourth", cd);
+    }
+
     /* ================= cooldown queries ================= */
 
     /** Original helper kept for compatibility (primary slot). */
@@ -255,7 +373,7 @@ public final class PowerAPI {
         return Math.max(0L, rem);
     }
 
-    /** New overload: check "primary", "secondary", or "third". */
+    /** New overload: "primary", "secondary", "third", "fourth". */
     public static long getRemainingCooldownTicks(ServerPlayerEntity player, String which) {
         String id = get(player);
         if (id == null || id.isEmpty()) return 0L;
@@ -264,11 +382,13 @@ public final class PowerAPI {
 
         long now = player.getWorld().getTime();
         String key = id;
-        long cd = 0L;
+        long cd;
         if ("secondary".equals(which)) {
             key = id + "#secondary"; cd = Math.max(0L, p.secondaryCooldownTicks());
         } else if ("third".equals(which)) {
             key = id + "#third";     cd = Math.max(0L, p.thirdCooldownTicks());
+        } else if ("fourth".equals(which)) {
+            key = id + "#fourth";    cd = Math.max(0L, p.fourthCooldownTicks());
         } else {
             cd = Math.max(0L, p.cooldownTicks());
         }

@@ -13,6 +13,8 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.particle.DefaultParticleType;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -25,6 +27,8 @@ import net.minecraft.world.World;
 
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.abilities.client.ClientPowerHolder;
+import net.seep.odd.abilities.spotted.BuddyPersistentState;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 import net.seep.odd.particles.OddParticles;
@@ -35,40 +39,32 @@ import java.util.*;
  * Spotted Phantom
  * - Primary: 12s invis (attack cancels). Random decoy prints while invis (visual only).
  * - Secondary: toggle trail (prints ~every block moved). Each print lingers ~1s with dmg+slow.
- * - Third: summon/recall Phantom Buddy (12x12 storage).
+ * - Third: summon/recall Phantom Buddy (persistent, recall/summon survives logout).
  *
- * NOTE: server tick hookup is done in SpottedNet.initCommon().
+ * Server tick hookup is still done in SpottedNet.initCommon().
  */
 public final class SpottedPhantomPower implements Power {
 
-    /* ======================= config ======================= */
-    public static final int INVIS_TICKS = 20 * 12; // 12 seconds
+    public static final int INVIS_TICKS = 20 * 12; // 12s
 
-    // Decoy tracks while invisible (visual only)
     private static final int   DECOY_EVERY_TICKS = 2;
     private static final float DECOY_CHANCE      = 0.55f;
     private static final float DECOY_RADIUS_MIN  = 0.7f;
     private static final float DECOY_RADIUS_MAX  = 2.2f;
 
-    // Trail spawn: one footprint about every block moved (horizontal distance)
-    private static final double STEP_DISTANCE_BLOCKS = 0.9; // 1.0 = exact block cadence
+    private static final double STEP_DISTANCE_BLOCKS = 0.9;
+    private static final double FOOT_OFFSET = 0.22;
+    private static final double FOOT_BACK   = 0.22;
 
-    // Footprint placement offsets (relative to player facing)
-    private static final double FOOT_OFFSET      = 0.22; // left/right offset from center
-    private static final double FOOT_BACK        = 0.22; // a touch behind player
+    private static final int   TRAIL_LINGER_TICKS       = 20;
+    private static final float STEP_AOE                 = 0.70f;
+    private static final float STEP_DMG                 = 1.0f;
+    private static final int   STEP_SLOW_T              = 20;
+    private static final int   STEP_SLOW_A              = 0;
+    private static final int   STEP_HURT_COOLDOWN_TICKS = 4;
 
-    // Lingering damage per footprint (~1s each)
-    private static final int    TRAIL_LINGER_TICKS       = 20; // 1s
-    private static final float  STEP_AOE                 = 0.70f;
-    private static final float  STEP_DMG                 = 1.0f; // half heart per window
-    private static final int    STEP_SLOW_T              = 20;   // ~1s
-    private static final int    STEP_SLOW_A              = 0;    // Slowness I
-    private static final int    STEP_HURT_COOLDOWN_TICKS = 4;    // per-target cooldown
-
-    // particle type (client renders ground-aligned; we send zero spread)
     private static final DefaultParticleType STEPS = OddParticles.SPOTTED_STEPS;
 
-    /* ======================= power meta ======================= */
     @Override public String id() { return "spotted_phantom"; }
     @Override public boolean hasSlot(String slot) {
         return "primary".equals(slot) || "secondary".equals(slot) || "third".equals(slot);
@@ -104,63 +100,49 @@ public final class SpottedPhantomPower implements Power {
         return new Identifier(Oddities.MOD_ID, "textures/gui/overview/spotted_phantom.png");
     }
 
-    /* ======================= per-player state ======================= */
+    /* ---------- per-player state (no buddyId anymore; mapping is persistent) ---------- */
     private static final class St {
         boolean invisActive;
         int invisLeftTicks;
 
         boolean trailOn;
 
-        UUID buddyId; // entity uuid if spawned
-
-        // Trail distance bookkeeping
         boolean hasTrailAnchor = false;
         double  trailAnchorX, trailAnchorZ;
-        boolean leftNext = true; // alternate foot
+        boolean leftNext = true;
 
-        // Lingering damage zones
         final Deque<Spot> spots = new ArrayDeque<>();
     }
     private static final Map<UUID, St> DATA = new Object2ObjectOpenHashMap<>();
     private static St S(ServerPlayerEntity p) { return DATA.computeIfAbsent(p.getUuid(), u -> new St()); }
 
-    /** lingering spot with expiry tick */
     private static final class Spot {
         final Vec3d pos;
         final int untilTick;
         Spot(Vec3d pos, int untilTick) { this.pos = pos; this.untilTick = untilTick; }
     }
-
-    /** Per-target “recently hurt by steps” cooldown. */
     private static final Map<UUID, Integer> STEP_COOLDOWN_UNTIL_TICK = new Object2ObjectOpenHashMap<>();
 
-    /** Exposed so SpottedNet can check. */
     public static boolean isCurrentPower(ServerPlayerEntity p) {
         var pow = Powers.get(PowerAPI.get(p));
         return pow instanceof SpottedPhantomPower;
     }
 
-    /* ======================= inputs ======================= */
+    /* ---------- inputs ---------- */
     @Override
     public void activate(ServerPlayerEntity p) {
         if (!isCurrentPower(p)) return;
         St st = S(p);
-
-        if (st.invisActive) {
-            stopInvis(p, st, false);
-            return;
-        }
-        startInvis(p, st);
+        if (st.invisActive) stopInvis(p, st, false);
+        else startInvis(p, st);
     }
 
     @Override
     public void activateSecondary(ServerPlayerEntity p) {
         if (!isCurrentPower(p)) return;
         St st = S(p);
-
         st.trailOn = !st.trailOn;
-        if (!st.trailOn) st.hasTrailAnchor = false; // reset anchor when turning off
-
+        if (!st.trailOn) st.hasTrailAnchor = false;
         p.sendMessage(Text.literal("Runner Steps: " + (st.trailOn ? "ON" : "OFF")), true);
         p.getWorld().playSound(null, p.getBlockPos(),
                 SoundEvents.BLOCK_FURNACE_FIRE_CRACKLE, SoundCategory.PLAYERS,
@@ -170,11 +152,10 @@ public final class SpottedPhantomPower implements Power {
     @Override
     public void activateThird(ServerPlayerEntity p) {
         if (!isCurrentPower(p)) return;
-        St st = S(p);
-        toggleBuddy(p, st);
+        toggleBuddy(p);
     }
 
-    /* ======================= server tick (called by SpottedNet) ======================= */
+    /* ---------- server tick (called by SpottedNet) ---------- */
     public static void serverTick(ServerPlayerEntity p) {
         if (!isCurrentPower(p)) return;
         World w = p.getWorld();
@@ -182,7 +163,6 @@ public final class SpottedPhantomPower implements Power {
 
         St st = S(p);
 
-        // Invis upkeep + decoy prints (visual only) — ZERO SPREAD so they appear exactly where we compute
         if (st.invisActive) {
             st.invisLeftTicks--;
             if (st.invisLeftTicks <= 0) {
@@ -192,25 +172,23 @@ public final class SpottedPhantomPower implements Power {
                 double a = p.getRandom().nextDouble() * Math.PI * 2;
                 double x = p.getX() + Math.cos(a) * r;
                 double z = p.getZ() + Math.sin(a) * r;
-                double y = p.getY() + 0.02; // feet + tiny lift
+                double y = p.getY() + 0.02;
 
                 sw.spawnParticles(STEPS, x, y, z, 1, 0, 0, 0, 0.0);
                 sw.spawnParticles(p, STEPS, false, x, y, z, 1, 0, 0, 0, 0.0);
             }
         }
 
-        // Trail spawn based on distance moved (~1 block per print), ONLY when not invisible
         if (st.trailOn && !st.invisActive && p.isOnGround()) {
             spawnFootprintsByDistance(sw, p, st);
         } else if (!p.isOnGround() || st.invisActive || !st.trailOn) {
-            st.hasTrailAnchor = false; // reset anchor when airborne / invis / disabled
+            st.hasTrailAnchor = false;
         }
 
-        // Apply lingering damage areas
         processTrailAreas(sw, p, st);
     }
 
-    /* ======================= internals ======================= */
+    /* ---------- invis ---------- */
     private static void startInvis(ServerPlayerEntity p, St st) {
         st.invisActive = true;
         st.invisLeftTicks = INVIS_TICKS;
@@ -219,7 +197,6 @@ public final class SpottedPhantomPower implements Power {
         p.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, INVIS_TICKS, 0, true, false, false));
         p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED,        INVIS_TICKS, 1, true, false, false));
 
-        // NEW: mark as spotted-invisible (client-only rendering gate)
         net.seep.odd.abilities.spotted.SpottedNet.broadcastSpottedInvis(p, true);
 
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_AMBIENT, SoundCategory.PLAYERS, 0.7f, 1.35f);
@@ -234,15 +211,13 @@ public final class SpottedPhantomPower implements Power {
         p.removeStatusEffect(StatusEffects.INVISIBILITY);
         p.removeStatusEffect(StatusEffects.SPEED);
 
-        // NEW: unmark
         net.seep.odd.abilities.spotted.SpottedNet.broadcastSpottedInvis(p, false);
 
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.6f, natural ? 1.0f : 0.8f);
         p.sendMessage(Text.literal("Spotted Phantom: Visible"), true);
     }
 
-
-    /** Spawn prints when the player has moved ~1 block horizontally since the last print. */
+    /* ---------- trail ---------- */
     private static void spawnFootprintsByDistance(ServerWorld sw, ServerPlayerEntity p, St st) {
         double px = p.getX(), pz = p.getZ();
 
@@ -257,17 +232,14 @@ public final class SpottedPhantomPower implements Power {
         double dist = Math.sqrt(dx*dx + dz*dz);
         if (dist < STEP_DISTANCE_BLOCKS) return;
 
-        // advance anchor by step distance
         double ratio = STEP_DISTANCE_BLOCKS / dist;
         st.trailAnchorX += dx * ratio;
         st.trailAnchorZ += dz * ratio;
 
-        // one footprint at the anchor
         spawnSingleFootprintAt(sw, p, st, st.trailAnchorX, st.trailAnchorZ, st.leftNext);
         st.leftNext = !st.leftNext;
     }
 
-    /** Spawns one footprint (left/right) and adds a 1s lingering spot. ZERO SPREAD so it won't scatter. */
     private static void spawnSingleFootprintAt(ServerWorld sw, ServerPlayerEntity p, St st,
                                                double baseX, double baseZ, boolean leftFoot) {
         double yaw = Math.toRadians(p.getYaw());
@@ -281,25 +253,21 @@ public final class SpottedPhantomPower implements Power {
         double sideX = -sin * FOOT_OFFSET * sideSign;
         double sideZ =  cos * FOOT_OFFSET * sideSign;
 
-        double y = p.getY() + 0.02; // feet + tiny lift
+        double y = p.getY() + 0.02;
 
         double fx = baseX + backX + sideX;
         double fz = baseZ + backZ + sideZ;
 
-        // Visuals — **zero spread** so it doesn't scatter around the feet
         sw.spawnParticles(STEPS, fx, y, fz, 1, 0, 0, 0, 0.0);
         sw.spawnParticles(p, STEPS, false, fx, y, fz, 1, 0, 0, 0, 0.0);
 
-        // Lingering damage spot (~1s)
         int until = p.age + TRAIL_LINGER_TICKS;
         st.spots.addLast(new Spot(new Vec3d(fx, y, fz), until));
         while (st.spots.size() > 256) st.spots.removeFirst();
     }
 
-    /** Process lingering areas for damage + slow with per-target cooldown. */
     private static void processTrailAreas(ServerWorld sw, ServerPlayerEntity src, St st) {
         int now = src.age;
-        // prune expired
         while (!st.spots.isEmpty() && st.spots.peekFirst().untilTick <= now) {
             st.spots.removeFirst();
         }
@@ -329,29 +297,46 @@ public final class SpottedPhantomPower implements Power {
         }
     }
 
-    private static void toggleBuddy(ServerPlayerEntity p, St st) {
-        ServerWorld sw = (ServerWorld) p.getWorld();
+    /* ---------- summon / recall with persistence ---------- */
+    private static void toggleBuddy(ServerPlayerEntity p) {
+        ServerWorld target = (ServerWorld) p.getWorld();
+        var server = p.getServer();
+        var state  = BuddyPersistentState.get(server);
+        var ref    = state.get(p.getUuid());
 
-        // recall if exists
-        if (st.buddyId != null) {
-            var ent = sw.getEntity(st.buddyId);
-            if (ent instanceof PhantomBuddyEntity pb && pb.isAlive()) {
-                pb.recallToOwnerAndDrop(p);
-                st.buddyId = null;
-                p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_FOX_SNIFF, SoundCategory.PLAYERS, 0.7f, 1.2f);
-                p.sendMessage(Text.literal("Phantom Buddy: Recalled"), true);
-                return;
+        PhantomBuddyEntity found = null;
+        if (ref != null) {
+            RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, ref.dimension);
+            ServerWorld refWorld = server.getWorld(key);
+            if (refWorld != null) {
+                var e = refWorld.getEntity(ref.entityUuid);
+                if (e instanceof PhantomBuddyEntity pb && pb.isAlive()) {
+                    found = pb;
+                }
             }
-            st.buddyId = null;
         }
 
-        // spawn new
-        PhantomBuddyEntity buddy = ModEntities.PHANTOM_BUDDY.create(sw);
+        if (found != null) {
+            // Recall: persist stash and despawn; clear mapping
+            found.recallToOwnerAndDrop(p);
+            state.clear(p.getUuid());
+            p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_FOX_SNIFF, SoundCategory.PLAYERS, 0.7f, 1.2f);
+            p.sendMessage(Text.literal("Phantom Buddy: Recalled"), true);
+            return;
+        }
+
+        // Not found (or never summoned): spawn new and record mapping
+        int gen = state.nextGen(p.getUuid());
+
+        PhantomBuddyEntity buddy = ModEntities.PHANTOM_BUDDY.create(target);
         if (buddy == null) return;
+
         buddy.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ(), p.getYaw(), p.getPitch());
-        buddy.setOwner(p);
-        sw.spawnEntity(buddy);
-        st.buddyId = buddy.getUuid();
+        buddy.setOwner(p);              // loads saved inventory for this owner
+        buddy.setGenerationTag(gen);    // important: entity self-validates vs state
+        target.spawnEntity(buddy);
+
+        state.set(p.getUuid(), buddy.getUuid(), target.getRegistryKey().getValue(), gen);
 
         p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.ENTITY_FOX_AMBIENT, SoundCategory.PLAYERS, 0.7f, 1.0f);
         p.sendMessage(Text.literal("Phantom Buddy: Summoned"), true);
@@ -367,9 +352,8 @@ public final class SpottedPhantomPower implements Power {
         }
     }
 
-    /* ======================= interaction guards ======================= */
+    /* ---------- interaction guards ---------- */
     static {
-        // Attacking cancels invis but still allows the action
         AttackEntityCallback.EVENT.register((player, w, hand, entity, hit) -> {
             if (player instanceof ServerPlayerEntity sp && isCurrentPower(sp)) {
                 St st = S(sp);
@@ -386,11 +370,11 @@ public final class SpottedPhantomPower implements Power {
         });
     }
 
-    /* ======================= CLIENT: compact HUD (seconds left) ======================= */
+    /* ---------- CLIENT HUD ---------- */
     @Environment(EnvType.CLIENT)
     public static final class Client {
         private Client() {}
-        private static boolean INIT = false; // prevents double HUD
+        private static boolean INIT = false;
 
         public static void init() {
             if (INIT) return;
@@ -400,8 +384,10 @@ public final class SpottedPhantomPower implements Power {
                 MinecraftClient mc = MinecraftClient.getInstance();
                 if (mc.player == null) return;
 
+                if (!"spotted_phantom".equals(ClientPowerHolder.get())) return;
+
                 StatusEffectInstance eff = mc.player.getStatusEffect(StatusEffects.INVISIBILITY);
-                if (eff == null) return;
+                if (eff == null || !eff.isAmbient()) return;
 
                 int secs = Math.max(0, eff.getDuration() / 20);
                 if (secs <= 0) return;

@@ -36,11 +36,11 @@ import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 import net.seep.odd.abilities.spotted.SpottedStorageState;
-import net.seep.odd.abilities.spotted.PhantomBuddyScreenHandler;
+import net.seep.odd.abilities.spotted.BuddyPersistentState;
 
 import java.util.UUID;
 
-/** Friendly stash-carrying companion (4×4 storage = 16 slots). */
+/** Friendly stash-carrying companion (4×4 storage = 16 slots) with persistence. */
 public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
 
     public static final int BUDDY_SIZE = 4 * 4;
@@ -52,6 +52,9 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
 
     /** Guard so recall doesn't trigger death cleanup logic. */
     private boolean recalling = false;
+
+    /** Persistence generation (prevents dupes when an old body unload/reloads later). */
+    private int generationTag = 0;
 
     public PhantomBuddyEntity(EntityType<? extends TameableEntity> type, World world) {
         super(type, world);
@@ -75,7 +78,7 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
         this.goalSelector.add(8, new LookAtEntityGoal(this, PlayerEntity.class, 8.0f));
     }
 
-    /* ---------- GUI open ---------- */
+    /* ---------- GUI ---------- */
 
     @Override
     public ActionResult interactMob(PlayerEntity player, Hand hand) {
@@ -92,7 +95,7 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
         return super.interactMob(player, hand);
     }
 
-    /* ---------- Owner & storage helpers ---------- */
+    /* ---------- Owner & storage ---------- */
 
     public SimpleInventory getStorage() { return storage; }
 
@@ -103,46 +106,76 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
         SpottedStorageState.get(player.getServer()).loadInto(player.getUuid(), storage);
     }
 
+    public void setGenerationTag(int gen) { this.generationTag = gen; }
+    public int  getGenerationTag()        { return this.generationTag; }
+
     /**
-     * Recall: persist inventory to server state for this owner, clear the live inventory to avoid dupes,
-     * and despawn WITHOUT clearing the persisted stash.
+     * Recall: persist inventory to server state for this owner, clear live inventory to avoid dupes,
+     * and despawn. Also clears the owner→buddy mapping.
      */
     public void recallToOwnerAndDrop(ServerPlayerEntity owner) {
         if (!(this.getWorld() instanceof ServerWorld sw)) { this.discard(); return; }
 
-        // Mark as recalling so remove() knows not to run death cleanup
         this.recalling = true;
 
         // Save items for next summon
         SpottedStorageState.get(owner.getServer()).saveInventory(owner.getUuid(), storage);
 
-        // Clear the live inventory so nothing dupes while the entity disappears
+        // Clear live inv
         for (int i = 0; i < storage.size(); i++) storage.setStack(i, ItemStack.EMPTY);
 
+        // Clear mapping (no active body now)
+        BuddyPersistentState.get(owner.getServer()).clear(owner.getUuid());
+
         sw.playSound(null, owner.getBlockPos(), SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.6f, 1.1f);
-        this.discard(); // triggers remove(RemovalReason.DISCARDED)
+        this.discard();
     }
 
-    /**
-     * Removal hook:
-     * - On true death/destruction (NOT recall): drop items, wipe live inventory, and clear persisted stash.
-     * - On recall (recalling == true): skip cleanup so the stash remains saved.
-     */
+    /* ---------- Lifecycle ---------- */
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.getWorld().isClient) {
+            UUID ownerId = this.getOwnerUuid();
+            var server = this.getServer();
+            if (ownerId != null && server != null) {
+                var state = BuddyPersistentState.get(server);
+                var ref = state.get(ownerId);
+                // If mapping is gone, or points elsewhere/newer gen, we are stale: remove
+                if (ref == null
+                        || !ref.entityUuid.equals(this.getUuid())
+                        || ref.generation != this.generationTag) {
+                    this.discard();
+                }
+            }
+        }
+    }
     @Override
     public void remove(RemovalReason reason) {
         if (!this.getWorld().isClient) {
-            if (!this.recalling && reason.shouldDestroy()) {
-                // Death path: drop then wipe everything, including persisted stash
+            if (this.recalling) {
+                // Recall path: inventory already persisted & cleared; no drops.
+            } else if (reason == RemovalReason.KILLED) {
+                // True death only: drop the buddy's stash and wipe the persisted copy.
                 dropAll();
-                for (int i = 0; i < storage.size(); i++) storage.setStack(i, ItemStack.EMPTY);
                 UUID ownerId = this.getOwnerUuid();
                 if (ownerId != null && this.getServer() != null) {
                     SpottedStorageState.get(this.getServer()).clear(ownerId);
+                }
+            } else {
+                // Any other removal (DISCARDED, UNLOADED_TO_CHUNK, UNLOADED_WITH_PLAYER,
+                // CHANGED_DIMENSION, etc.) — DO NOT DROP.
+                // Optional safety: persist a snapshot so recall after a reload still has items.
+                UUID ownerId = this.getOwnerUuid();
+                if (ownerId != null && this.getServer() != null) {
+                    SpottedStorageState.get(this.getServer()).saveInventory(ownerId, storage);
                 }
             }
         }
         super.remove(reason);
     }
+
 
     private void dropAll() {
         for (int i = 0; i < storage.size(); i++) {
@@ -152,15 +185,12 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
         }
     }
 
+    /* ---------- Vanilla/Gecko ---------- */
+
     @Override public boolean damage(DamageSource source, float amount) { return super.damage(source, amount); }
     @Override public @Nullable PassiveEntity createChild(ServerWorld world, PassiveEntity entity) { return null; }
+    @Override public EntityView method_48926() { return null; } // Fabric’s EntityView hook
 
-    @Override
-    public EntityView method_48926() {
-        return null;
-    }
-
-    /* ---------- Null-safe owner lookup ---------- */
     @Override
     public @Nullable LivingEntity getOwner() {
         UUID id = this.getOwnerUuid();
@@ -168,15 +198,17 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
         World w = this.getWorld();
         if (w == null) return null;
         return w.getPlayerByUuid(id);
+        // (If owner offline, this returns null; that’s fine.)
     }
 
-    /* ---------- NBT (entity save) ---------- */
+    /* ---------- NBT ---------- */
     @Override
     public void writeCustomDataToNbt(NbtCompound nbt) {
         super.writeCustomDataToNbt(nbt);
         DefaultedList<ItemStack> list = DefaultedList.ofSize(storage.size(), ItemStack.EMPTY);
         for (int i = 0; i < storage.size(); i++) list.set(i, storage.getStack(i));
         Inventories.writeNbt(nbt, list);
+        nbt.putInt("odd_gen", this.generationTag);
     }
 
     @Override
@@ -185,6 +217,7 @@ public class PhantomBuddyEntity extends TameableEntity implements GeoEntity {
         DefaultedList<ItemStack> list = DefaultedList.ofSize(storage.size(), ItemStack.EMPTY);
         Inventories.readNbt(nbt, list);
         for (int i = 0; i < storage.size(); i++) storage.setStack(i, list.get(i));
+        if (nbt.contains("odd_gen")) this.generationTag = nbt.getInt("odd_gen");
     }
 
     /* ---------- GeckoLib ---------- */
