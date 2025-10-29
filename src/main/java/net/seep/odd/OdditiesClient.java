@@ -23,6 +23,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.world.World;
 
+import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.cosmic.CosmicNet;
@@ -45,11 +46,8 @@ import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.looker.LookerClient;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
-import net.seep.odd.abilities.power.CosmicPower;
-import net.seep.odd.abilities.power.SpectralPhasePower;
-import net.seep.odd.abilities.power.SpottedPhantomPower;
+import net.seep.odd.abilities.power.*;
 
-import net.seep.odd.abilities.power.SuperChargePower;
 import net.seep.odd.abilities.rider.RiderClientInput;
 import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.spectral.SpectralClientState;
@@ -273,6 +271,14 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Gamble
         net.seep.odd.abilities.gamble.item.GambleRevolverItem.initClientHooks();
+
+
+        // Buddymorph
+        BuddymorphClient.init();
+        BuddymorphPower.Client.init();
+
+
+
 
 
 

@@ -24,6 +24,11 @@ import net.seep.odd.abilities.artificer.condenser.CondenserNet; // (only used in
 import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.astral.AstralInventory;
+import net.seep.odd.abilities.buddymorph.BuddymorphCommands;
+import net.seep.odd.abilities.buddymorph.BuddymorphData;
+import net.seep.odd.abilities.buddymorph.BuddymorphNet;
+import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
+import net.seep.odd.abilities.buddymorph.client.BuddymorphScreen;
 import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
@@ -128,6 +133,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new RatPower());
 		Powers.register(new SuperChargePower());
 		Powers.register(new GamblePower());
+		Powers.register(new BuddymorphPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -282,6 +288,20 @@ public final class Oddities implements ModInitializer {
 		// Supercharge
 		 SuperEntities.register();
 		 SuperChargePower.bootstrap();
+
+		 // Buddymorph
+		BuddymorphCommands.register();
+		BuddymorphNet.init();
+
+
+
+
+
+
+
+
+
+
 
 
 

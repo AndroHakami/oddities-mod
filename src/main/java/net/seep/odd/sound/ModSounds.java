@@ -57,6 +57,8 @@ public class ModSounds {
     public static final SoundEvent ZERO_CHARGE = registerSoundEvent("zero_charge");
     public static final SoundEvent ZERO_BLAST = registerSoundEvent("zero_blast");
 
+    // Buddymorph
+    public static final SoundEvent MELODY = registerSoundEvent("melody");
 
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,

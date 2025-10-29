@@ -29,6 +29,12 @@
       "odd:zero_blast"
     ]
   },
+  "melody": {
+    "subtitle": "odd.melody",
+    "sounds": [
+      "odd:melody"
+    ]
+  },
   "zero_charge": {
     "subtitle": "odd.zero_charge",
     "sounds": [
