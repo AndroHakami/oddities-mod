@@ -3,97 +3,115 @@ package net.seep.odd.abilities.buddymorph;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
-import net.minecraft.nbt.NbtString;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.PersistentState;
 import net.minecraft.world.PersistentStateManager;
+import net.seep.odd.Oddities;
 
 import java.util.*;
 
-/** Per-world storage for Buddymorph. Keeps unique, insertion-ordered ids. */
+/**
+ * Per-player store of befriended buddies with remaining transform charges.
+ * Each newly befriended mob starts with 3 charges. When charges reach 0, it is removed.
+ */
 public final class BuddymorphData extends PersistentState {
-    private static final String KEY = "odd_buddymorph_data_v1";
+    private static final String SAVE_NAME = Oddities.MOD_ID + "_buddymorph";
+    private static final int DEFAULT_CHARGES = 3;
 
-    // uuid -> ordered set of buddy ids
-    private final Map<UUID, LinkedHashSet<Identifier>> buddies = new HashMap<>();
+    // player -> (buddy id -> remaining charges)  (LinkedHashMap = stable order for UI)
+    private final Map<UUID, LinkedHashMap<Identifier, Integer>> data = new HashMap<>();
 
-    /** Load (or create) this world's state. */
-    public static BuddymorphData get(ServerWorld sw) {
-        PersistentStateManager psm = sw.getServer().getOverworld().getPersistentStateManager();
-        return psm.getOrCreate(BuddymorphData::fromNbt, BuddymorphData::new, KEY);
-    }
+    /* ---------- API ---------- */
 
-    /* ---------- public API ---------- */
-
-    /** Copy as list for networking/UI (preserves order). */
-    public List<Identifier> getList(UUID player) {
-        return new ArrayList<>(set(player));
+    public boolean addBuddy(UUID player, Identifier id) {
+        var map = data.computeIfAbsent(player, k -> new LinkedHashMap<>());
+        if (map.containsKey(id)) return false;
+        map.put(id, DEFAULT_CHARGES);
+        markDirty();
+        return true;
     }
 
     public boolean hasBuddy(UUID player, Identifier id) {
-        return set(player).contains(id);
+        var map = data.get(player);
+        return map != null && map.containsKey(id);
     }
 
-    /** @return true if newly added (never duplicates). */
-    public boolean addBuddy(UUID player, Identifier id) {
-        boolean added = set(player).add(id);
-        if (added) setDirty(true);
-        return added;
+    /** Consume one charge; when it hits 0 remove the buddy. Returns true if consumed. */
+    public boolean consumeCharge(UUID player, Identifier id) {
+        var map = data.get(player);
+        if (map == null) return false;
+        Integer c = map.get(id);
+        if (c == null || c <= 0) return false;
+        c -= 1;
+        if (c <= 0) map.remove(id);
+        else map.put(id, c);
+        markDirty();
+        return true;
     }
 
-    /* ---------- internal ---------- */
-
-    private LinkedHashSet<Identifier> set(UUID u) {
-        return buddies.computeIfAbsent(u, k -> new LinkedHashSet<>());
+    /** Remaining charges or 0 if not befriended. */
+    public int getCharges(UUID player, Identifier id) {
+        var map = data.get(player);
+        Integer c = (map == null) ? null : map.get(id);
+        return c == null ? 0 : c;
     }
 
-    /* ---------- NBT ---------- */
+    /** Ordered set of IDs (legacy use). */
+    public Set<Identifier> getList(UUID player) {
+        var map = data.get(player);
+        return map == null ? Collections.emptySet() : new LinkedHashSet<>(map.keySet());
+    }
 
-    /** Static loader used by PersistentStateManager#getOrCreate. */
-    public static BuddymorphData fromNbt(NbtCompound tag) {
+    /** Ordered map of IDs -> remaining charges for networking/UI. */
+    public LinkedHashMap<Identifier, Integer> getListWithCharges(UUID player) {
+        var map = data.get(player);
+        return map == null ? new LinkedHashMap<>() : new LinkedHashMap<>(map);
+    }
+
+    /* ---------- Persistence ---------- */
+
+    public static BuddymorphData get(ServerWorld world) {
+        PersistentStateManager m = world.getPersistentStateManager();
+        return m.getOrCreate(BuddymorphData::fromNbt, BuddymorphData::new, SAVE_NAME);
+    }
+
+    private static BuddymorphData fromNbt(NbtCompound nbt) {
         BuddymorphData d = new BuddymorphData();
-        d.readInto(tag);
+        NbtList players = nbt.getList("players", NbtElement.COMPOUND_TYPE);
+        for (int i = 0; i < players.size(); i++) {
+            NbtCompound pTag = players.getCompound(i);
+            UUID u = pTag.getUuid("u");
+            NbtList buddies = pTag.getList("b", NbtElement.COMPOUND_TYPE);
+            LinkedHashMap<Identifier, Integer> map = new LinkedHashMap<>();
+            for (int j = 0; j < buddies.size(); j++) {
+                NbtCompound b = buddies.getCompound(j);
+                Identifier id = new Identifier(b.getString("id"));
+                int charges = b.getInt("c");
+                if (charges > 0) map.put(id, charges);
+            }
+            if (!map.isEmpty()) d.data.put(u, map);
+        }
         return d;
     }
 
-    /** Write persistent data. */
     @Override
-    public NbtCompound writeNbt(NbtCompound tag) {
-        NbtList players = new NbtList(); // each: { id: UUID, buddies: [ "namespace:type", ... ] }
-
-        for (var e : buddies.entrySet()) {
-            NbtCompound c = new NbtCompound();
-            c.putUuid("id", e.getKey());
-
-            NbtList ids = new NbtList();
-            for (Identifier id : e.getValue()) {
-                ids.add(NbtString.of(id.toString())); // write as plain strings
+    public NbtCompound writeNbt(NbtCompound nbt) {
+        NbtList players = new NbtList();
+        for (var entry : data.entrySet()) {
+            NbtCompound pTag = new NbtCompound();
+            pTag.putUuid("u", entry.getKey());
+            NbtList buddies = new NbtList();
+            for (var e : entry.getValue().entrySet()) {
+                NbtCompound b = new NbtCompound();
+                b.putString("id", e.getKey().toString());
+                b.putInt("c", e.getValue());
+                buddies.add(b);
             }
-            c.put("buddies", ids);
-
-            players.add(c);
+            pTag.put("b", buddies);
+            players.add(pTag);
         }
-
-        tag.put("players", players);
-        return tag;
-    }
-
-    /** Helper that fills this instance from NBT. */
-    private void readInto(NbtCompound tag) {
-        buddies.clear();
-
-        NbtList players = tag.getList("players", NbtElement.COMPOUND_TYPE);
-        for (int i = 0; i < players.size(); i++) {
-            NbtCompound c = players.getCompound(i);
-            UUID uuid = c.getUuid("id");
-
-            LinkedHashSet<Identifier> set = new LinkedHashSet<>();
-            NbtList ids = c.getList("buddies", NbtElement.STRING_TYPE);
-            for (int j = 0; j < ids.size(); j++) {
-                set.add(new Identifier(ids.getString(j)));
-            }
-            buddies.put(uuid, set);
-        }
+        nbt.put("players", players);
+        return nbt;
     }
 }

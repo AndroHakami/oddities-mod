@@ -25,13 +25,14 @@ public final class BuddymorphClient {
         ClientPlayNetworking.registerGlobalReceiver(BuddymorphNet.S2C_OPEN, (client, handler, buf, response) -> {
             final int n = buf.readVarInt();
             List<String> ids = new ArrayList<>(n);
-            for (int i = 0; i < n; i++) ids.add(buf.readString(256));
+            List<Integer> charges = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                ids.add(buf.readString(256));     // id
+                charges.add(buf.readVarInt());    // charges
+            }
             client.execute(() -> {
                 MinecraftClient mc = MinecraftClient.getInstance();
-                if (mc != null && mc.player != null) {
-                    mc.player.sendMessage(Text.literal("[BM client] OPEN " + ids), true);
-                }
-                mc.setScreen(new SimpleBuddymorphScreen(ids));
+                mc.setScreen(new SimpleBuddymorphScreen(ids, charges)); // charges-aware ctor
             });
         });
 
@@ -39,14 +40,15 @@ public final class BuddymorphClient {
         ClientPlayNetworking.registerGlobalReceiver(BuddymorphNet.S2C_UPDATE, (client, handler, buf, response) -> {
             final int n = buf.readVarInt();
             List<String> ids = new ArrayList<>(n);
-            for (int i = 0; i < n; i++) ids.add(buf.readString(256));
+            List<Integer> charges = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                ids.add(buf.readString(256));
+                charges.add(buf.readVarInt());
+            }
             client.execute(() -> {
                 MinecraftClient mc = MinecraftClient.getInstance();
-                if (mc != null && mc.player != null) {
-                    mc.player.sendMessage(Text.literal("[BM client] UPDATE " + ids), true);
-                }
                 if (mc != null && mc.currentScreen instanceof SimpleBuddymorphScreen scr) {
-                    scr.updateIds(ids);
+                    scr.updateIds(ids, charges); // charges-aware update
                 }
             });
         });

@@ -80,6 +80,13 @@ public final class GhostlingsPower implements Power {
             default          -> new Identifier(MODID, "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "GHOSTLY COMMAND";
+            case "secondary" -> "WORK STATUS";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
 
     @Override
     public String slotLongDescription(String slot) {

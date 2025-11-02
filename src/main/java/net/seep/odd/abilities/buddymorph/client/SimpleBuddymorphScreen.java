@@ -31,10 +31,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Buddymorph picker with 3D previews.
- * - Jitter-free: freeze prev/current angles & age per render (no interpolation wiggle).
- * - "You" tile uses a frozen snapshot of your player (skin/equipment) captured on open.
- * - Drag = rotate; Scroll = zoom; Click = select.
+ * Buddymorph picker with 3D previews (anti-jitter) and optional charge badges.
+ * - Works with old payload (IDs only) via SimpleBuddymorphScreen(List<String> ids)
+ * - Works with new payload (IDs + charges) via SimpleBuddymorphScreen(List<String> ids, List<Integer> charges)
+ * - "You" tile uses a frozen snapshot of your player (doesn’t change when you morph)
+ * - Drag = rotate; Scroll = zoom; Click = select
  */
 @Environment(EnvType.CLIENT)
 public final class SimpleBuddymorphScreen extends Screen {
@@ -56,25 +57,41 @@ public final class SimpleBuddymorphScreen extends Screen {
     // player snapshot used for the "You" tile, independent of morphs
     private static OtherClientPlayerEntity SELF_SNAPSHOT;
 
+    /* ----------------- Constructors (IDs only OR IDs+charges) ----------------- */
+
+    /** Back-compat: IDs only (no badges). */
     public SimpleBuddymorphScreen(List<String> ids) {
         super(Text.literal("Buddymorph"));
-        setEntries(ids);
+        setEntries(ids, null);
     }
 
-    /** When new ids arrive live while open. */
+    /** New: IDs + charges. Both lists must be same size; null/size mismatch → badges hidden. */
+    public SimpleBuddymorphScreen(List<String> ids, List<Integer> charges) {
+        super(Text.literal("Buddymorph"));
+        setEntries(ids, charges);
+    }
+
+    /* Live updates from net handlers */
     public void updateIds(List<String> ids) {
-        setEntries(ids);
+        setEntries(ids, null);
+        layoutGrid();
+    }
+    public void updateIds(List<String> ids, List<Integer> charges) {
+        setEntries(ids, charges);
         layoutGrid();
     }
 
-    private void setEntries(List<String> ids) {
+    private void setEntries(List<String> ids, List<Integer> charges) {
         entries.clear();
         entries.add(Entry.self());
 
-        for (String s : ids) {
+        boolean useCharges = charges != null && charges.size() == ids.size();
+
+        for (int idx = 0; idx < ids.size(); idx++) {
             try {
-                Identifier id = new Identifier(s);
-                Entry e = Entry.of(id);
+                Identifier id = new Identifier(ids.get(idx));
+                int ch = useCharges ? Math.max(-1, charges.get(idx)) : -1; // -1 = hidden badge
+                Entry e = Entry.of(id, ch);
                 entries.add(e);
                 // eagerly create preview so new tiles show immediately
                 LivingEntity le = ensurePreview(e);
@@ -137,6 +154,18 @@ public final class SimpleBuddymorphScreen extends Screen {
             if (label.length() > 14) label = label.substring(0, 14) + "…";
             int cx = r.x + r.w / 2;
             ctx.drawCenteredTextWithShadow(textRenderer, label, cx, r.y + 6, e.self ? 0xFFEAA73C : 0xFFEEEEEE);
+
+            // charge badge (show only if charges >= 0 and not self)
+            if (!e.self && e.charges >= 0) {
+                String badge = "×" + e.charges;
+                int bw = textRenderer.getWidth(badge) + 6;
+                int bx = r.x + r.w - bw - 5;
+                int by = r.y + 5;
+                ctx.fill(bx, by, bx + bw, by + 10, 0xAA000000); // dark pill
+                // green if >1, red if 0/1
+                int color = (e.charges > 1) ? 0xFFB5F27A : 0xFFFF8080;
+                ctx.drawTextWithShadow(textRenderer, badge, bx + 3, by + 1, color);
+            }
 
             // 3D preview
             if (hasWorld) {
@@ -394,13 +423,11 @@ public final class SimpleBuddymorphScreen extends Screen {
                 try {
                     Method setSpeed = la.getClass().getMethod("setSpeed", float.class);
                     setSpeed.invoke(la, 0f);
-                } catch (NoSuchMethodException ignored) {
-                    // older: try "setSpeedOld" or similar (unlikely); else ignore
-                }
+                } catch (NoSuchMethodException ignored) { }
                 try {
                     Method update = la.getClass().getMethod("update", float.class, float.class);
                     update.invoke(la, 0f, 0f); // ensure phase reset
-                } catch (NoSuchMethodException ignored) {}
+                } catch (NoSuchMethodException ignored) { }
             }
         } catch (Throwable ignored) {
             // 1.19-: fallback fields (limbAngle/limbDistance) — ignore if absent
@@ -420,13 +447,14 @@ public final class SimpleBuddymorphScreen extends Screen {
     private static final class Entry {
         final boolean self;
         final Identifier typeId;
+        final int charges; // -1 = hidden badge (IDs-only mode)
         LivingEntity preview;
         float yaw = 0f, pitch = 0f;
         float zoom = 1.0f;
 
-        static Entry self()                 { return new Entry(true,  new Identifier("minecraft", "player")); }
-        static Entry of(Identifier typeId)  { return new Entry(false, typeId); }
-        private Entry(boolean self, Identifier typeId) { this.self = self; this.typeId = typeId; }
+        static Entry self()                         { return new Entry(true,  new Identifier("minecraft", "player"), -1); }
+        static Entry of(Identifier typeId, int ch)  { return new Entry(false, typeId, ch); }
+        private Entry(boolean self, Identifier typeId, int charges) { this.self = self; this.typeId = typeId; this.charges = charges; }
     }
 
     private static final class Rect {

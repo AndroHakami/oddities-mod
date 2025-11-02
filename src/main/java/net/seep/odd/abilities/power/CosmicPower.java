@@ -64,6 +64,13 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
     @Override public String longDescription() {
         return "Hold to charge a dimensional slash (CPM stance), release to blink and cleave. Orbiting swords on secondary.";
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "DIMENSIONAL SLASH";
+            case "secondary" -> "COSMIC SWORDS";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary"   -> "Hold to charge; release (or press again) to dash. CPM stance/slash.";

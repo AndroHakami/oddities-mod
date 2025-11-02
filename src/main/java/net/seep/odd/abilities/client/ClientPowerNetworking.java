@@ -17,14 +17,14 @@ public final class ClientPowerNetworking {
     }
 
     public static void registerPowerSyncReceiver(Consumer<String> clientSetter) {
-        ClientPlayNetworking.registerGlobalReceiver(PowerNetworking.SYNC, (client, handler, buf, rs) -> {
+        ClientPlayNetworking.registerGlobalReceiver(PowerNetworking.S2C_SYNC_POWER, (client, handler, buf, rs) -> {
             String id = buf.readString();
             client.execute(() -> clientSetter.accept(id));
         });
     }
 
     public static void registerCooldownReceiver() {
-        ClientPlayNetworking.registerGlobalReceiver(PowerNetworking.COOLDOWN, (client, handler, buf, rs) -> {
+        ClientPlayNetworking.registerGlobalReceiver(PowerNetworking.S2C_COOLDOWN, (client, handler, buf, rs) -> {
             String slot = buf.readString();
             int ticks = buf.readVarInt();
             client.execute(() -> ClientCooldowns.set(slot, ticks));
@@ -33,7 +33,7 @@ public final class ClientPowerNetworking {
 
     /** NEW: live charge snapshot receiver (used on spend + initial sync). */
     public static void registerChargesReceiver() {
-        ClientPlayNetworking.registerGlobalReceiver(PowerNetworking.CHARGES, (client, handler, buf, rs) -> {
+        ClientPlayNetworking.registerGlobalReceiver(PowerNetworking.S2C_CHARGES, (client, handler, buf, rs) -> {
             String slot = buf.readString();
             int have = buf.readVarInt();
             int max = buf.readVarInt();
@@ -41,6 +41,7 @@ public final class ClientPowerNetworking {
             long nextReady = buf.readVarLong();
             long serverNow = buf.readVarLong();
             client.execute(() -> AbilityHudOverlay.ClientCharges.set(slot, have, max, recharge, nextReady, serverNow));
+
         });
     }
 }

@@ -25,14 +25,30 @@ public final class RiderPower implements Power {
     @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
     @Override public long cooldownTicks() { return 20 * 2; }          // small GCD between summons
     @Override public long secondaryCooldownTicks() { return 20 * 3; } // small lockout on detonate
-    @Override public Identifier iconTexture(String slot) {
-        return new Identifier("odd", "textures/gui/abilities/" + ("secondary".equals(slot) ? "rider_detonate.png" : "rider.png"));
+    @Override
+    public Identifier iconTexture(String slot) {
+        return switch (slot) {
+            case "primary"   -> new Identifier("odd", "textures/gui/abilities/rider_car.png");
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/rider_explosion.png");
+            default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
+        };
     }
     @Override public String longDescription() {
         return "Summon a two-seat car (left driver). Drift with CTRL+A/D to charge a boost (x1/x2/x3), reverse, honk (R), and do a charged jump with SPACE. Secondary detonates the car.";
     }
     @Override public String slotLongDescription(String slot) {
-        return "secondary".equals(slot) ? "Detonate your car." : "Summon / mount your car.";
+        return switch (slot) {
+            case "primary"   -> "Summon a really cool car";
+            case "secondary" -> "Explode your really cool car";
+            default -> "";
+        };
+    }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "MY RIDE";
+            case "secondary" -> "IRISH ENGINEERING";
+            default -> Power.super.slotTitle(slot);
+        };
     }
 
     /* ========= inputs ========= */

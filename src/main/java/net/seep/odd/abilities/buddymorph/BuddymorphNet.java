@@ -9,6 +9,8 @@ import net.seep.odd.Oddities;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 public final class BuddymorphNet {
     private BuddymorphNet(){}
@@ -33,6 +35,10 @@ public final class BuddymorphNet {
         });
     }
 
+    /* ---------------------------------------------------------------------
+       ORIGINAL LIST-ONLY METHODS (UNCHANGED PAYLOAD: ids only)
+       --------------------------------------------------------------------- */
+
     public static void s2cOpenMenu(ServerPlayerEntity sp, List<Identifier> ids) {
         PacketByteBuf out = PacketByteBufs.create();
         out.writeVarInt(ids.size());
@@ -46,6 +52,34 @@ public final class BuddymorphNet {
         for (var id : ids) out.writeString(id.toString());
         ServerPlayNetworking.send(sp, S2C_UPDATE, out);
     }
+
+    /* ---------------------------------------------------------------------
+       NEW OVERLOADS WITH CHARGES (FORMAT: count, then { id, charges } * n)
+       Use these if your client reads charges per buddy.
+       --------------------------------------------------------------------- */
+
+    public static void s2cOpenMenu(ServerPlayerEntity sp, LinkedHashMap<Identifier, Integer> buddies) {
+        PacketByteBuf out = PacketByteBufs.create();
+        writeIdCharges(out, buddies);
+        ServerPlayNetworking.send(sp, S2C_OPEN, out);
+    }
+
+    public static void s2cUpdateMenu(ServerPlayerEntity sp, LinkedHashMap<Identifier, Integer> buddies) {
+        PacketByteBuf out = PacketByteBufs.create();
+        writeIdCharges(out, buddies);
+        ServerPlayNetworking.send(sp, S2C_UPDATE, out);
+    }
+
+    /* helper: id+charges writer */
+    private static void writeIdCharges(PacketByteBuf out, LinkedHashMap<Identifier, Integer> buddies) {
+        out.writeVarInt(buddies.size());
+        for (Map.Entry<Identifier, Integer> e : buddies.entrySet()) {
+            out.writeString(e.getKey().toString());
+            out.writeVarInt(e.getValue());
+        }
+    }
+
+    /* --------------------------------------------------------------------- */
 
     public static void s2cMelody(ServerPlayerEntity sp, int ticks) {
         PacketByteBuf out = PacketByteBufs.create();

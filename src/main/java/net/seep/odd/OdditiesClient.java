@@ -30,6 +30,9 @@ import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.cosmic.client.CosmicCpmBridge;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordRenderer;
+import net.seep.odd.abilities.fallingsnow.FallingSnowClient;
+import net.seep.odd.abilities.fallingsnow.FallingSnowNet;
+import net.seep.odd.abilities.fallingsnow.FallingSnowPowerAccessor;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
 import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
@@ -80,6 +83,7 @@ import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
+import net.seep.odd.entity.falsefrog.client.FalseFrogRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
@@ -101,11 +105,13 @@ public final class OdditiesClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         // Power sync + cooldowns (client)
-        ClientPowerNetworking.registerReceiver(ClientPowerHolder::set, PowerNetworking.SYNC);
+        ClientPowerNetworking.registerReceiver(ClientPowerHolder::set, PowerNetworking.S2C_SYNC_POWER);
         ClientCooldowns.registerTicker();
         ClientPowerNetworking.registerCooldownReceiver();
         ClientPowerNetworking.registerChargesReceiver();
+        PowerNetworking.initClient();
         OddParticlesClient.register();
+
 
         // Keybinds + HUDs (client)
         AbilityKeybinds.register();
@@ -277,6 +283,20 @@ public final class OdditiesClient implements ClientModInitializer {
         BuddymorphClient.init();
         BuddymorphPower.Client.init();
 
+        // Falling Snow
+        FallingSnowPower.Client.init();
+        FallingSnowClient.init();
+        EntityRendererRegistry.register(ModEntities.HEALING_SNOWBALL, ctx -> new FlyingItemEntityRenderer<>(ctx));
+        EntityRendererRegistry.register(ModEntities.BIG_SNOWBALL, ctx -> new FlyingItemEntityRenderer<>(ctx));
+        EntityRendererRegistry.register(ModEntities.ORBITING_SNOWBALL, ctx -> new FlyingItemEntityRenderer<>(ctx));
+
+
+        // Rotten Roots (World)
+
+
+
+
+
 
 
 
@@ -321,6 +341,7 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.ICE_PROJECTILE, IceProjectileRenderer::new);
         EntityRendererRegistry.register(ModEntities.PHANTOM_BUDDY, PhantomBuddyRenderer::new);
         EntityRendererRegistry.register(ModEntities.ZERO_BEAM, ZeroBeamRenderer::new);
+        EntityRendererRegistry.register(ModEntities.FALSE_FROG, FalseFrogRenderer::new);
 
 
 

@@ -39,6 +39,13 @@ public final class MistyVeilPower implements Power {
             default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "RAINY STEPS";
+            case "secondary" -> "MIST BUBBLE";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {

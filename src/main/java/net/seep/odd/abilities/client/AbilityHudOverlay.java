@@ -26,12 +26,9 @@ import java.util.function.IntSupplier;
 public final class AbilityHudOverlay {
     private AbilityHudOverlay() {}
 
-    /* ================== sizing & visuals ================== */
-
     /** Your icon textures are 68×68. */
     private static final int ICON_SRC  = 66;
     private static final int RING_DRAW = 18; // diameter (px) for the small charge ring
-
 
     /** On-screen icon size (height). 22 matches hotbar height; bump to 24–28 if you want larger. */
     private static final int ICON_DRAW = 22;
@@ -67,18 +64,15 @@ public final class AbilityHudOverlay {
         int w = ctx.getScaledWindowWidth();
         int h = ctx.getScaledWindowHeight();
 
-        // Vanilla hotbar box
         final int HOTBAR_WIDTH  = 182;
         final int HOTBAR_HEIGHT = 22;
 
-        // Position icons on SAME ROW as the hotbar: vertically centered to the bar
         int y0 = h - HOTBAR_HEIGHT + (HOTBAR_HEIGHT - ICON_DRAW) / 2;
 
-        // Start at the right edge of the hotbar (then nudge in if we'd clip the screen edge)
         int hotbarRight = (w / 2) + (HOTBAR_WIDTH / 2);
         int totalWidth = slots.size() * ICON_DRAW + (slots.size() - 1) * ICON_PAD;
 
-        int x0 = hotbarRight + 8; // 8px gap to the right of the bar
+        int x0 = hotbarRight + 8;
         int rightMargin = 8;
         if (x0 + totalWidth > w - rightMargin) {
             x0 = Math.max(rightMargin, w - rightMargin - totalWidth);
@@ -108,7 +102,7 @@ public final class AbilityHudOverlay {
         };
         int remain = ClientCooldowns.get(slot);
 
-        // Draw the icon (scaled from 68×68)
+        // icon
         var m = ctx.getMatrices();
         m.push();
         m.translate(x, y, 0);
@@ -119,43 +113,38 @@ public final class AbilityHudOverlay {
 
         boolean isChargeSlot = (p instanceof ChargedPower cp) && cp.usesCharges(slot);
 
-        // Standard vertical wipe for non-charge cooldowns
+        // wipe for classic cooldowns
         if (!isChargeSlot && remain > 0 && totalCd > 0) {
             float ratio = Math.min(1f, remain / (float) totalCd);
             int cover = (int) (size * ratio);
             ctx.fill(x, y + (size - cover), x + size, y + size, 0x99000000);
         }
 
-        // Held fade
+        // held tint
         if (ClientHeldState.isHeld(slot)) {
             ctx.fill(x, y, x + size, y + size, 0x66000000);
         }
 
-        // Charge ring + number ON THE SAME LINE (around/over the icon)
         if (isChargeSlot) {
             drawChargeCircle(ctx, x, y, size, slot);
         } else if (remain > 0) {
-            // Numeric cooldown stays (centered)
             String txt = (remain >= 20)
                     ? String.valueOf((int) Math.ceil(remain / 20.0))
                     : String.format(Locale.ROOT, "%.1f", remain / 20.0);
             int tw = mc.textRenderer.getWidth(txt);
             ctx.drawTextWithShadow(mc.textRenderer, txt, x + (size - tw) / 2, y + (size / 2) - 4, ACCENT.getAsInt());
         }
-
-        // ❌ Removed: key label text under the icon (as requested)
     }
 
-    /** Draw ring + yellow annular fill *around* the icon, aligned to the hotbar row. */
+    /** Small circle + NEW square snake *around the ring* for charge lanes. */
     private static void drawChargeCircle(DrawContext ctx, int iconX, int iconY, int iconSize, String slot) {
-        var mc = MinecraftClient.getInstance();
         int accent = ACCENT.getAsInt();
 
         var lane = ClientCharges.get(slot);
-        int have = lane.have;
-        int max  = Math.max(1, lane.max);
+        int  have     = lane.have;
+        int  max      = Math.max(1, lane.max);
         long recharge = Math.max(0L, lane.recharge);
-        long now = lane.approxNow();
+        long now      = lane.approxNow();
 
         if (recharge > 0 && have < max) {
             while (have < max && now >= lane.nextReady) {
@@ -167,18 +156,16 @@ public final class AbilityHudOverlay {
             have = lane.have = max;
         }
 
-        // ---- position: centered ABOVE the icon ----
+        // position of ring above icon
         int rx = iconX + (iconSize - RING_DRAW) / 2;
         int ry = iconY - RING_DRAW - 4;
 
         float cx = rx + RING_DRAW / 2f;
         float cy = ry + RING_DRAW / 2f;
 
-        // keep fill inside the ring border
         float outer = (RING_DRAW / 2f) - 1.0f;
         float inner = outer - Math.max(2.0f, RING_DRAW * 0.10f);
 
-        // progress toward next charge
         float fill = 0f;
         if (have < max && recharge > 0L) {
             long left = Math.max(0L, lane.nextReady - now);
@@ -189,7 +176,12 @@ public final class AbilityHudOverlay {
             drawRadialAnnulus(ctx.getMatrices(), cx, cy, inner, outer, fill, accent);
         }
 
-        // ring texture on top (scaled to RING_DRAW)
+        // NEW: square snake hugging the ring (not the big icon)
+        if (have < max && recharge > 0L) {
+            drawSquareSnakeAroundRing(ctx, rx, ry, RING_DRAW, fill, accent);
+        }
+
+        // ring texture
         var m = ctx.getMatrices();
         m.push();
         m.translate(rx, ry, 0);
@@ -198,15 +190,61 @@ public final class AbilityHudOverlay {
         ctx.drawTexture(CHARGE_RING_TEX, 0, 0, 0, 0, RING_SRC, RING_SRC, RING_SRC, RING_SRC);
         m.pop();
 
-        // centered charge count inside the ring
+        // count inside ring
         String n = Integer.toString(Math.min(99, have));
-        int tw = mc.textRenderer.getWidth(n);
+        int tw = MinecraftClient.getInstance().textRenderer.getWidth(n);
         int tx = rx + (RING_DRAW - tw) / 2;
         int ty = ry + (RING_DRAW - 8) / 2;
-        ctx.drawTextWithShadow(mc.textRenderer, n, tx, ty, accent);
+        ctx.drawTextWithShadow(MinecraftClient.getInstance().textRenderer, n, tx, ty, accent);
     }
 
-    /** Draw an annular pie slice between inner/outer radii from 12 o'clock clockwise. */
+    /** Square “snake” path around a box at (rx,ry,size×size). */
+    private static void drawSquareSnakeAroundRing(DrawContext ctx, int rx, int ry, int size, float progress, int accent) {
+        progress = Math.max(0f, Math.min(1f, progress));
+
+        final int MARGIN    = 2; // just outside the ring
+        final int THICKNESS = 3;
+
+        int left   = rx - MARGIN;
+        int top    = ry - MARGIN;
+        int side   = size + MARGIN * 2;
+        int right  = left + side;
+        int bottom = top + side;
+
+        int bg = (accent & 0x00FFFFFF) | 0x33000000;
+        ctx.fill(left, top, right, top + THICKNESS, bg);
+        ctx.fill(right - THICKNESS, top, right, bottom, bg);
+        ctx.fill(left, bottom - THICKNESS, right, bottom, bg);
+        ctx.fill(left, top, left + THICKNESS, bottom, bg);
+
+        float perimeter = 4f * (float) side;
+        float length    = perimeter * progress;
+        float remain    = length;
+
+        int fg = (accent & 0x00FFFFFF) | 0xFF000000;
+
+        if (remain > 0f) {
+            int take = Math.min((int)Math.ceil(remain), side);
+            ctx.fill(left, top, left + take, top + THICKNESS, fg);
+            remain -= take;
+        }
+        if (remain > 0f) {
+            int take = Math.min((int)Math.ceil(remain), side);
+            ctx.fill(right - THICKNESS, top, right, top + take, fg);
+            remain -= take;
+        }
+        if (remain > 0f) {
+            int take = Math.min((int)Math.ceil(remain), side);
+            ctx.fill(right - take, bottom - THICKNESS, right, bottom, fg);
+            remain -= take;
+        }
+        if (remain > 0f) {
+            int take = Math.min((int)Math.ceil(remain), side);
+            ctx.fill(left, bottom - take, left + THICKNESS, bottom, fg);
+        }
+    }
+
+    /** Annular pie slice for the tiny ring. */
     private static void drawRadialAnnulus(MatrixStack matrices, float cx, float cy, float rInner, float rOuter, float fill, int rgba) {
         fill = Math.max(0f, Math.min(1f, fill));
         if (fill <= 0f) return;
@@ -241,19 +279,17 @@ public final class AbilityHudOverlay {
     }
 
     /* ---------- optional cooldown interfaces ---------- */
-
     public interface HasThirdCooldown { long thirdCooldownTicks(); }
     public interface HasFourthCooldown { long fourthCooldownTicks(); }
 
-    /* ---------- client helpers (unchanged) ---------- */
-
-    static final class ClientCharges {
+    /* ---------- client helpers ---------- */
+    public static final class ClientCharges {
         private static final HashMap<String, Lane> CH = new HashMap<>();
-        static final class Lane {
-            int have = 0, max = 1;
-            long recharge = 0L, nextReady = 0L;
-            long serverNowAtSync = 0L, clientTickAtSync = 0L;
-            long approxNow() {
+        public static final class Lane {
+            public int have = 0, max = 1;
+            public long recharge = 0L, nextReady = 0L;
+            public long serverNowAtSync = 0L, clientTickAtSync = 0L;
+            public long approxNow() {
                 var mc = MinecraftClient.getInstance();
                 long clientNow = (mc.world == null) ? 0 : mc.world.getTime();
                 long delta = clientNow - clientTickAtSync;
@@ -275,7 +311,7 @@ public final class AbilityHudOverlay {
         public static void clear() { CH.clear(); }
     }
 
-    static final class ClientHeldState {
+    public static final class ClientHeldState {
         private static final HashMap<String, Boolean> HELD = new HashMap<>();
         public static boolean isHeld(String slot) { return HELD.getOrDefault(slot, false); }
         public static void set(String slot, boolean held) { HELD.put(slot, held); }

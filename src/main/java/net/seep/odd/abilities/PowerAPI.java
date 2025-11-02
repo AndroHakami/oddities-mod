@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/PowerAPI.java
 package net.seep.odd.abilities;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -25,7 +26,7 @@ import java.util.UUID;
  * Backwards-compatible PowerAPI with optional "defer cooldown until fire".
  * Non-deferred powers behave the same as before.
  *
- * Extended: charge-based slots + hold/release hooks.
+ * Extended: charge-based slots + hold/release hooks + latch to block "hold to bypass cooldown".
  */
 public final class PowerAPI {
     private PowerAPI() {}
@@ -35,9 +36,32 @@ public final class PowerAPI {
     private static final class UseFlags {
         boolean primaryHeld, secondaryHeld, thirdHeld, fourthHeld;
         boolean primaryInUse, secondaryInUse, thirdInUse, fourthInUse;
+
+        // Latch = this hold session was permitted at holdStart (not cooling then).
+        boolean primaryLatch, secondaryLatch, thirdLatch, fourthLatch;
     }
     private static final Map<UUID, UseFlags> USE = new Object2ObjectOpenHashMap<>();
     private static UseFlags U(ServerPlayerEntity p) { return USE.computeIfAbsent(p.getUuid(), u -> new UseFlags()); }
+
+    private static void setLatch(ServerPlayerEntity p, String slot, boolean v) {
+        UseFlags f = U(p);
+        switch (slot) {
+            case "primary"   -> f.primaryLatch   = v;
+            case "secondary" -> f.secondaryLatch = v;
+            case "third"     -> f.thirdLatch     = v;
+            case "fourth"    -> f.fourthLatch    = v;
+        }
+    }
+    private static boolean getLatch(ServerPlayerEntity p, String slot) {
+        UseFlags f = U(p);
+        return switch (slot) {
+            case "primary"   -> f.primaryLatch;
+            case "secondary" -> f.secondaryLatch;
+            case "third"     -> f.thirdLatch;
+            case "fourth"    -> f.fourthLatch;
+            default -> false;
+        };
+    }
 
     /** Mark that a slot has begun a "use" session (charging, etc.). */
     public static void beginUse(ServerPlayerEntity player, String slot) {
@@ -59,6 +83,26 @@ public final class PowerAPI {
             case "fourth"    -> f.fourthHeld    = held;
         }
     }
+
+    // --- helpers for per-slot cooldowns ---
+    private static long cooldownTicksFor(Power p, String slot) {
+        return switch (slot) {
+            case "secondary" -> Math.max(0L, p.secondaryCooldownTicks());
+            case "third"     -> Math.max(0L, p.thirdCooldownTicks());
+            case "fourth"    -> Math.max(0L, p.fourthCooldownTicks());
+            default          -> Math.max(0L, p.cooldownTicks()); // primary
+        };
+    }
+
+    private static String cooldownKeyFor(String id, String slot) {
+        return switch (slot) {
+            case "secondary" -> id + "#secondary";
+            case "third"     -> id + "#third";
+            case "fourth"    -> id + "#fourth";
+            default          -> id; // primary
+        };
+    }
+
     public static boolean isHeld(ServerPlayerEntity p, String slot) {
         UseFlags f = U(p);
         return switch (slot) {
@@ -82,36 +126,80 @@ public final class PowerAPI {
 
     /* ================= HOLD / RELEASE (additive hooks) ================= */
 
-    /** Call from your client-side keybind when a slot starts being held (C2S). */
+    /** Called when a slot starts being held (C2S). Latches the session if not cooling at press time. */
     public static void holdStart(ServerPlayerEntity player, String slot) {
         String id = get(player);
         if (id == null || id.isEmpty()) return;
         Power p = Powers.get(id);
+        if (p == null) return;
+
+        // Gate: do not allow a hold to begin if slot is cooling.
+        long rem = getRemainingCooldownTicks(player, slot);
+        if (rem > 0) {
+            player.sendMessage(Text.literal(String.format("Cooling: %.1fs", rem / 20.0)), true);
+            setHeld(player, slot, false);
+            setLatch(player, slot, false);
+            return;
+        }
+
+        // Allowed now; latch this session so it cannot "wait out" the cooldown.
+        setLatch(player, slot, true);
+
         if (p instanceof HoldReleasePower hr) hr.onHoldStart(player, slot);
         beginUse(player, slot);
         setHeld(player, slot, true);
     }
 
-    /** Call periodically while held (e.g., every client tick via C2S, or server tick count). */
+    /** Called periodically while held (C2S or server ticking). Ignored if the session wasn't latched. */
     public static void holdTick(ServerPlayerEntity player, String slot, int heldTicks) {
         String id = get(player);
         if (id == null || id.isEmpty()) return;
         Power p = Powers.get(id);
+        if (p == null) return;
+
+        // If currently cooling or session wasn't latched, ignore.
+        if (getRemainingCooldownTicks(player, slot) > 0 || !getLatch(player, slot)) return;
+
         if (p instanceof HoldReleasePower hr) hr.onHoldTick(player, slot, heldTicks);
     }
 
-    /** Call when released (C2S). */
+    /** Called on release (C2S). Applies cooldown at release for held slots. */
     public static void holdRelease(ServerPlayerEntity player, String slot, int heldTicks, boolean canceled) {
         String id = get(player);
         if (id == null || id.isEmpty()) return;
         Power p = Powers.get(id);
-        if (p instanceof HoldReleasePower hr) hr.onHoldRelease(player, slot, heldTicks, canceled);
+        if (p == null) return;
+
+        // clear held/in-use flags
         setHeld(player, slot, false);
         switch (slot) {
             case "primary"   -> U(player).primaryInUse   = false;
             case "secondary" -> U(player).secondaryInUse = false;
             case "third"     -> U(player).thirdInUse     = false;
             case "fourth"    -> U(player).fourthInUse    = false;
+        }
+
+        boolean latched = getLatch(player, slot);
+        setLatch(player, slot, false);
+
+        // If the session started during cooldown, or was canceled, do nothing.
+        if (canceled || !latched) return;
+
+        // If cooldown started during the hold (e.g., externally), block firing.
+        if (getRemainingCooldownTicks(player, slot) > 0) {
+            player.sendMessage(Text.literal("Cooling."), true);
+            return;
+        }
+
+        if (p instanceof HoldReleasePower hr) hr.onHoldRelease(player, slot, heldTicks, false);
+
+        // Apply cooldown now for held slots.
+        long cd = cooldownTicksFor(p, slot);
+        if (cd > 0) {
+            long now = player.getWorld().getTime();
+            String key = cooldownKeyFor(id, slot);
+            CooldownState.get(player.getServer()).setLastUse(player.getUuid(), key, now);
+            PowerNetworking.sendCooldown(player, slot, cd);
         }
     }
 
@@ -174,7 +262,7 @@ public final class PowerAPI {
 
         // send fresh snapshot so HUD drops immediately and knows nextReady
         ChargeState.Snapshot snap = cs.snapshot(key, player.getUuid(), max, now);
-        PowerNetworking.sendCharges(player, slot, snap.have, snap.max, snap.recharge, snap.nextReady, snap.now);
+        PowerNetworking.sendCharges(player, slot, snap.have(), snap.max(), snap.recharge(), snap.nextReady(), snap.now());
 
         return true;
     }

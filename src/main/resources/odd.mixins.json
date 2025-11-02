@@ -12,6 +12,7 @@
     "VoidFogMixin",
     "client.ArmorFeatureRendererMixin",
     "client.BackgroundRendererMixin",
+    "client.BackgroundRotRendererMixin",
     "client.ClientWorldMixin",
     "client.HeldItemFeatureRendererMixin",
     "client.HeldItemRendererMixin",

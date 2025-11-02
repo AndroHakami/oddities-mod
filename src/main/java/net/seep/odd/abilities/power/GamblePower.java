@@ -38,6 +38,13 @@ public final class GamblePower implements Power {
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "SWITCH UP!";
+            case "secondary" -> "HEARTS OUT!";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
 
     @Override public String longDescription() { return "Revolver fueled by hearts. Toggle bullet mode and reload with the secondary slot."; }
     @Override public String slotLongDescription(String slot) {

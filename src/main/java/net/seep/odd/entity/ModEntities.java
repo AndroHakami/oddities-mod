@@ -24,6 +24,10 @@ import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 
+// Falling Snow (new)
+import net.seep.odd.abilities.fallingsnow.HealingSnowballEntity;
+import net.seep.odd.abilities.fallingsnow.BigSnowballEntity;
+
 public final class ModEntities {
     private ModEntities() {}
 
@@ -57,6 +61,17 @@ public final class ModEntities {
     // Zero Gravity
     public static final Identifier ZERO_BEAM_ID = new Identifier(Oddities.MOD_ID, "zero_beam");
 
+    // Falling Snow (new)
+    public static final Identifier HEALING_SNOWBALL_ID = new Identifier(Oddities.MOD_ID, "healing_snowball");
+    public static final Identifier BIG_SNOWBALL_ID     = new Identifier(Oddities.MOD_ID, "big_snowball");
+    public static final Identifier ORBITING_SNOWBALL_ID = new Identifier(Oddities.MOD_ID, "orbiting_snowball");
+
+    // False Frog
+    public static final Identifier FALSE_FROG_ID = new Identifier(Oddities.MOD_ID, "false_frog");
+
+
+
+
     /** Assigned in {@link #register()} during mod init. */
     public static EntityType<CreepyEntity>             CREEPY;
     public static EntityType<MistyBubbleEntity>        MISTY_BUBBLE;
@@ -86,6 +101,15 @@ public final class ModEntities {
 
     // Zero Gravity
     public static EntityType<net.seep.odd.entity.zerosuit.ZeroBeamEntity> ZERO_BEAM;
+
+    // Falling Snow
+    public static EntityType<HealingSnowballEntity>    HEALING_SNOWBALL;
+    public static EntityType<BigSnowballEntity>        BIG_SNOWBALL;
+    public static EntityType<net.seep.odd.abilities.fallingsnow.OrbitingSnowballEntity> ORBITING_SNOWBALL;
+
+    // False Frog
+    public static EntityType<net.seep.odd.entity.falsefrog.FalseFrogEntity> FALSE_FROG;
+
 
     public static void register() {
         // Creepy
@@ -319,5 +343,72 @@ public final class ModEntities {
             );
             FabricDefaultAttributeRegistry.register(PHANTOM_BUDDY, PhantomBuddyEntity.createAttributes());
         }
+
+        // === Falling Snow: projectiles ===
+        if (HEALING_SNOWBALL == null) {
+            HEALING_SNOWBALL = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    HEALING_SNOWBALL_ID,
+                    FabricEntityTypeBuilder.<HealingSnowballEntity>create(
+                                    SpawnGroup.MISC,
+                                    (EntityType<HealingSnowballEntity> type, World world) -> new HealingSnowballEntity(type, world))
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(10)
+                            .build()
+            );
+        }
+
+        if (BIG_SNOWBALL == null) {
+            BIG_SNOWBALL = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    BIG_SNOWBALL_ID,
+                    FabricEntityTypeBuilder.<BigSnowballEntity>create(
+                                    SpawnGroup.MISC,
+                                    (EntityType<BigSnowballEntity> type, World world) -> new BigSnowballEntity(type, world))
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(10)
+                            .build()
+            );
+        }
+        if (ORBITING_SNOWBALL == null) {
+            ORBITING_SNOWBALL = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    ORBITING_SNOWBALL_ID,
+                    FabricEntityTypeBuilder
+                            .<net.seep.odd.abilities.fallingsnow.OrbitingSnowballEntity>create(
+                                    SpawnGroup.MISC,
+                                    (EntityType<net.seep.odd.abilities.fallingsnow.OrbitingSnowballEntity> t, World w) ->
+                                            new net.seep.odd.abilities.fallingsnow.OrbitingSnowballEntity(t, w)
+                            )
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(10)
+                            .build()
+            );
+        }
+        if (FALSE_FROG == null) {
+            FALSE_FROG = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    FALSE_FROG_ID,
+                    FabricEntityTypeBuilder.create(
+                                    SpawnGroup.MONSTER,
+                                    (EntityType<net.seep.odd.entity.falsefrog.FalseFrogEntity> t, World w) ->
+                                            new net.seep.odd.entity.falsefrog.FalseFrogEntity(t, w)
+                            )
+                            .dimensions(EntityDimensions.fixed(
+                                    net.seep.odd.entity.falsefrog.FalseFrogEntity.WIDTH,
+                                    net.seep.odd.entity.falsefrog.FalseFrogEntity.HEIGHT))
+                            .trackRangeBlocks(96)
+                            .trackedUpdateRate(2)
+                            .build()
+            );
+            FabricDefaultAttributeRegistry.register(
+                    FALSE_FROG,
+                    net.seep.odd.entity.falsefrog.FalseFrogEntity.createAttributes()
+            );
+        }
+
     }
 }

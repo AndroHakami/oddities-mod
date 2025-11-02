@@ -28,6 +28,7 @@ public class ModSounds {
     public static final SoundEvent CRAPPY_BLOCK_HIT = registerSoundEvent("crappy_block_hit");
     public static final SoundEvent CRAPPY_BLOCK_STEP = registerSoundEvent("crappy_block_step");
     public static final SoundEvent VOID_AMBIENCE = registerSoundEvent("void_ambience");
+    public static final SoundEvent ROTTEN_ROOTS = registerSoundEvent("rotten_roots");
     public static final SoundEvent VOID_OPEN = registerSoundEvent("void_open");
 
 

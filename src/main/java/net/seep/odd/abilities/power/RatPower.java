@@ -58,6 +58,12 @@ public final class RatPower implements Power {
     @Override public Identifier portraitTexture() {
         return new Identifier(Oddities.MOD_ID, "textures/gui/overview/rat.png");
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "MY SEAT!";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
 
     /* ======================= state ======================= */
     private static final class St {

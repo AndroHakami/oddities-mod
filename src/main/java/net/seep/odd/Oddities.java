@@ -59,6 +59,7 @@ import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
 
+import net.seep.odd.commands.OddCooldownCommand;
 import net.seep.odd.enchant.ItalianStompersHandler;
 import net.seep.odd.enchant.ModEnchantments;
 
@@ -70,6 +71,8 @@ import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 
+import net.seep.odd.expeditions.Expeditions;
+import net.seep.odd.expeditions.rottenroots.RottenRootsCommands;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
@@ -78,6 +81,7 @@ import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sound.ModSounds;
 
 import net.seep.odd.status.ModStatusEffects;
+import net.seep.odd.worldgen.ModSpawns;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.GeckoLib;
@@ -95,9 +99,17 @@ public final class Oddities implements ModInitializer {
 		ModSounds.registerSounds();
 		ModStatusEffects.init();
 
+
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
 		net.seep.odd.util.TickScheduler.init();
 		OddParticles.register();
+
+		// EXPEDITIONS
+		Expeditions.register();
+
+
+
+
 
 		// Entities & attributes
 		ModEntities.register();
@@ -107,6 +119,8 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.RIDER_CAR, RiderCarEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.GHOSTLING, GhostlingEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.FALSE_FROG, GhostlingEntity.createAttributes());
+		ModSpawns.registerFalseFrogSpawns();
 
 
 		// GeckoLib (common entrypoint)
@@ -134,6 +148,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new SuperChargePower());
 		Powers.register(new GamblePower());
 		Powers.register(new BuddymorphPower());
+		Powers.register(new FallingSnowPower());
 
 		// ---- Commands ----
 		PowerCommands.register();

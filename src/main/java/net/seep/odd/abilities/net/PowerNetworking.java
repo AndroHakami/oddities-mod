@@ -1,67 +1,142 @@
 package net.seep.odd.abilities.net;
 
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
-import net.seep.odd.abilities.power.Power;
-import net.seep.odd.abilities.power.Powers;
-import net.seep.odd.abilities.power.ChargedPower;
-import net.seep.odd.abilities.data.ChargeState;
-
-import java.util.UUID;
+import net.seep.odd.Oddities;
+import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.abilities.client.AbilityHudOverlay;
+import net.seep.odd.abilities.client.ClientCooldowns;
 
 public final class PowerNetworking {
-    private PowerNetworking() {}
+    private PowerNetworking(){}
 
-    public static final Identifier SYNC     = new Identifier("odd", "power_sync");
-    public static final Identifier COOLDOWN = new Identifier("odd", "power_cooldown");
-    public static final Identifier CHARGES  = new Identifier("odd", "power_charges"); // NEW
+    /* ===================== CHANNELS ===================== */
 
-    /** Send current power id to a player (also sends initial charge snapshots if applicable). */
-    public static void syncTo(ServerPlayerEntity player, String id) {
-        // id sync
-        PacketByteBuf buf = PacketByteBufs.create();
-        buf.writeString(id);
-        ServerPlayNetworking.send(player, SYNC, buf);
+    // S2C
+    public static final Identifier S2C_SYNC_POWER = new Identifier(Oddities.MOD_ID, "power/sync_power_id");
+    public static final Identifier S2C_COOLDOWN   = new Identifier(Oddities.MOD_ID, "power/cooldown");
+    public static final Identifier S2C_CHARGES    = new Identifier(Oddities.MOD_ID, "power/charges");
 
-        // also push initial charge lanes so HUD has correct numbers immediately
-        Power p = Powers.get(id);
-        if (p instanceof ChargedPower cp) {
-            long now = player.getWorld().getTime();
-            UUID u = player.getUuid();
-            ChargeState cs = ChargeState.get(player.getServer());
-            String[] slots = {"primary", "secondary", "third", "fourth"};
-            for (String s : slots) {
-                if (!cp.usesCharges(s)) continue;
-                int max = Math.max(1, cp.maxCharges(s));
-                String key = id + "#" + s;
-                // tick + snapshot
-                ChargeState.Snapshot snap = cs.snapshot(key, u, max, now);
-                sendCharges(player, s, snap.have, snap.max, snap.recharge, snap.nextReady, snap.now);
-            }
-        }
+    // C2S (NEW): hold lifecycle
+    public static final Identifier C2S_HOLD_START   = new Identifier(Oddities.MOD_ID, "power/hold_start");
+    public static final Identifier C2S_HOLD_TICK    = new Identifier(Oddities.MOD_ID, "power/hold_tick");
+    public static final Identifier C2S_HOLD_RELEASE = new Identifier(Oddities.MOD_ID, "power/hold_release");
+
+    /* ===================== SERVER REG ===================== */
+
+    /** Call from common init. */
+    public static void initServer() {
+        // HOLD START
+        ServerPlayNetworking.registerGlobalReceiver(C2S_HOLD_START, (server, player, handler, buf, responseSender) -> {
+            final String slot = buf.readString(16);
+            server.execute(() -> PowerAPI.holdStart(player, slot));
+        });
+
+        // HOLD TICK
+        ServerPlayNetworking.registerGlobalReceiver(C2S_HOLD_TICK, (server, player, handler, buf, responseSender) -> {
+            final String slot = buf.readString(16);
+            final int heldTicks = buf.readVarInt();
+            server.execute(() -> PowerAPI.holdTick(player, slot, heldTicks));
+        });
+
+        // HOLD RELEASE
+        ServerPlayNetworking.registerGlobalReceiver(C2S_HOLD_RELEASE, (server, player, handler, buf, responseSender) -> {
+            final String slot = buf.readString(16);
+            final int heldTicks = buf.readVarInt();
+            final boolean canceled = buf.readBoolean();
+            server.execute(() -> PowerAPI.holdRelease(player, slot, heldTicks, canceled));
+        });
     }
 
-    /** Send a cooldown window to a client HUD (ticks). */
-    public static void sendCooldown(ServerPlayerEntity player, String slot, long ticks) {
-        PacketByteBuf buf = PacketByteBufs.create();
-        buf.writeString(slot);
-        buf.writeVarInt((int) Math.max(0, ticks));
-        ServerPlayNetworking.send(player, COOLDOWN, buf);
+    /* ===================== CLIENT REG ===================== */
+
+    /** Call from client init. */
+    @Environment(EnvType.CLIENT)
+    public static void initClient() {
+        // 1) power id sync -> clear local UI state, AbilityHudOverlay reads it on render
+        ClientPlayNetworking.registerGlobalReceiver(S2C_SYNC_POWER, (client, handler, buf, response) -> {
+            final String id = buf.readString(64);
+            client.execute(() -> {
+                // this is what your HUD reads
+                AbilityHudOverlay.ClientCharges.clear();
+                ClientCooldowns.clear();
+                net.seep.odd.abilities.client.ClientPowerHolder.set(id);
+            });
+        });
+
+        // 2) simple cooldown update (non-charge)
+        ClientPlayNetworking.registerGlobalReceiver(S2C_COOLDOWN, (client, handler, buf, response) -> {
+            final String slot = buf.readString(16);
+            final long remain = buf.readVarLong();
+            client.execute(() -> ClientCooldowns.set(slot, (int)Math.max(0L, remain)));
+        });
+
+        // 3) charge lane snapshot
+        ClientPlayNetworking.registerGlobalReceiver(S2C_CHARGES, (client, handler, buf, response) -> {
+            final String slot = buf.readString(16);
+            final int have = buf.readVarInt();
+            final int max  = buf.readVarInt();
+            final long recharge  = buf.readVarLong();
+            final long nextReady = buf.readVarLong();
+            final long serverNow = buf.readVarLong();
+            client.execute(() -> AbilityHudOverlay.ClientCharges.set(slot, have, max, recharge, nextReady, serverNow));
+        });
     }
 
-    /** Send a charge lane snapshot for a given slot. */
-    public static void sendCharges(ServerPlayerEntity player, String slot, int have, int max, long recharge, long nextReady, long serverNow) {
-        PacketByteBuf buf = PacketByteBufs.create();
-        buf.writeString(slot);
-        buf.writeVarInt(Math.max(0, have));
-        buf.writeVarInt(Math.max(1, max));
-        buf.writeVarLong(Math.max(0L, recharge));
-        buf.writeVarLong(Math.max(0L, nextReady));
-        buf.writeVarLong(Math.max(0L, serverNow));
-        ServerPlayNetworking.send(player, CHARGES, buf);
+    /* ===================== CLIENT SEND HELPERS ===================== */
+
+    @Environment(EnvType.CLIENT)
+    public static void sendHoldStart(String slot) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeString(slot, 16);
+        ClientPlayNetworking.send(C2S_HOLD_START, out);
+    }
+    @Environment(EnvType.CLIENT)
+    public static void sendHoldTick(String slot, int heldTicks) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeString(slot, 16);
+        out.writeVarInt(heldTicks);
+        ClientPlayNetworking.send(C2S_HOLD_TICK, out);
+    }
+    @Environment(EnvType.CLIENT)
+    public static void sendHoldRelease(String slot, int heldTicks, boolean canceled) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeString(slot, 16);
+        out.writeVarInt(heldTicks);
+        out.writeBoolean(canceled);
+        ClientPlayNetworking.send(C2S_HOLD_RELEASE, out);
+    }
+
+    /* ===================== S2C EMITTERS (SERVER SIDE) ===================== */
+
+    public static void syncTo(ServerPlayerEntity sp, String id) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeString(id == null ? "" : id, 64);
+        ServerPlayNetworking.send(sp, S2C_SYNC_POWER, out);
+    }
+
+    public static void sendCooldown(ServerPlayerEntity sp, String slot, long remain) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeString(slot, 16);
+        out.writeVarLong(Math.max(0L, remain));
+        ServerPlayNetworking.send(sp, S2C_COOLDOWN, out);
+    }
+
+    public static void sendCharges(ServerPlayerEntity sp, String slot, int have, int max, long recharge, long nextReady, long serverNow) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeString(slot, 16);
+        out.writeVarInt(have);
+        out.writeVarInt(max);
+        out.writeVarLong(recharge);
+        out.writeVarLong(nextReady);
+        out.writeVarLong(serverNow);
+        ServerPlayNetworking.send(sp, S2C_CHARGES, out);
     }
 }

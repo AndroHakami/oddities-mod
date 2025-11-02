@@ -52,6 +52,12 @@ public final class ClientCooldowns {
         return get(slot) > 0;
     }
 
+    /** Clear all client-side cooldown state (e.g., when power id changes). */
+    public static void clear() {
+        duration.clear();
+        startedAt.clear();
+    }
+
     /** No-op now; left for compatibility with existing init code. */
     public static void registerTicker() { /* time-based; nothing to tick */ }
 }

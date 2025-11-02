@@ -3,9 +3,12 @@ package net.seep.odd.abilities.client;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.seep.odd.abilities.net.AbilityKeyPacket;
+import net.seep.odd.abilities.power.Powers;
+import net.seep.odd.abilities.power.HoldReleasePower;
 import org.lwjgl.glfw.GLFW;
 
 public final class AbilityKeybinds {
@@ -16,6 +19,10 @@ public final class AbilityKeybinds {
     private static KeyBinding third;
     private static KeyBinding fourth;
     private static KeyBinding overview;
+
+    // client-side hold state for the secondary key
+    private static boolean secHolding = false;
+    private static int secHeldTicks = 0;
 
     private AbilityKeybinds() {}
 
@@ -33,19 +40,58 @@ public final class AbilityKeybinds {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
 
-            // >>> OPEN OVERVIEW SCREEN HERE <<<
+            // Overview UI open (local only)
             if (overview.wasPressed()) {
                 if (client.currentScreen == null) {
                     client.setScreen(new net.seep.odd.abilities.client.AbilityOverviewScreen());
                 }
                 return; // don't send a packet for overview
             }
-            if (primary.wasPressed())   sendPress("primary");
-            if (secondary.wasPressed()) sendPress("secondary");
-            if (third.wasPressed())     sendPress("third");
-            if (fourth.wasPressed())    sendPress("fourth");
-            if (overview.wasPressed())  sendPress("overview");
+
+            // PRIMARY / THIRD / FOURTH stay as simple presses
+            if (primary.wasPressed()) sendPress("primary");
+            if (third.wasPressed())   sendPress("third");
+            if (fourth.wasPressed())  sendPress("fourth");
+
+            // SECONDARY: if current power supports hold, run hold lifecycle; else fall back to press
+            boolean useHoldForSecondary = currentPowerSupportsSecondaryHold();
+
+            if (useHoldForSecondary) {
+                boolean pressed = secondary.isPressed();
+                if (pressed && !secHolding) {
+                    secHolding = true;
+                    secHeldTicks = 0;
+                    ClientPlayNetworking.send(AbilityKeyPacket.HOLD_START,
+                            AbilityKeyPacket.makeHoldStartBuf("secondary"));
+                    // local HUD fade
+                    AbilityHudOverlay.ClientHeldState.set("secondary", true);
+                }
+
+                if (pressed && secHolding) {
+                    secHeldTicks++;
+                    ClientPlayNetworking.send(AbilityKeyPacket.HOLD_TICK,
+                            AbilityKeyPacket.makeHoldTickBuf("secondary", secHeldTicks));
+                }
+
+                if (!pressed && secHolding) {
+                    ClientPlayNetworking.send(AbilityKeyPacket.HOLD_RELEASE,
+                            AbilityKeyPacket.makeHoldReleaseBuf("secondary", secHeldTicks, false));
+                    AbilityHudOverlay.ClientHeldState.set("secondary", false);
+                    secHolding = false;
+                    secHeldTicks = 0;
+                }
+            } else {
+                // Fallback: old behavior
+                if (secondary.wasPressed()) sendPress("secondary");
+            }
         });
+    }
+
+    private static boolean currentPowerSupportsSecondaryHold() {
+        // Ask client-side registry what power is active and whether it implements HoldReleasePower
+        String powerId = ClientPowerHolder.get();
+        var p = Powers.get(powerId);
+        return p instanceof HoldReleasePower && p.hasSlot("secondary");
     }
 
     private static KeyBinding registerKey(String name, int defaultKey) {
@@ -74,7 +120,6 @@ public final class AbilityKeybinds {
         };
         return kb == null ? "" : kb.getBoundKeyLocalizedText().getString();
     }
-
 
     // Optional getters if you need to expose the bindings elsewhere
     public static KeyBinding primary()   { return primary; }

@@ -1,182 +1,209 @@
 package net.seep.odd.abilities.data;
 
-import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.world.PersistentState;
-import net.minecraft.world.PersistentStateManager;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Tracks per-player, per-lane charges with pipelined recharge.
- * Lane key format is up to the caller (Power id + "#" + slot in PowerAPI).
+ * Per-player charge lanes with queue-style regeneration.
+ *
+ * Key model:
+ * - For each lane (string key) per player, we store:
+ *   have (current charges), max, recharge (ticks between charges),
+ *   nextReady (server world tick when the next +1 will be granted; 0 means no timer running).
+ *
+ * Semantics:
+ * - tick(): while (have < max && nextReady > 0 && now >= nextReady) { have++; nextReady = (have < max ? nextReady + recharge : 0); }
+ * - consume(): if have>0 then have--; if no timer running and recharge>0 -> start one at now+recharge; otherwise keep the existing timer.
+ *   (This preserves an in-flight timer, so consuming does NOT push it back.)
  */
-public final class ChargeState extends PersistentState {
-    private static final String SAVE_ID = "charges";
-    private static final String PLAYERS_KEY = "players";
+public class ChargeState extends PersistentState {
+    private static final String STORAGE_NAME = "oddities_power_charges";
 
-    // players -> (laneKey -> Lane)
-    private final Map<UUID, Map<String, Lane>> data = new Object2ObjectOpenHashMap<>();
+    /** players -> (laneKey -> lane) */
+    private final Map<UUID, Map<String, Lane>> data = new HashMap<>();
 
     public static ChargeState get(MinecraftServer server) {
-        PersistentStateManager psm = server.getOverworld().getPersistentStateManager();
-        return psm.getOrCreate(ChargeState::fromNbt, ChargeState::new, SAVE_ID);
+        ServerWorld world = server.getOverworld();
+        return world.getPersistentStateManager().getOrCreate(ChargeState::fromNbt, ChargeState::new, STORAGE_NAME);
     }
 
-    private static ChargeState fromNbt(NbtCompound nbt) {
-        ChargeState s = new ChargeState();
-        if (nbt.contains(PLAYERS_KEY, NbtElement.COMPOUND_TYPE)) {
-            NbtCompound players = nbt.getCompound(PLAYERS_KEY);
-            for (String uuidStr : players.getKeys()) {
-                try {
-                    UUID id = UUID.fromString(uuidStr);
-                    NbtCompound lanesN = players.getCompound(uuidStr);
-                    Map<String, Lane> lanes = new Object2ObjectOpenHashMap<>();
-                    for (String laneKey : lanesN.getKeys()) {
-                        lanes.put(laneKey, Lane.fromNbt(lanesN.getCompound(laneKey)));
-                    }
-                    s.data.put(id, lanes);
-                } catch (IllegalArgumentException ignored) {}
+    /* ---------------- lane model ---------------- */
+
+    private static final class Lane {
+        int  have     = 0;
+        int  max      = 1;
+        long recharge = 0L;
+        long nextReady = 0L; // 0 => no timer running
+
+        void ensureMax(int newMax) {
+            if (newMax <= 0) newMax = 1;
+            if (max != newMax) {
+                // If we ever change max, clamp have to the new max.
+                max = newMax;
+                if (have > max) have = max;
             }
+        }
+    }
+
+    private Lane lane(UUID uuid, String key) {
+        Map<String, Lane> lanes = data.computeIfAbsent(uuid, u -> new HashMap<>());
+        return lanes.computeIfAbsent(key, k -> new Lane());
+    }
+
+    /* ---------------- public API ---------------- */
+
+    /** Progress the lane up to 'now'. Also ensures lane is initialized and clamped. */
+    public void tick(String key, UUID uuid, int max, long now) {
+        Lane ln = lane(uuid, key);
+
+        // First-time lane => start full
+        if (ln.max == 1 && ln.have == 0 && ln.nextReady == 0 && ln.recharge == 0L) {
+            ln.max = Math.max(1, max);
+            ln.have = ln.max;
+        } else {
+            ln.ensureMax(max);
+        }
+
+        // If recharge is zero or negative, lane is always full.
+        if (ln.recharge <= 0L) {
+            ln.have = ln.max;
+            ln.nextReady = 0L;
+            return;
+        }
+
+        // Grant queued charges while time has passed.
+        if (ln.have < ln.max && ln.nextReady > 0L) {
+            while (ln.have < ln.max && now >= ln.nextReady) {
+                ln.have++;
+                if (ln.have < ln.max) {
+                    ln.nextReady += ln.recharge; // queue next
+                } else {
+                    ln.nextReady = 0L; // full -> no timer
+                }
+            }
+        }
+
+        markDirty();
+    }
+
+    /** Current charges (after a tick() you call just before). */
+    public int get(String key, UUID uuid, int max) {
+        Lane ln = lane(uuid, key);
+        // If lane was never used, treat as full
+        if (ln.max == 1 && ln.have == 0 && ln.nextReady == 0 && ln.recharge == 0L) {
+            ln.max = Math.max(1, max);
+            ln.have = ln.max;
+            markDirty();
+        } else {
+            ln.ensureMax(max);
+        }
+        return ln.have;
+    }
+
+    /**
+     * Consume one charge if available.
+     * - Preserves an in-flight timer (does not reset or extend it).
+     * - If lane was full (no timer) and we consume, we start the timer at now+recharge.
+     */
+    public boolean consume(String key, UUID uuid, int max, long now, long recharge) {
+        Lane ln = lane(uuid, key);
+
+        // Initialize lane if first use
+        if (ln.max == 1 && ln.have == 0 && ln.nextReady == 0 && ln.recharge == 0L) {
+            ln.max = Math.max(1, max);
+            ln.have = ln.max;
+        } else {
+            ln.ensureMax(max);
+        }
+
+        // Update (tick) first so have/nextReady reflect any elapsed time
+        if (ln.recharge != recharge) {
+            ln.recharge = Math.max(0L, recharge);
+        }
+        tick(key, uuid, ln.max, now);
+
+        if (ln.have <= 0) {
+            return false;
+        }
+
+        // Consume one
+        ln.have--;
+
+        // Timer logic:
+        // If we were full (no timer running) and just consumed, start the timer.
+        // If a timer is already running (nextReady > 0), KEEP IT as-is (do not push it).
+        if (ln.recharge > 0L && ln.nextReady == 0L) {
+            ln.nextReady = now + ln.recharge;
+        }
+
+        markDirty();
+        return true;
+    }
+
+    /** Snapshot after having called tick(). */
+    public Snapshot snapshot(String key, UUID uuid, int max, long now) {
+        Lane ln = lane(uuid, key);
+        // Make sure the lane shape is consistent even if never used
+        if (ln.max == 1 && ln.have == 0 && ln.nextReady == 0 && ln.recharge == 0L) {
+            ln.max = Math.max(1, max);
+            ln.have = ln.max;
+        } else {
+            ln.ensureMax(max);
+        }
+        return new Snapshot(ln.have, ln.max, ln.recharge, ln.nextReady, now);
+    }
+
+    /* ---------------- snapshot record ---------------- */
+
+    public record Snapshot(int have, int max, long recharge, long nextReady, long now) {}
+
+    /* ---------------- persistence ---------------- */
+
+    public static ChargeState fromNbt(NbtCompound nbt) {
+        ChargeState s = new ChargeState();
+        NbtCompound players = nbt.getCompound("players");
+        for (String uuidStr : players.getKeys()) {
+            UUID id;
+            try { id = UUID.fromString(uuidStr); } catch (IllegalArgumentException ex) { continue; }
+            NbtCompound lanesNbt = players.getCompound(uuidStr);
+            Map<String, Lane> lanes = new HashMap<>();
+            for (String laneKey : lanesNbt.getKeys()) {
+                NbtCompound lnNbt = lanesNbt.getCompound(laneKey);
+                Lane ln = new Lane();
+                ln.have      = lnNbt.getInt("have");
+                ln.max       = Math.max(1, lnNbt.getInt("max"));
+                ln.recharge  = Math.max(0L, lnNbt.getLong("recharge"));
+                ln.nextReady = Math.max(0L, lnNbt.getLong("nextReady"));
+                lanes.put(laneKey, ln);
+            }
+            s.data.put(id, lanes);
         }
         return s;
-    }
-
-    public ChargeState() {}
-
-    /* ---------------------- public API used by PowerAPI ---------------------- */
-
-    /** Replenish any ready charges for this lane (lazy tick). */
-    public void tick(String laneKey, UUID player, int max, long now) {
-        Lane lane = lane(player, laneKey);
-        if (lane.max != max) {
-            lane.max = Math.max(1, max);
-            if (lane.have > lane.max) lane.have = lane.max;
-        }
-        boolean changed = false;
-
-        // If recharge is 0, lane is always full
-        if (lane.recharge <= 0) {
-            if (lane.have != lane.max) { lane.have = lane.max; changed = true; }
-        } else {
-            while (lane.have < lane.max && now >= lane.nextReady) {
-                lane.have++;
-                lane.nextReady += lane.recharge; // pipeline consecutive refills
-                changed = true;
-            }
-        }
-
-        if (changed) setDirty(true);
-    }
-
-    /** Current available charges (after a previous tick call). */
-    public int get(String laneKey, UUID player, int max) {
-        Lane lane = lane(player, laneKey);
-        if (lane.max != max) {
-            lane.max = Math.max(1, max);
-            if (lane.have > lane.max) lane.have = lane.max;
-        }
-        return Math.min(lane.have, lane.max);
-    }
-
-    /** Consume one charge and schedule its recharge. */
-    public void consume(String laneKey, UUID player, int max, long now, long rechargeTicks) {
-        Lane lane = lane(player, laneKey);
-        int newMax = Math.max(1, max);
-        if (lane.max != newMax) {
-            lane.max = newMax;
-            if (lane.have > lane.max) lane.have = lane.max;
-        }
-
-        lane.recharge = Math.max(0L, rechargeTicks);
-
-        if (lane.have > 0) {
-            lane.have--;
-
-            if (lane.recharge <= 0) {
-                // instantaneous refill: always full
-                lane.have = lane.max;
-                lane.nextReady = now; // irrelevant
-            } else {
-                // Pipeline the next ready time: if none scheduled yet, start now+rt; otherwise push it.
-                lane.nextReady = Math.max(lane.nextReady, now) + lane.recharge;
-            }
-
-            setDirty(true);
-        }
-    }
-
-    /** Snapshot for S2C (have/max/recharge/nextReady + the server's "now"). */
-    public Snapshot snapshot(String laneKey, UUID player, int max, long now) {
-        tick(laneKey, player, max, now);
-        Lane lane = lane(player, laneKey);
-        return new Snapshot(Math.min(lane.have, lane.max), lane.max, lane.recharge, lane.nextReady, now);
-    }
-
-    /* ---------------------- internals + serialization ---------------------- */
-
-    private Lane lane(UUID player, String laneKey) {
-        Map<String, Lane> lanes = data.computeIfAbsent(player, u -> new Object2ObjectOpenHashMap<>());
-        return lanes.computeIfAbsent(laneKey, k -> {
-            Lane l = new Lane();
-            l.max = 1;
-            l.have = 1;
-            l.recharge = 0;
-            l.nextReady = 0;
-            return l;
-        });
     }
 
     @Override
     public NbtCompound writeNbt(NbtCompound nbt) {
         NbtCompound players = new NbtCompound();
-        for (var ePlayer : data.entrySet()) {
-            NbtCompound lanesN = new NbtCompound();
-            for (var eLane : ePlayer.getValue().entrySet()) {
-                lanesN.put(eLane.getKey(), eLane.getValue().toNbt());
+        for (var pe : data.entrySet()) {
+            NbtCompound lanesNbt = new NbtCompound();
+            for (var le : pe.getValue().entrySet()) {
+                Lane ln = le.getValue();
+                NbtCompound lnNbt = new NbtCompound();
+                lnNbt.putInt("have", ln.have);
+                lnNbt.putInt("max", ln.max);
+                lnNbt.putLong("recharge", ln.recharge);
+                lnNbt.putLong("nextReady", ln.nextReady);
+                lanesNbt.put(le.getKey(), lnNbt);
             }
-            players.put(ePlayer.getKey().toString(), lanesN);
+            players.put(pe.getKey().toString(), lanesNbt);
         }
-        nbt.put(PLAYERS_KEY, players);
+        nbt.put("players", players);
         return nbt;
-    }
-
-    /* A lane of charges for one slot */
-    private static final class Lane {
-        int  max;        // last-seen capacity
-        int  have;       // current available charges
-        long recharge;   // ticks per charge
-        long nextReady;  // when the next charge becomes available (pipelines)
-
-        NbtCompound toNbt() {
-            NbtCompound n = new NbtCompound();
-            n.putInt("max", max);
-            n.putInt("have", have);
-            n.putLong("recharge", recharge);
-            n.putLong("nextReady", nextReady);
-            return n;
-        }
-        static Lane fromNbt(NbtCompound n) {
-            Lane l = new Lane();
-            if (n.contains("max", NbtElement.INT_TYPE))        l.max = Math.max(1, n.getInt("max"));
-            if (n.contains("have", NbtElement.INT_TYPE))       l.have = Math.max(0, n.getInt("have"));
-            if (n.contains("recharge", NbtElement.LONG_TYPE))  l.recharge = Math.max(0L, n.getLong("recharge"));
-            if (n.contains("nextReady", NbtElement.LONG_TYPE)) l.nextReady = n.getLong("nextReady");
-            if (l.max <= 0) l.max = 1;
-            if (l.have > l.max) l.have = l.max;
-            return l;
-        }
-    }
-
-    /** Immutable snapshot for network. */
-    public static final class Snapshot {
-        public final int have, max;
-        public final long recharge, nextReady, now;
-        public Snapshot(int have, int max, long recharge, long nextReady, long now) {
-            this.have = have; this.max = max; this.recharge = recharge; this.nextReady = nextReady; this.now = now;
-        }
     }
 }
