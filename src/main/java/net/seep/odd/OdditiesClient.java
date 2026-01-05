@@ -47,6 +47,8 @@ import net.seep.odd.abilities.icewitch.client.IceWitchHud;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.looker.LookerClient;
+import net.seep.odd.abilities.lunar.item.LunarDrillItem;
+import net.seep.odd.abilities.lunar.net.LunarPackets;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
 import net.seep.odd.abilities.power.*;
@@ -84,6 +86,7 @@ import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.falsefrog.client.FalseFrogRenderer;
+import net.seep.odd.entity.firefly.client.FireflyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
@@ -94,6 +97,7 @@ import net.seep.odd.entity.zerosuit.ZeroBeamRenderer;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.particles.client.OddParticlesClient;
 import net.seep.odd.particles.client.SpottedStepsParticle;
+import net.seep.odd.particles.client.TelekinesisParticle;
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
 import net.seep.odd.abilities.ghostlings.client.GhostlingRenderer;
@@ -275,15 +279,15 @@ public final class OdditiesClient implements ClientModInitializer {
 
         EntityRendererRegistry.register(SuperEntities.THROWN_ITEM, SuperThrownItemEntityRenderer::new);
 
-        // Gamble
+        // Gamble (client)
         net.seep.odd.abilities.gamble.item.GambleRevolverItem.initClientHooks();
 
 
-        // Buddymorph
+        // Buddymorph (client)
         BuddymorphClient.init();
         BuddymorphPower.Client.init();
 
-        // Falling Snow
+        // Falling Snow (client)
         FallingSnowPower.Client.init();
         FallingSnowClient.init();
         EntityRendererRegistry.register(ModEntities.HEALING_SNOWBALL, ctx -> new FlyingItemEntityRenderer<>(ctx));
@@ -292,6 +296,36 @@ public final class OdditiesClient implements ClientModInitializer {
 
 
         // Rotten Roots (World)
+
+        // Fairy (client)
+        net.seep.odd.abilities.fairy.client.FairyKeysClient.registerClient();
+        net.seep.odd.block.falseflower.FalseFlowerTracker.registerClient();
+
+        // Lunar (client)
+        LunarPackets.registerClientReceivers();
+        net.seep.odd.abilities.lunar.client.MoonAnchorClient.init();
+        EntityRendererRegistry.register(ModEntities.LUNAR_MARK, ctx -> new FlyingItemEntityRenderer<>(ctx));
+        LunarPower.Hud.init();
+        LunarDrillItem.initClientHooks();
+
+        // Fire Sword (Client)
+        // Client init ONLY
+        EntityRendererRegistry.register(ModEntities.FIRE_SWORD_PROJECTILE,
+                net.seep.odd.abilities.firesword.client.FireSwordProjectileRenderer::new);
+
+        // Glitch Power (Client)
+        GlitchPower.Client.init();
+        ParticleFactoryRegistry.getInstance()
+                .register(OddParticles.TELEKINESIS, TelekinesisParticle.Factory::new);
+        BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.GLITCH_BLOCK, RenderLayer.getTranslucent());
+
+        // Accelerate Power (Client)
+        AcceleratePower.Client.init();
+
+
+
+
+
 
 
 
@@ -342,6 +376,7 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.PHANTOM_BUDDY, PhantomBuddyRenderer::new);
         EntityRendererRegistry.register(ModEntities.ZERO_BEAM, ZeroBeamRenderer::new);
         EntityRendererRegistry.register(ModEntities.FALSE_FROG, FalseFrogRenderer::new);
+        EntityRendererRegistry.register(ModEntities.FIREFLY, FireflyRenderer::new);
 
 
 

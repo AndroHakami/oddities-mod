@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/block/ModBlocks.java
 package net.seep.odd.block;
 
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
@@ -23,6 +24,10 @@ import net.seep.odd.block.grandanvil.GrandAnvilBlock;
 import net.seep.odd.block.grandanvil.GrandAnvilBlockEntity;
 import net.seep.odd.sound.ModSounds;
 
+// NEW: False Flower
+import net.seep.odd.block.falseflower.FalseFlowerBlock;
+import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
+
 public class ModBlocks {
 
     /* ---------------- Existing blocks ---------------- */
@@ -35,6 +40,18 @@ public class ModBlocks {
 
     public static final Block SOUND_BLOCK = registerBlock("sound_block",
             new SoundBlock(FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).sounds(ModSounds.SOUND_BLOCK_SOUNDS)), false);
+
+    // NEW: Glitch Block (indestructible glass-like)
+    public static final Block GLITCH_BLOCK = registerBlock("glitch_block",
+            new Block(FabricBlockSettings.copyOf(Blocks.GLASS)
+                    .strength(-1.0f, 3600000.0f)   // unbreakable / blast-proof
+                    .nonOpaque()
+                    .sounds(BlockSoundGroup.GLASS)
+                    .dropsNothing()
+
+            ),
+            false
+    );
 
     public static final Block GRAND_ANVIL = Registry.register(
             Registries.BLOCK,
@@ -66,6 +83,12 @@ public class ModBlocks {
     public static Block POTION_MIXER;
     public static Item  POTION_MIXER_ITEM;
     public static BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE;
+
+    /* ---------------- False Flower (Fairy power) ---------------- */
+
+    public static Block FALSE_FLOWER;
+    public static Item  FALSE_FLOWER_ITEM;
+    public static BlockEntityType<FalseFlowerBlockEntity> FALSE_FLOWER_BE;
 
     /* ---------------- Helpers ---------------- */
 
@@ -109,6 +132,34 @@ public class ModBlocks {
                 Registries.BLOCK_ENTITY_TYPE,
                 new Identifier(Oddities.MOD_ID, "potion_mixer"),
                 FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build(null)
+        );
+
+        /* --------- REGISTER: False Flower --------- */
+
+        // Block
+        FALSE_FLOWER = Registry.register(
+                Registries.BLOCK,
+                new Identifier(Oddities.MOD_ID, "false_flower"),
+                new FalseFlowerBlock(
+                        AbstractBlock.Settings.copy(Blocks.AZALEA)
+                                .nonOpaque()
+                                .strength(0.4f)
+                                .sounds(BlockSoundGroup.AZALEA)
+                )
+        );
+
+        // Block item
+        FALSE_FLOWER_ITEM = Registry.register(
+                Registries.ITEM,
+                new Identifier(Oddities.MOD_ID, "false_flower"),
+                new BlockItem(FALSE_FLOWER, new Item.Settings())
+        );
+
+        // Block entity type
+        FALSE_FLOWER_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE,
+                new Identifier(Oddities.MOD_ID, "false_flower"),
+                FabricBlockEntityTypeBuilder.create(FalseFlowerBlockEntity::new, FALSE_FLOWER).build(null)
         );
     }
 }

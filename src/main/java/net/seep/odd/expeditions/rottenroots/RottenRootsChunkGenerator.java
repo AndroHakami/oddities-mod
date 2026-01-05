@@ -11,7 +11,6 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
-import net.minecraft.world.BlockView;
 import net.minecraft.world.ChunkRegion;
 import net.minecraft.world.HeightLimitView;
 import net.minecraft.world.Heightmap;
@@ -35,13 +34,22 @@ import java.util.concurrent.Executor;
  */
 public final class RottenRootsChunkGenerator extends ChunkGenerator {
 
-    public static final MapCodec<RottenRootsChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance ->
+    // MapCodec used by the CHUNK_GENERATOR registry (type-based dispatch)
+    public static final MapCodec<RottenRootsChunkGenerator> CONFIG_CODEC = RecordCodecBuilder.mapCodec(instance ->
             instance.group(
                     BiomeSource.CODEC.fieldOf("biome_source").forGetter(g -> g.biomeSource),
                     Codec.LONG.optionalFieldOf("seed", 0L).forGetter(g -> g.seed),
                     Codec.FLOAT.optionalFieldOf("density", 1.0f).forGetter(g -> g.density)
             ).apply(instance, RottenRootsChunkGenerator::new)
     );
+
+    // IMPORTANT: stable Codec instance (do NOT call CONFIG_CODEC.codec() every time)
+    public static final Codec<RottenRootsChunkGenerator> CODEC = CONFIG_CODEC.codec();
+
+    // === Multipliers ===
+    private static final float DENSITY_FACTOR = 1.4f;
+    private static final int   LENGTH_MULT    = 3;
+    private static final int   THICK_SCALE_MAX= 2;
 
     private final long seed;
     private final float density;
@@ -52,18 +60,26 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         this.density = Math.max(0.05f, density);
     }
 
-    @Override public Codec<? extends ChunkGenerator> getCodec() { return CODEC.codec(); }
-
+    // THIS is what fixes your world save corruption:
     @Override
-    public void carve(ChunkRegion chunkRegion, long seed, NoiseConfig noiseConfig, BiomeAccess biomeAccess, StructureAccessor structureAccessor, Chunk chunk, GenerationStep.Carver carverStep) {
-
+    protected Codec<? extends ChunkGenerator> getCodec() {
+        return CODEC; // stable instance
     }
 
-    public ChunkGenerator withSeed(long seed) { return new RottenRootsChunkGenerator(this.biomeSource, seed, this.density); }
-     public void carve(ChunkRegion region, long seed, NoiseConfig nc, BiomeSource ba, StructureAccessor sa, Chunk chunk, GenerationStep.Carver step) {}
+
+    public ChunkGenerator withSeed(long seed) {
+        return new RottenRootsChunkGenerator(this.biomeSource, seed, this.density);
+    }
 
     @Override
-    public CompletableFuture<Chunk> populateNoise(Executor executor, Blender blender, NoiseConfig noiseConfig, StructureAccessor structures, Chunk chunk) {
+    public void carve(ChunkRegion region, long seed, NoiseConfig noiseConfig, BiomeAccess biomeAccess,
+                      StructureAccessor structureAccessor, Chunk chunk, GenerationStep.Carver carverStep) {
+        // no carving
+    }
+
+    @Override
+    public CompletableFuture<Chunk> populateNoise(Executor executor, Blender blender, NoiseConfig noiseConfig,
+                                                  StructureAccessor structures, Chunk chunk) {
         paintBedrockFloor(chunk);
         paintRoots(chunk);
         return CompletableFuture.completedFuture(chunk);
@@ -71,9 +87,7 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
 
     @Override public int getSeaLevel() { return 0; }
     @Override public void buildSurface(ChunkRegion region, StructureAccessor sa, NoiseConfig nc, Chunk chunk) {}
-    public void carve(ChunkRegion region, long seed, NoiseConfig nc, BlockPos origin) {}
     @Override public void populateEntities(ChunkRegion region) {}
-    public int getSeaLevel(HeightLimitView world) { return 0; }
     @Override public int getMinimumY() { return -64; }
     @Override public int getWorldHeight() { return 384; }
     @Override public int getSpawnHeight(HeightLimitView world) { return 120; }
@@ -112,7 +126,7 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         final int maxZ = minZ + 15;
         final int bottomY = chunk.getBottomY();
 
-        final int CELL = 40; // dense
+        final int CELL = 40;
 
         int cx0 = Math.floorDiv(minX, CELL) - 1;
         int cz0 = Math.floorDiv(minZ, CELL) - 1;
@@ -126,7 +140,9 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             int cellId = (cx * 7349) ^ (cz * 9157);
             Random r = Random.create(scrambleId(seed, cellId));
 
-            int anchorsHere = 3 + r.nextBetween(0, 2); // 3..5
+            int baseAnchors = 3 + r.nextBetween(0, 2);
+            int anchorsHere = Math.max(2, Math.round(baseAnchors * DENSITY_FACTOR));
+
             List<Anchor> anchors = new ArrayList<>(anchorsHere);
             for (int i = 0; i < anchorsHere; i++) {
                 int ax = cx * CELL + r.nextBetween(0, CELL - 1);
@@ -136,43 +152,50 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             }
             reps.add(anchors.get(r.nextInt(anchors.size())));
 
-            // Main strands (reweighted: fewer non-steep, more steep)
             for (Anchor a : anchors) {
-                int strands = 2 + r.nextBetween(0, 2); // 2..4
+                int baseStrands = 2 + r.nextBetween(0, 2);
+                int strands = Math.max(1, Math.round(baseStrands * DENSITY_FACTOR));
                 for (int s = 0; s < strands; s++) {
                     Vec3d d = chooseWeightedDirection(r);
-                    int len = 90 + r.nextBetween(0, 120);
-                    int thick = pickThickness(r);
+                    int len = (90 + r.nextBetween(0, 120)) * LENGTH_MULT;
+                    int baseThick = pickThickness(r);
+                    int scale = 1 + r.nextBetween(0, THICK_SCALE_MAX - 1);
+                    int thick = Math.min(8, baseThick * scale);
                     BlockState log = pickLog(r);
                     carveStrand(chunk, m, a.x, a.y, a.z, d, len, thick, log,
                             minX, minZ, maxX, maxZ, bottomY, r);
                 }
             }
 
-            // Intra-cell bridges (medium tilt)
-            int bridgesLocal = 2 + r.nextBetween(0, 2); // 2..4
+            int baseBridgesLocal = 2 + r.nextBetween(0, 2);
+            int bridgesLocal = Math.max(1, Math.round(baseBridgesLocal * DENSITY_FACTOR));
             for (int b = 0; b < bridgesLocal; b++) {
                 Anchor a = anchors.get(r.nextInt(anchors.size()));
                 Anchor b2 = anchors.get(r.nextInt(anchors.size()));
                 if (a == b2) continue;
 
                 Vec3d dir = directionToward(a.x, a.y, a.z, b2.x, b2.y, b2.z, r, 20, 40);
-                int len = (int)Math.max(50, new Vec3d(b2.x - a.x, b2.y - a.y, b2.z - a.z).length());
-                int thick = Math.max(1, pickThickness(r) - 1);
-                BlockState log = pickLog(r);
+                int baseLen = (int)Math.max(50, new Vec3d(b2.x - a.x, b2.y - a.y, b2.z - a.z).length());
+                int len = baseLen * LENGTH_MULT;
 
+                int baseThick = pickThickness(r);
+                int scale = 1 + r.nextBetween(0, THICK_SCALE_MAX - 1);
+                int thick = Math.max(1, Math.min(7, baseThick * scale - 1));
+
+                BlockState log = pickLog(r);
                 carveStrand(chunk, m, a.x, a.y, a.z, dir, len, thick, log,
                         minX, minZ, maxX, maxZ, bottomY, r);
             }
         }
 
-        // External bridges between neighboring cells
         for (int cx = cx0; cx <= cx1; cx++) for (int cz = cz0; cz <= cz1; cz++) {
             int cellId = (cx * 7349) ^ (cz * 9157);
             Random r = Random.create(scrambleId(seed, cellId));
 
-            int bridges = 2 + r.nextBetween(0, 2); // 2..4
-            Anchor a = representativeFor(reps, cx, cz, CELL);
+            int baseBridges = 2 + r.nextBetween(0, 2);
+            int bridges = Math.max(1, Math.round(baseBridges * DENSITY_FACTOR));
+
+            Anchor a = representativeFor(reps, cx, cz);
             if (a == null) continue;
 
             for (int b = 0; b < bridges; b++) {
@@ -180,14 +203,18 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
                 int nz = cz + r.nextBetween(-1, 1);
                 if (nx == cx && nz == cz) nz += 1;
 
-                Anchor nb = representativeFor(reps, nx, nz, CELL);
+                Anchor nb = representativeFor(reps, nx, nz);
                 if (nb == null) continue;
 
                 Vec3d dir = directionToward(a.x, a.y, a.z, nb.x, nb.y, nb.z, r, 20, 40);
-                int len = (int)Math.max(60, new Vec3d(nb.x - a.x, nb.y - a.y, nb.z - a.z).length());
-                int thick = Math.max(1, pickThickness(r) - 1);
-                BlockState log = pickLog(r);
+                int baseLen = (int)Math.max(60, new Vec3d(nb.x - a.x, nb.y - a.y, nb.z - a.z).length());
+                int len = baseLen * LENGTH_MULT;
 
+                int baseThick = pickThickness(r);
+                int scale = 1 + r.nextBetween(0, THICK_SCALE_MAX - 1);
+                int thick = Math.max(1, Math.min(7, baseThick * scale - 1));
+
+                BlockState log = pickLog(r);
                 carveStrand(chunk, m, a.x, a.y, a.z, dir, len, thick, log,
                         minX, minZ, maxX, maxZ, bottomY, r);
             }
@@ -211,20 +238,18 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         }
     }
 
-    private static Anchor representativeFor(List<Anchor> reps, int cx, int cz, int cellSize) {
+    private static Anchor representativeFor(List<Anchor> reps, int cx, int cz) {
         for (Anchor a : reps) if (a.cellX == cx && a.cellZ == cz) return a;
         return null;
     }
 
-    /** Reweighted: non-steep −30%, steep +50% (renormalized). */
     private static Vec3d chooseWeightedDirection(Random r) {
-        // base: low 0.60, med 0.25, steep 0.15
-        double lw = 0.60 * 0.70;   // 0.42
-        double mw = 0.25 * 0.70;   // 0.175
-        double sw = 0.15 * 1.50;   // 0.225
-        double sum = lw + mw + sw; // 0.82
-        double lowT = lw / sum;                // ≈ 0.512195
-        double medT = (lw + mw) / sum;         // ≈ 0.725610
+        double lw = 0.60 * 0.70;
+        double mw = 0.25 * 0.70;
+        double sw = 0.15 * 1.50;
+        double sum = lw + mw + sw;
+        double lowT = lw / sum;
+        double medT = (lw + mw) / sum;
 
         float f = r.nextFloat();
         if (f < lowT) return dirLow(r);
@@ -262,23 +287,18 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         return new Vec3d(x, y, z).normalize();
     }
 
-    /** Thickness skewed so *most are thick*: 1:18%, 2:45%, 3:37%. */
     private static int pickThickness(Random r) {
         float f = r.nextFloat();
-        if (f < 0.18f) return 1;
-        if (f < 0.63f) return 2;   // 0.18 + 0.45
+        if (f < 0.15f) return 1;
+        if (f < 0.60f) return 2;
         return 3;
     }
 
     private static BlockState pickLog(Random r) {
-        // No birch.
         List<BlockState> logs = List.of(
                 Blocks.OAK_LOG.getDefaultState(),
                 Blocks.SPRUCE_LOG.getDefaultState(),
-                Blocks.DARK_OAK_LOG.getDefaultState(),
-                Blocks.ACACIA_LOG.getDefaultState(),
-                Blocks.JUNGLE_LOG.getDefaultState(),
-                Blocks.MANGROVE_LOG.getDefaultState()
+                Blocks.DARK_OAK_LOG.getDefaultState()
         );
         return logs.get(r.nextInt(logs.size()));
     }
@@ -312,13 +332,15 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             Direction.Axis axis = dominantAxis(d);
             BlockState oriented = log.with(PillarBlock.AXIS, axis);
 
-            for (int dx = -thick; dx <= thick; dx++) for (int dy = -thick; dy <= thick; dy++) for (int dz = -thick; dz <= thick; dz++) {
-                if (dx*dx + dy*dy + dz*dz > thick*thick) continue;
-                int px = x + dx, py = y + dy, pz = z + dz;
-                if (px < minX || px > maxX || pz < minZ || pz > maxZ) continue;
-                m.set(px, py, pz);
-                if (chunk.getBlockState(m).isAir()) chunk.setBlockState(m, oriented, false);
-            }
+            for (int dx = -thick; dx <= thick; dx++)
+                for (int dy = -thick; dy <= thick; dy++)
+                    for (int dz = -thick; dz <= thick; dz++) {
+                        if (dx*dx + dy*dy + dz*dz > thick*thick) continue;
+                        int px = x + dx, py = y + dy, pz = z + dz;
+                        if (px < minX || px > maxX || pz < minZ || pz > maxZ) continue;
+                        m.set(px, py, pz);
+                        if (chunk.getBlockState(m).isAir()) chunk.setBlockState(m, oriented, false);
+                    }
         }
     }
 }

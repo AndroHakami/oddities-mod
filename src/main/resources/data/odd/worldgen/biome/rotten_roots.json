@@ -15,7 +15,19 @@
     }
   },
 
-  "spawners": {},
+  "spawners": {
+    "monster": [
+      { "type": "odd:false_frog", "weight": 35, "minCount": 1, "maxCount": 2 }
+    ],
+    "creature": [],
+    "ambient": [],
+    "water_creature": [],
+    "water_ambient": [],
+    "underground_water_creature": [],
+    "axolotls": [],
+    "misc": []
+  },
+
   "spawn_costs": {},
   "carvers": {},
   "features": []

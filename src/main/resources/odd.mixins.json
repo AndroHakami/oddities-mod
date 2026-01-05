@@ -14,6 +14,7 @@
     "client.BackgroundRendererMixin",
     "client.BackgroundRotRendererMixin",
     "client.ClientWorldMixin",
+    "client.GameRendererGlitchZoomMixin",
     "client.HeldItemFeatureRendererMixin",
     "client.HeldItemRendererMixin",
     "client.MixinHeldItemRenderer",
@@ -23,6 +24,8 @@
     "client.OverdrivePerspectiveMixin",
     "client.VacuumNoBobMixin",
     "client.WorldRendererCloudMixin",
+    "client.WorldRendererDrillMixin",
+    "client.WorldRendererGlitchWallPreviewMixin",
     "client.WorldRendererSkyMixin"
   ],
   "mixins": [

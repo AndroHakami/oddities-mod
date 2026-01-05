@@ -2,8 +2,11 @@
   "type": "odd:rotten_roots",
   "generator": {
     "type": "odd:rotten_roots",
-    "seed": 2,
+    "seed": 0,
     "density": 1.0,
-    "biome_source": { "type": "minecraft:fixed", "biome": "odd:rotten_roots" }
+    "biome_source": {
+      "type": "minecraft:fixed",
+      "biome": "odd:rotten_roots"
+    }
   }
 }

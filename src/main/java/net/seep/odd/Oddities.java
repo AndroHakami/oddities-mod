@@ -40,6 +40,8 @@ import net.seep.odd.abilities.icewitch.client.IceSpellAreaRenderer;
 import net.seep.odd.abilities.icewitch.client.IceWitchHud;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
+import net.seep.odd.abilities.lunar.item.LunarDrillItem;
+import net.seep.odd.abilities.lunar.net.LunarPackets;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
@@ -67,6 +69,8 @@ import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.car.radio.RadioTracksInit;
 import net.seep.odd.entity.creepy.CreepyEntity;
+import net.seep.odd.entity.falsefrog.FalseFrogEntity;
+import net.seep.odd.entity.firefly.FireflyEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
@@ -119,8 +123,10 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.OUTERMAN, OuterManEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.RIDER_CAR, RiderCarEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.GHOSTLING, GhostlingEntity.createAttributes());
-		FabricDefaultAttributeRegistry.register(ModEntities.FALSE_FROG, GhostlingEntity.createAttributes());
-		ModSpawns.registerFalseFrogSpawns();
+		FabricDefaultAttributeRegistry.register(ModEntities.FALSE_FROG, FalseFrogEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.FIREFLY, FireflyEntity.createAttributes());
+		ModSpawns.register();
+
 
 
 		// GeckoLib (common entrypoint)
@@ -149,6 +155,11 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new GamblePower());
 		Powers.register(new BuddymorphPower());
 		Powers.register(new FallingSnowPower());
+		Powers.register(new FairyPower());
+		Powers.register(new LunarPower());
+		Powers.register(new FireSwordPower());
+		Powers.register(new GlitchPower());
+		Powers.register(new AcceleratePower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -307,6 +318,17 @@ public final class Oddities implements ModInitializer {
 		 // Buddymorph
 		BuddymorphCommands.register();
 		BuddymorphNet.init();
+
+		// Fairy
+		net.seep.odd.block.falseflower.FalseFlowerTracker.registerServer();
+
+		// Lunar
+		LunarPackets.registerServerReceivers();
+		LunarPower.register();
+		LunarDrillItem.registerHooks();
+
+
+
 
 
 

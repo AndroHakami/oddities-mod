@@ -1,0 +1,96 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"idle": {
+			"loop": true,
+			"animation_length": 0.6,
+			"bones": {
+				"tail": {
+					"rotation": {
+						"0.0": {
+							"post": {
+								"vector": [0, 0, 0]
+							},
+							"lerp_mode": "catmullrom"
+						},
+						"0.12": {
+							"post": {
+								"vector": [0, 10, 0]
+							},
+							"lerp_mode": "catmullrom"
+						},
+						"0.24": {
+							"post": {
+								"vector": [0, 0, 0]
+							},
+							"lerp_mode": "catmullrom"
+						},
+						"0.4": {
+							"post": {
+								"vector": [0, -8, 0]
+							},
+							"lerp_mode": "catmullrom"
+						},
+						"0.6": {
+							"post": {
+								"vector": [0, 0, 0]
+							},
+							"lerp_mode": "catmullrom"
+						}
+					}
+				},
+				"wing1": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, -20]
+						},
+						"0.08": {
+							"vector": [0, 0, -29]
+						},
+						"0.2": {
+							"vector": [0, 0, -20]
+						},
+						"0.32": {
+							"vector": [0, 0, -29]
+						},
+						"0.44": {
+							"vector": [0, 0, -20]
+						},
+						"0.52": {
+							"vector": [0, 0, -29]
+						},
+						"0.6": {
+							"vector": [0, 0, -20]
+						}
+					}
+				},
+				"wing2": {
+					"rotation": {
+						"0.0": {
+							"vector": [0, 0, 20]
+						},
+						"0.08": {
+							"vector": [0, 0, 31]
+						},
+						"0.2": {
+							"vector": [0, 0, 20]
+						},
+						"0.32": {
+							"vector": [0, 0, 31]
+						},
+						"0.44": {
+							"vector": [0, 0, 20]
+						},
+						"0.52": {
+							"vector": [0, 0, 31]
+						},
+						"0.6": {
+							"vector": [0, 0, 20]
+						}
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

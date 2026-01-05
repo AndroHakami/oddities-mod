@@ -10,13 +10,16 @@ import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.firesword.entity.FireSwordProjectileEntity;
 import net.seep.odd.abilities.icewitch.IceProjectileEntity;
 import net.seep.odd.abilities.icewitch.IceSpellAreaEntity;
+import net.seep.odd.abilities.lunar.entity.LunarMarkProjectileEntity;
 import net.seep.odd.abilities.tamer.entity.VillagerEvoEntity;
 import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
+import net.seep.odd.entity.firefly.FireflyEntity;
 import net.seep.odd.entity.misty.MistyBubbleEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
@@ -66,8 +69,19 @@ public final class ModEntities {
     public static final Identifier BIG_SNOWBALL_ID     = new Identifier(Oddities.MOD_ID, "big_snowball");
     public static final Identifier ORBITING_SNOWBALL_ID = new Identifier(Oddities.MOD_ID, "orbiting_snowball");
 
-    // False Frog
+    // Rotten Roots
     public static final Identifier FALSE_FROG_ID = new Identifier(Oddities.MOD_ID, "false_frog");
+    public static final Identifier FIREFLY_ID = new Identifier(Oddities.MOD_ID, "firefly");
+
+    // Lunar
+    public static final Identifier LUNAR_MARK_ID = new Identifier(Oddities.MOD_ID, "lunar_mark");
+
+    // Fire Sword
+    public static final Identifier FIRE_SWORD_ID = new Identifier(Oddities.MOD_ID, "fire_sword_projectile");
+
+    // Conquer
+    public static final Identifier DARK_HORSE_ID = new Identifier(Oddities.MOD_ID, "dark_horse");
+
 
 
 
@@ -107,8 +121,18 @@ public final class ModEntities {
     public static EntityType<BigSnowballEntity>        BIG_SNOWBALL;
     public static EntityType<net.seep.odd.abilities.fallingsnow.OrbitingSnowballEntity> ORBITING_SNOWBALL;
 
-    // False Frog
+    // Rotten Roots
     public static EntityType<net.seep.odd.entity.falsefrog.FalseFrogEntity> FALSE_FROG;
+    public static EntityType<net.seep.odd.entity.firefly.FireflyEntity> FIREFLY;
+
+    // Lunar
+    public static EntityType<LunarMarkProjectileEntity> LUNAR_MARK;
+
+    // FireSword
+    public static EntityType<FireSwordProjectileEntity> FIRE_SWORD_PROJECTILE;
+
+
+
 
 
     public static void register() {
@@ -137,6 +161,26 @@ public final class ModEntities {
                             .dimensions(EntityDimensions.fixed(0.0f, 0.0f))
                             .trackRangeChunks(8)
                             .trackedUpdateRate(1)
+                            .build()
+            );
+        }
+        if (LUNAR_MARK == null) {
+            LUNAR_MARK = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "lunar_mark"),
+                    FabricEntityTypeBuilder.<LunarMarkProjectileEntity>create(SpawnGroup.MISC, LunarMarkProjectileEntity::new)
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64).trackedUpdateRate(10)
+                            .build()
+            );
+        }
+        if (FIRE_SWORD_PROJECTILE == null) {
+            FIRE_SWORD_PROJECTILE = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "fire_sword_projectile"),
+                    FabricEntityTypeBuilder.<FireSwordProjectileEntity>create(SpawnGroup.MISC, FireSwordProjectileEntity::new)
+                            .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                            .trackRangeBlocks(64).trackedUpdateRate(10)
                             .build()
             );
         }
@@ -409,6 +453,20 @@ public final class ModEntities {
                     net.seep.odd.entity.falsefrog.FalseFrogEntity.createAttributes()
             );
         }
+        // === Rotten Roots: Firefly (ambient) ===
+        if (FIREFLY == null) {
+            FIREFLY = Registry.register(
+                    Registries.ENTITY_TYPE,
+                    FIREFLY_ID,
+                    FabricEntityTypeBuilder.create(SpawnGroup.AMBIENT, (EntityType<FireflyEntity> t, World w) -> new FireflyEntity(t, w))
+                            .dimensions(EntityDimensions.fixed(0.35f, 0.35f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(2)
+                            .build()
+            );
+            FabricDefaultAttributeRegistry.register(FIREFLY, FireflyEntity.createAttributes());
+        }
+
 
     }
 }

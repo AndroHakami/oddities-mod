@@ -1,6 +1,5 @@
 package net.seep.odd.item;
 
-import com.eliotlash.mclib.math.functions.classic.Mod;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroupEntries;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
@@ -11,7 +10,10 @@ import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
+import net.seep.odd.abilities.firesword.item.FireSwordItem;
+import net.seep.odd.abilities.firesword.item.FireSwordToolMaterial;
 import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
+import net.seep.odd.abilities.lunar.item.LunarDrillItem;
 import net.seep.odd.abilities.tamer.item.TameBallItem;
 import net.seep.odd.item.custom.CosmicKatanaItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
@@ -33,6 +35,14 @@ public class ModItems {
     public static final Item ALIEN_PEARL = registerItem("alien_pearl", new Item(new FabricItemSettings().food(ModFoodComponents.ALIEN_PEARL)));
     public static final Item COSMIC_KATANA =
             registerItem("cosmic_katana", new CosmicKatanaItem(new FabricItemSettings().maxCount(1).maxDamage(1561)));
+    public static final Item LUNAR_DRILL =  Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "lunar_drill"), new LunarDrillItem(new Item.Settings().maxCount(1)));
+    public static final Item FIRE_SWORD = Registry.register(Registries.ITEM, new Identifier("odd", "fire_sword"), new FireSwordItem(
+                    FireSwordToolMaterial.INSTANCE,
+                    6,
+                    -2.2f,
+                    new FabricItemSettings().maxCount(1)
+            )
+    );
 
 
 

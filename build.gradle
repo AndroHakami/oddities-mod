@@ -103,6 +103,11 @@ dependencies {
 
 	// Veil (Fabric loader side)
 	// pin an actual published version for 1.20.1 (update as you like)
+	//Fabric SkyBoxes (Nuit)
+	modRuntimeOnly "maven.modrinth:nuit:mc1.20.1-0.7.3"
+
+
+
 
 
 
@@ -141,7 +146,8 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.deprecation = true
 	it.options.compilerArgs += [
 			'-Xlint:all',   // includes 'unchecked'
-			'-Xlint:-path'  // mutes noisy classpath warnings
+			'-Xlint:-path'
+			// mutes noisy classpath warnings
 			// add '-Werror' if you want warnings to fail the build
 	]
 }

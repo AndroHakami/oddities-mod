@@ -26,8 +26,13 @@ public final class OddParticlesClient {
         );
         ParticleFactoryRegistry.getInstance().register(
                 OddParticles.ZERO_GRAVITY,
-                (FabricSpriteProvider sp) -> new SpottedStepsParticle.Factory(sp)
+                (FabricSpriteProvider sp) -> new ZeroGravityParticle.Factory(sp)
         );
+        ParticleFactoryRegistry.getInstance().register(
+                OddParticles.TELEKINESIS,
+                (FabricSpriteProvider sp) -> new TelekinesisParticle.Factory(sp)
+        );
+
 
 
 

@@ -11,6 +11,30 @@
       "odd:creepy_pull"
     ]
   },
+  "glitch_telekinesis": {
+    "subtitle": "odd.glitch_telekinesis",
+    "sounds": [
+      "odd:glitch_telekinesis"
+    ]
+  },
+  "glitch_telekinesis_grab": {
+    "subtitle": "odd.glitch_telekinesis_grab",
+    "sounds": [
+      "odd:glitch_telekinesis_grab"
+    ]
+  },
+  "glitch_telekinesis_end": {
+    "subtitle": "odd.glitch_telekinesis_end",
+    "sounds": [
+      "odd:glitch_telekinesis_end"
+    ]
+  },
+  "accelerate": {
+    "subtitle": "odd.accelerate",
+    "sounds": [
+      "odd:accelerate"
+    ]
+  },
   "saucer_attack": {
     "subtitle": "odd.saucer_attack",
     "sounds": [
@@ -183,6 +207,24 @@
     "subtitle": "void_open",
     "sounds": [
       "odd:void_open"
+    ]
+  },
+  "drill": {
+    "subtitle": "drill",
+    "sounds": [
+      "odd:drill"
+    ]
+  },
+  "drill_charge": {
+    "subtitle": "drill_charge",
+    "sounds": [
+      "odd:drill_charge"
+    ]
+  },
+  "drill_ready": {
+    "subtitle": "drill_ready",
+    "sounds": [
+      "odd:drill_ready"
     ]
   },
   "void_ambience": {

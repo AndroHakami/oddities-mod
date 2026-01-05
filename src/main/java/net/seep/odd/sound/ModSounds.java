@@ -30,6 +30,10 @@ public class ModSounds {
     public static final SoundEvent VOID_AMBIENCE = registerSoundEvent("void_ambience");
     public static final SoundEvent ROTTEN_ROOTS = registerSoundEvent("rotten_roots");
     public static final SoundEvent VOID_OPEN = registerSoundEvent("void_open");
+    public static final SoundEvent TELEKINESIS = registerSoundEvent("glitch_telekinesis");
+    public static final SoundEvent TELEKINESIS_GRAB = registerSoundEvent("glitch_telekinesis_grab");
+    public static final SoundEvent TELEKINESIS_EN = registerSoundEvent("glitch_telekinesis_end");
+    public static final SoundEvent ACCELERATE = registerSoundEvent("accelerate");
 
 
     // UFO SHIT
@@ -60,6 +64,12 @@ public class ModSounds {
 
     // Buddymorph
     public static final SoundEvent MELODY = registerSoundEvent("melody");
+
+    // Lunar
+    public static final SoundEvent DRILL = registerSoundEvent("drill");
+    public static final SoundEvent DRILL_CHARGE = registerSoundEvent("drill_charge");
+    public static final SoundEvent DRILL_READY = registerSoundEvent("drill_ready");
+
 
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
