@@ -160,6 +160,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new FireSwordPower());
 		Powers.register(new GlitchPower());
 		Powers.register(new AcceleratePower());
+		Powers.register(new ConquerPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -326,6 +327,9 @@ public final class Oddities implements ModInitializer {
 		LunarPackets.registerServerReceivers();
 		LunarPower.register();
 		LunarDrillItem.registerHooks();
+
+		// Conquer
+
 
 
 

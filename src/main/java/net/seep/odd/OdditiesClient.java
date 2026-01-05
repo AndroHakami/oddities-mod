@@ -322,6 +322,10 @@ public final class OdditiesClient implements ClientModInitializer {
         // Accelerate Power (Client)
         AcceleratePower.Client.init();
 
+        // Conquer (Client)
+
+
+
 
 
 

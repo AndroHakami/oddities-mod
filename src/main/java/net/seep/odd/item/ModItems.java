@@ -10,6 +10,7 @@ import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
+import net.seep.odd.abilities.conquer.item.WinterScytheItem;
 import net.seep.odd.abilities.firesword.item.FireSwordItem;
 import net.seep.odd.abilities.firesword.item.FireSwordToolMaterial;
 import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
@@ -33,16 +34,10 @@ public class ModItems {
     public static final Item VACUUM = registerItem("vacuum", new ArtificerVacuumItem(new FabricItemSettings().maxCount(1)));
     public static final Item GAMBLE_REVOLVER = registerItem("gamble_revolver", new GambleRevolverItem(new FabricItemSettings().maxCount(1)));
     public static final Item ALIEN_PEARL = registerItem("alien_pearl", new Item(new FabricItemSettings().food(ModFoodComponents.ALIEN_PEARL)));
-    public static final Item COSMIC_KATANA =
-            registerItem("cosmic_katana", new CosmicKatanaItem(new FabricItemSettings().maxCount(1).maxDamage(1561)));
+    public static final Item COSMIC_KATANA = registerItem("cosmic_katana", new CosmicKatanaItem(new FabricItemSettings().maxCount(1).maxDamage(1561)));
     public static final Item LUNAR_DRILL =  Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "lunar_drill"), new LunarDrillItem(new Item.Settings().maxCount(1)));
-    public static final Item FIRE_SWORD = Registry.register(Registries.ITEM, new Identifier("odd", "fire_sword"), new FireSwordItem(
-                    FireSwordToolMaterial.INSTANCE,
-                    6,
-                    -2.2f,
-                    new FabricItemSettings().maxCount(1)
-            )
-    );
+    public static final Item FIRE_SWORD = Registry.register(Registries.ITEM, new Identifier("odd", "fire_sword"), new FireSwordItem(FireSwordToolMaterial.INSTANCE, 6, -2.2f, new FabricItemSettings().maxCount(1)));
+    public static final Item WINTER_SCYTHE = registerItem("winter_scythe", new WinterScytheItem(new FabricItemSettings().maxCount(1)));
 
 
 
