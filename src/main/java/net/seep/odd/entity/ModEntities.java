@@ -6,6 +6,8 @@ import net.fabricmc.fabric.api.object.builder.v1.entity.FabricEntityTypeBuilder;
 import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnGroup;
+import net.minecraft.entity.passive.IronGolemEntity;
+import net.minecraft.entity.passive.VillagerEntity;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
@@ -13,6 +15,9 @@ import net.minecraft.world.World;
 import net.seep.odd.Oddities;
 
 import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
+import net.seep.odd.abilities.conquer.entity.CorruptedVillagerEntity;
+import net.seep.odd.abilities.conquer.entity.CorruptedIronGolemEntity;
+
 import net.seep.odd.abilities.firesword.entity.FireSwordProjectileEntity;
 import net.seep.odd.abilities.icewitch.IceProjectileEntity;
 import net.seep.odd.abilities.icewitch.IceSpellAreaEntity;
@@ -22,9 +27,11 @@ import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
+import net.seep.odd.entity.cultist.SightseerEntity;
 import net.seep.odd.entity.firefly.FireflyEntity;
 import net.seep.odd.entity.misty.MistyBubbleEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
+import net.seep.odd.entity.seal.SealEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
@@ -33,6 +40,7 @@ import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 // Falling Snow
 import net.seep.odd.abilities.fallingsnow.HealingSnowballEntity;
 import net.seep.odd.abilities.fallingsnow.BigSnowballEntity;
+import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -59,6 +67,7 @@ public final class ModEntities {
     public static final Identifier PHANTOM_BUDDY_ID      = new Identifier(Oddities.MOD_ID, "phantom_buddy");
 
     public static final Identifier ZERO_BEAM_ID          = new Identifier(Oddities.MOD_ID, "zero_beam");
+    public static final Identifier ZERO_SUIT_MISSILE_ID          = new Identifier(Oddities.MOD_ID, "zero_suit_missile");
 
     public static final Identifier HEALING_SNOWBALL_ID   = new Identifier(Oddities.MOD_ID, "healing_snowball");
     public static final Identifier BIG_SNOWBALL_ID       = new Identifier(Oddities.MOD_ID, "big_snowball");
@@ -72,11 +81,38 @@ public final class ModEntities {
     public static final Identifier FIRE_SWORD_ID         = new Identifier(Oddities.MOD_ID, "fire_sword_projectile");
 
     // Conquer
-    public static final Identifier DARK_HORSE_ID         = new Identifier(Oddities.MOD_ID, "dark_horse");
+    public static final Identifier DARK_HORSE_ID           = new Identifier(Oddities.MOD_ID, "dark_horse");
+    public static final Identifier CORRUPTED_VILLAGER_ID   = new Identifier(Oddities.MOD_ID, "corrupted_villager");
+    public static final Identifier CORRUPTED_IRON_GOLEM_ID = new Identifier(Oddities.MOD_ID, "corrupted_iron_golem");
+    public static final Identifier SEAL_ID = new Identifier(Oddities.MOD_ID, "seal");
+    public static final Identifier SIGHTSEER_ID = new Identifier(Oddities.MOD_ID, "sightseer");
 
     /* =========================================================
-       EntityType registration — “static final” style (like I sent)
+       EntityType registration — “static final” style
        ========================================================= */
+    // Sightseer (Cultist)
+    public static final EntityType<SightseerEntity> SIGHTSEER = Registry.register(
+            Registries.ENTITY_TYPE,
+            SIGHTSEER_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MONSTER,
+                            (EntityType<SightseerEntity> type, World world) -> new SightseerEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.85f, 2.1f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    // Seal
+    public static final EntityType<SealEntity> SEAL = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "seal"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, SealEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.9f, 0.6f))
+                    .trackRangeChunks(8)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
 
     // Creepy
     public static final EntityType<CreepyEntity> CREEPY = Registry.register(
@@ -113,6 +149,18 @@ public final class ModEntities {
                     .trackedUpdateRate(10)
                     .build()
     );
+    public static final EntityType<ZeroSuitMissileEntity> ZERO_SUIT_MISSILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            ZERO_SUIT_MISSILE_ID,
+            FabricEntityTypeBuilder.<ZeroSuitMissileEntity>create(SpawnGroup.MONSTER, ZeroSuitMissileEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.1f, 0.25f))
+                    .trackRangeBlocks(200)
+                    .trackedUpdateRate(1)               // key: gives interpolation room
+                    .forceTrackedVelocityUpdates(true)  // key: smoother flight
+                    .build()
+    );
+
+
 
     // Fire Sword projectile
     public static final EntityType<FireSwordProjectileEntity> FIRE_SWORD_PROJECTILE = Registry.register(
@@ -268,7 +316,7 @@ public final class ModEntities {
                             SpawnGroup.MISC,
                             (EntityType<UfoSaucerEntity> type, World world) -> new UfoSaucerEntity(type, world)
                     )
-                    .dimensions(EntityDimensions.fixed(1.8f, 0.9f))
+                    .dimensions(EntityDimensions.fixed(3.8f, 2.2f))
                     .trackRangeBlocks(96)
                     .trackedUpdateRate(1)
                     .build()
@@ -386,7 +434,37 @@ public final class ModEntities {
             DARK_HORSE_ID,
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, DarkHorseEntity::new)
                     // vanilla horse-ish size
-                    .dimensions(EntityDimensions.fixed(1.3964844F, 1.6F))
+                    .dimensions(EntityDimensions.fixed(1.95507816F, 2.24F))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
+
+    // =====================================
+    // Conquer: Corrupted Villager / Iron Golem
+    // =====================================
+
+    public static final EntityType<CorruptedVillagerEntity> CORRUPTED_VILLAGER = Registry.register(
+            Registries.ENTITY_TYPE,
+            CORRUPTED_VILLAGER_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MISC,
+                            (EntityType<CorruptedVillagerEntity> t, World w) -> new CorruptedVillagerEntity(t, w)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f)) // villager size
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
+
+    public static final EntityType<CorruptedIronGolemEntity> CORRUPTED_IRON_GOLEM = Registry.register(
+            Registries.ENTITY_TYPE,
+            CORRUPTED_IRON_GOLEM_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MISC,
+                            (EntityType<CorruptedIronGolemEntity> t, World w) -> new CorruptedIronGolemEntity(t, w)
+                    )
+                    .dimensions(EntityDimensions.fixed(1.4f, 2.7f)) // iron golem size
                     .trackRangeBlocks(96)
                     .trackedUpdateRate(3)
                     .build()
@@ -408,5 +486,11 @@ public final class ModEntities {
 
         // Conquer: Dark Horse
         FabricDefaultAttributeRegistry.register(DARK_HORSE, DarkHorseEntity.createDarkHorseAttributes());
+
+        // Conquer: Corrupted villager / golem
+        FabricDefaultAttributeRegistry.register(CORRUPTED_VILLAGER, VillagerEntity.createVillagerAttributes());
+        FabricDefaultAttributeRegistry.register(CORRUPTED_IRON_GOLEM, IronGolemEntity.createIronGolemAttributes());
+        // cultist
+        FabricDefaultAttributeRegistry.register(SIGHTSEER, SightseerEntity.createAttributes());
     }
 }

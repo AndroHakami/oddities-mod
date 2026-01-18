@@ -16,6 +16,7 @@ import net.seep.odd.abilities.firesword.item.FireSwordToolMaterial;
 import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
 import net.seep.odd.abilities.lunar.item.LunarDrillItem;
 import net.seep.odd.abilities.tamer.item.TameBallItem;
+import net.seep.odd.entity.seal.item.SealSpawnEggItem;
 import net.seep.odd.item.custom.CosmicKatanaItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
 import net.seep.odd.item.ghost.GhostHandItem;
@@ -38,6 +39,11 @@ public class ModItems {
     public static final Item LUNAR_DRILL =  Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "lunar_drill"), new LunarDrillItem(new Item.Settings().maxCount(1)));
     public static final Item FIRE_SWORD = Registry.register(Registries.ITEM, new Identifier("odd", "fire_sword"), new FireSwordItem(FireSwordToolMaterial.INSTANCE, 6, -2.2f, new FabricItemSettings().maxCount(1)));
     public static final Item WINTER_SCYTHE = registerItem("winter_scythe", new WinterScytheItem(new FabricItemSettings().maxCount(1)));
+    public static final Item METALIC_FROST_SPAWN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "metallic_frost_spawn"), new net.seep.odd.abilities.conquer.item.MetalicFrostSpawnItem(new Item.Settings().maxCount(1)));
+    public static final Item BIG_METALIC_FROST_SPAWN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "big_metallic_frost_spawn"), new net.seep.odd.abilities.conquer.item.BigMetalicFrostSpawnItem(new Item.Settings().maxCount(1)));
+    public static final Item DABLOON = registerItem("dabloon", new Item(new FabricItemSettings().maxCount(64)));
+    public static final Item SEAL_SPAWN_EGG = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "seal_spawn_egg"), new SealSpawnEggItem(new Item.Settings().maxCount(1)));
+
 
 
 

@@ -1,0 +1,15 @@
+{
+  "targets": [ "annihilation" ],
+  "passes": [
+    {
+      "name": "odd:annihilation",
+      "intarget": "minecraft:main",
+      "outtarget": "annihilation"
+    },
+    {
+      "name": "blit",
+      "intarget": "annihilation",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

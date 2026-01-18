@@ -61,6 +61,8 @@ public class ModSounds {
     // Zero Suit
     public static final SoundEvent ZERO_CHARGE = registerSoundEvent("zero_charge");
     public static final SoundEvent ZERO_BLAST = registerSoundEvent("zero_blast");
+    public static final SoundEvent GRAVITY = registerSoundEvent("gravity");
+    public static final SoundEvent GRAVITY_SWITCH = registerSoundEvent("gravity_switch");
 
     // Buddymorph
     public static final SoundEvent MELODY = registerSoundEvent("melody");
@@ -69,6 +71,16 @@ public class ModSounds {
     public static final SoundEvent DRILL = registerSoundEvent("drill");
     public static final SoundEvent DRILL_CHARGE = registerSoundEvent("drill_charge");
     public static final SoundEvent DRILL_READY = registerSoundEvent("drill_ready");
+
+    // Splash
+    public static final SoundEvent BUBBLES = registerSoundEvent("bubbles");
+    public static final SoundEvent STREAM = registerSoundEvent("stream");
+    public static final SoundEvent STREAM_APPLIED = registerSoundEvent("stream_applied");
+
+
+
+    // Shop
+    public static final SoundEvent SHOP_MUSIC = registerSoundEvent("shop_music");
 
 
 

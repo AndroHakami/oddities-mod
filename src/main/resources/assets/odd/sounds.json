@@ -17,6 +17,42 @@
       "odd:glitch_telekinesis"
     ]
   },
+  "gravity": {
+    "subtitle": "odd.gravity",
+    "sounds": [
+      "odd:gravity"
+    ]
+  },
+  "gravity_switch": {
+    "subtitle": "odd.gravity_switch",
+    "sounds": [
+      "odd:gravity_switch"
+    ]
+  },
+  "stream_applied": {
+    "subtitle": "odd.stream_applied",
+    "sounds": [
+      "odd:stream_applied"
+    ]
+  },
+  "stream": {
+    "subtitle": "odd.stream",
+    "sounds": [
+      "odd:stream"
+    ]
+  },
+  "bubbles": {
+    "subtitle": "odd.bubbles",
+    "sounds": [
+      "odd:bubbles"
+    ]
+  },
+  "shop_music": {
+    "subtitle": "odd.shop_music",
+    "sounds": [
+      "odd:shop_music"
+    ]
+  },
   "glitch_telekinesis_grab": {
     "subtitle": "odd.glitch_telekinesis_grab",
     "sounds": [

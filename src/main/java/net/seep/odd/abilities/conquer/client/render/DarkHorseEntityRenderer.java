@@ -18,7 +18,7 @@ public final class DarkHorseEntityRenderer extends AbstractHorseEntityRenderer<D
     private static final Identifier TEXTURE = new Identifier("odd", "textures/entity/conquer/dark_horse.png");
 
     public DarkHorseEntityRenderer(EntityRendererFactory.Context ctx) {
-        super(ctx, new HorseEntityModel<>(ctx.getPart(EntityModelLayers.HORSE)), 0.75f);
+        super(ctx, new HorseEntityModel<>(ctx.getPart(EntityModelLayers.HORSE)), 1.4f);
     }
 
     @Override

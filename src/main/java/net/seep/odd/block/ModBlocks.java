@@ -90,6 +90,11 @@ public class ModBlocks {
     public static Item  FALSE_FLOWER_ITEM;
     public static BlockEntityType<FalseFlowerBlockEntity> FALSE_FLOWER_BE;
 
+    /*---------- DABLOONS ---------------*/
+
+    public static Block DABLOONS_MACHINE;
+    public static Item  DABLOONS_MACHINE_ITEM;
+
     /* ---------------- Helpers ---------------- */
 
     private static Block registerBlock(String id, Block block, boolean withItem) {
@@ -160,6 +165,22 @@ public class ModBlocks {
                 Registries.BLOCK_ENTITY_TYPE,
                 new Identifier(Oddities.MOD_ID, "false_flower"),
                 FabricBlockEntityTypeBuilder.create(FalseFlowerBlockEntity::new, FALSE_FLOWER).build(null)
+        );
+
+        /* --------- REGISTER: Dabloons Machine --------- */
+
+        // Block (opens the shop UI)
+        DABLOONS_MACHINE = Registry.register(
+                Registries.BLOCK,
+                new Identifier(Oddities.MOD_ID, "dabloons_machine"),
+                new DabloonsMachineBlock()
+        );
+
+        // Block item
+        DABLOONS_MACHINE_ITEM = Registry.register(
+                Registries.ITEM,
+                new Identifier(Oddities.MOD_ID, "dabloons_machine"),
+                new BlockItem(DABLOONS_MACHINE, new Item.Settings())
         );
     }
 }

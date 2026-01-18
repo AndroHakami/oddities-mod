@@ -32,6 +32,10 @@ public final class OddParticlesClient {
                 OddParticles.TELEKINESIS,
                 (FabricSpriteProvider sp) -> new TelekinesisParticle.Factory(sp)
         );
+        ParticleFactoryRegistry.getInstance().register(OddParticles.SPLASH_BUBBLE_GREEN, GreenBubbleParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(OddParticles.SPLASH_BUBBLE_AQUA,  AquaBubbleParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(OddParticles.SPLASH_BUBBLE_PINK,  PinkBubbleParticle.Factory::new);
+
 
 
 

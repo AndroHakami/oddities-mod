@@ -15,6 +15,7 @@ import net.minecraft.client.item.ModelPredicateProviderRegistry;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityType;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.text.MutableText;
@@ -26,6 +27,11 @@ import net.minecraft.world.World;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
+import net.seep.odd.abilities.conquer.client.ConquerCorruptionClient;
+import net.seep.odd.abilities.conquer.client.render.CorruptedIronGolemRenderer;
+import net.seep.odd.abilities.conquer.client.render.CorruptedVillagerRenderer;
+import net.seep.odd.abilities.conquer.client.render.DarkHorseEntityRenderer;
+import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
 import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.cosmic.client.CosmicCpmBridge;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
@@ -59,6 +65,7 @@ import net.seep.odd.abilities.spectral.SpectralClientState;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
+import net.seep.odd.abilities.splash.client.SplashPowerClient;
 import net.seep.odd.abilities.spotted.SpottedNet;
 import net.seep.odd.abilities.supercharge.SuperChargeNet;
 import net.seep.odd.abilities.supercharge.SuperHud;
@@ -75,6 +82,7 @@ import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
 
 import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
+import net.seep.odd.abilities.zerosuit.client.AnnihilationShaderClient;
 import net.seep.odd.abilities.zerosuit.client.ZeroSuitCpmBridge;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.grandanvil.ModScreens;
@@ -85,15 +93,20 @@ import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
+import net.seep.odd.entity.cultist.SightseerRenderer;
 import net.seep.odd.entity.falsefrog.client.FalseFrogRenderer;
 import net.seep.odd.entity.firefly.client.FireflyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
+import net.seep.odd.entity.seal.client.SealRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 
 import net.seep.odd.entity.zerosuit.ZeroBeamRenderer;
+import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
+import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
+import net.seep.odd.entity.zerosuit.client.ZeroSuitMissileRenderer;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.particles.client.OddParticlesClient;
 import net.seep.odd.particles.client.SpottedStepsParticle;
@@ -115,6 +128,12 @@ public final class OdditiesClient implements ClientModInitializer {
         ClientPowerNetworking.registerChargesReceiver();
         PowerNetworking.initClient();
         OddParticlesClient.register();
+        // Dabloon Client //
+        net.seep.odd.shop.client.ShopClientNetworking.registerS2C();
+        net.minecraft.client.gui.screen.ingame.HandledScreens.register(
+                net.seep.odd.shop.screen.ModScreenHandlers.DABLOONS_MACHINE,
+                net.seep.odd.shop.client.DabloonsMachineScreen::new
+        );
 
 
         // Keybinds + HUDs (client)
@@ -249,6 +268,9 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.zerosuit.ZeroSuitNet.initClient();
         net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.init();
         ZeroSuitCpmBridge.init();
+        AnnihilationFx.init();
+        AnnihilationShaderClient.init();
+
 
 
 
@@ -325,6 +347,11 @@ public final class OdditiesClient implements ClientModInitializer {
         // Conquer (Client)
 
 
+        // Splash (Client)
+        SplashPowerClient.init();
+
+
+
 
 
 
@@ -381,6 +408,14 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.ZERO_BEAM, ZeroBeamRenderer::new);
         EntityRendererRegistry.register(ModEntities.FALSE_FROG, FalseFrogRenderer::new);
         EntityRendererRegistry.register(ModEntities.FIREFLY, FireflyRenderer::new);
+        EntityRendererRegistry.register(ModEntities.DARK_HORSE, DarkHorseEntityRenderer::new);
+        EntityRendererRegistry.register(ModEntities.CORRUPTED_VILLAGER, CorruptedVillagerRenderer::new);
+        EntityRendererRegistry.register(ModEntities.CORRUPTED_IRON_GOLEM, CorruptedIronGolemRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SEAL, SealRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ZERO_SUIT_MISSILE, ZeroSuitMissileRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SIGHTSEER, SightseerRenderer::new);
+
+
 
 
 

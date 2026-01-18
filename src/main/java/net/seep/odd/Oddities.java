@@ -1,5 +1,6 @@
 package net.seep.odd;
 
+import ladysnake.satin.api.managed.ShaderEffectManager;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -29,7 +30,9 @@ import net.seep.odd.abilities.buddymorph.BuddymorphData;
 import net.seep.odd.abilities.buddymorph.BuddymorphNet;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphScreen;
+import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.effect.ModEffects;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
@@ -72,15 +75,19 @@ import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.falsefrog.FalseFrogEntity;
 import net.seep.odd.entity.firefly.FireflyEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
+import net.seep.odd.entity.seal.SealEntity;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 
+import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
 import net.seep.odd.expeditions.Expeditions;
 import net.seep.odd.expeditions.rottenroots.RottenRootsCommands;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
 import net.seep.odd.particles.OddParticles;
+import net.seep.odd.shader.ModShaders;
+import net.seep.odd.shop.screen.ModScreenHandlers;
 import net.seep.odd.sky.CelestialCommands;
 import net.seep.odd.sound.ModSounds;
 
@@ -102,6 +109,15 @@ public final class Oddities implements ModInitializer {
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
 		ModStatusEffects.init();
+		net.seep.odd.recipe.ModRecipeSerializers.register();
+		ModShaders.init();
+
+		// Dabloon //
+		ModScreenHandlers.register();
+		net.seep.odd.shop.catalog.ShopCatalogManager.init();
+		net.seep.odd.shop.command.ShopCommands.register();
+		net.seep.odd.shop.ShopNetworking.registerC2S();
+		net.seep.odd.shop.ShopServerTick.register();
 
 
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
@@ -125,6 +141,8 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.GHOSTLING, GhostlingEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.FALSE_FROG, FalseFrogEntity.createAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.FIREFLY, FireflyEntity.createAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.DARK_HORSE, DarkHorseEntity.createDarkHorseAttributes());
+		FabricDefaultAttributeRegistry.register(ModEntities.SEAL, SealEntity.createSealAttributes());
 		ModSpawns.register();
 
 
@@ -161,6 +179,8 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new GlitchPower());
 		Powers.register(new AcceleratePower());
 		Powers.register(new ConquerPower());
+		Powers.register(new SplashPower());
+		Powers.register(new CultistPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -175,6 +195,7 @@ public final class Oddities implements ModInitializer {
 		GrandAnvilNet.registerServer();
 		ItalianStompersHandler.register();
 		ModEnchantments.registerTicker();
+
 
 		// ---- Networking / tickers (server) ----
 		AbilityKeyPacket.registerServerReceiver();
@@ -290,6 +311,9 @@ public final class Oddities implements ModInitializer {
 		// Zero Gravity
 
 		net.seep.odd.abilities.zerosuit.ZeroSuitNet.initCommon();
+		AnnihilationFx.init();
+
+
 
 
 		// Looker
@@ -329,6 +353,15 @@ public final class Oddities implements ModInitializer {
 		LunarDrillItem.registerHooks();
 
 		// Conquer
+
+		// Splash
+		SplashPower.init();
+
+		ShaderEffectManager.getInstance().manage(new Identifier(Oddities.MOD_ID, "shaders/post/annihilation.json"));
+
+
+
+
 
 
 

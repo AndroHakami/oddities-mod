@@ -30,14 +30,21 @@
   ],
   "mixins": [
     "BlockDisplayEntityAccessor",
+    "BlockDisplayEntityInvoker",
+    "DisplayEntityInvoker",
     "EntityPassengerOffsetMixin",
     "ExampleMixin",
+    "IronGolemCorruptionAggroMixin",
+    "IronGolemEntityMixin",
     "ItemEntityMixin",
     "ItemStackUseActionMixin",
+    "LivingEntityCorruptionCureTickerMixin",
     "LivingEntityEatFoodMixin",
     "MobEntityAccessorMixin",
     "MobEntityTamerDataMixin",
+    "VillagerEntityMixin",
     "access.CropBlockInvoker",
+    "access.MobEntityTargetSelectorAccessor",
     "spectral.PlayerSpectralNoclipMixin"
   ],
   "injectors": {
