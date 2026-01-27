@@ -82,6 +82,14 @@ public class ModSounds {
     // Shop
     public static final SoundEvent SHOP_MUSIC = registerSoundEvent("shop_music");
 
+    // Cultist
+    public static final SoundEvent SHY_GUY_AMBIENT = registerSoundEvent("shy_guy_ambient");
+    public static final SoundEvent SHY_GUY_SIT = registerSoundEvent("shy_guy_sit");
+    public static final SoundEvent SHY_GUY_SIT_POST_RAGE = registerSoundEvent("shy_guy_sit_post_rage");
+    public static final SoundEvent SHY_GUY_RAGE_WINDUP = registerSoundEvent("shy_guy_rage");
+    public static final SoundEvent SHY_GUY_RAGE_RUN = registerSoundEvent("shy_guy_rage_run");
+    public static final SoundEvent SHY_GUY_ATTACK = registerSoundEvent("shy_guy_attack");
+
 
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,

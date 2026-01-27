@@ -14,6 +14,9 @@ import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 import net.seep.odd.Oddities;
 
+import net.seep.odd.abilities.climber.entity.ClimberPullTetherEntity;
+import net.seep.odd.abilities.climber.entity.ClimberRopeAnchorEntity;
+import net.seep.odd.abilities.climber.entity.ClimberRopeShotEntity;
 import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
 import net.seep.odd.abilities.conquer.entity.CorruptedVillagerEntity;
 import net.seep.odd.abilities.conquer.entity.CorruptedIronGolemEntity;
@@ -27,7 +30,10 @@ import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
+import net.seep.odd.entity.cultist.CentipedeEntity;
+import net.seep.odd.entity.cultist.ShyGuyEntity;
 import net.seep.odd.entity.cultist.SightseerEntity;
+import net.seep.odd.entity.cultist.WeepingAngelEntity;
 import net.seep.odd.entity.firefly.FireflyEntity;
 import net.seep.odd.entity.misty.MistyBubbleEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
@@ -86,10 +92,91 @@ public final class ModEntities {
     public static final Identifier CORRUPTED_IRON_GOLEM_ID = new Identifier(Oddities.MOD_ID, "corrupted_iron_golem");
     public static final Identifier SEAL_ID = new Identifier(Oddities.MOD_ID, "seal");
     public static final Identifier SIGHTSEER_ID = new Identifier(Oddities.MOD_ID, "sightseer");
+    public static final Identifier SHY_GUY_ID = new Identifier(Oddities.MOD_ID, "shy_guy");
+
+    public static final Identifier WEEPING_ANGEL_ID = new Identifier(Oddities.MOD_ID, "weeping_angel");
+    public static final Identifier CENTIPEDE_ID = new Identifier(Oddities.MOD_ID, "centipede");
+    // Climber
+    public static final Identifier CLIMBER_ROPE_SHOT_ID   = new Identifier(Oddities.MOD_ID, "climber_rope_shot");
+    public static final Identifier CLIMBER_ROPE_ANCHOR_ID = new Identifier(Oddities.MOD_ID, "climber_rope_anchor");
+    public static final Identifier CLIMBER_PULL_TETHER_ID = new Identifier(Oddities.MOD_ID, "climber_pull_tether");
+
+
 
     /* =========================================================
        EntityType registration — “static final” style
        ========================================================= */
+    // Centipede (Cultist)
+    // =========================
+// Climber: Rope shot / Anchor / Pull tether
+// =========================
+
+    // Rope shot (arcing projectile)
+    public static final EntityType<ClimberRopeShotEntity> CLIMBER_ROPE_SHOT = Registry.register(
+            Registries.ENTITY_TYPE,
+            CLIMBER_ROPE_SHOT_ID,
+            FabricEntityTypeBuilder.<ClimberRopeShotEntity>create(SpawnGroup.MISC, ClimberRopeShotEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(10)
+                    .build()
+    );
+
+    // Rope anchor (invisible, renders lead line)
+    public static final EntityType<ClimberRopeAnchorEntity> CLIMBER_ROPE_ANCHOR = Registry.register(
+            Registries.ENTITY_TYPE,
+            CLIMBER_ROPE_ANCHOR_ID,
+            FabricEntityTypeBuilder.<ClimberRopeAnchorEntity>create(SpawnGroup.MISC, ClimberRopeAnchorEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.10f, 0.10f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(20)
+                    .build()
+    );
+
+    // Pull tether (invisible, follows target briefly to pull + renders lead line)
+    public static final EntityType<ClimberPullTetherEntity> CLIMBER_PULL_TETHER = Registry.register(
+            Registries.ENTITY_TYPE,
+            CLIMBER_PULL_TETHER_ID,
+            FabricEntityTypeBuilder.<ClimberPullTetherEntity>create(SpawnGroup.MISC, ClimberPullTetherEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.10f, 0.10f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    public static final EntityType<CentipedeEntity> CENTIPEDE = Registry.register(
+            Registries.ENTITY_TYPE,
+            CENTIPEDE_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, CentipedeEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.9f, 0.25f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    // Weeping Angel (CUltist)
+    public static final EntityType<WeepingAngelEntity> WEEPING_ANGEL = Registry.register(
+            Registries.ENTITY_TYPE,
+            WEEPING_ANGEL_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, WeepingAngelEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.98f, 0.98f)) // block-ish
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    // Shyguy (Cultist)
+    public static final EntityType<ShyGuyEntity> SHY_GUY = Registry.register(
+            Registries.ENTITY_TYPE,
+            SHY_GUY_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MONSTER,
+                            (EntityType<ShyGuyEntity> type, World world) -> new ShyGuyEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.85f, 2.1f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+
     // Sightseer (Cultist)
     public static final EntityType<SightseerEntity> SIGHTSEER = Registry.register(
             Registries.ENTITY_TYPE,
@@ -492,5 +579,10 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(CORRUPTED_IRON_GOLEM, IronGolemEntity.createIronGolemAttributes());
         // cultist
         FabricDefaultAttributeRegistry.register(SIGHTSEER, SightseerEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(SHY_GUY, ShyGuyEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(WEEPING_ANGEL, WeepingAngelEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(CENTIPEDE, CentipedeEntity.createAttributes());
+
+
     }
 }

@@ -33,6 +33,7 @@ import net.seep.odd.abilities.buddymorph.client.BuddymorphScreen;
 import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
 import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.effect.ModEffects;
+import net.seep.odd.abilities.fairy.client.ManageFlowersScreen;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
@@ -60,6 +61,7 @@ import net.seep.odd.abilities.voids.VoidRegistry;
 import net.seep.odd.abilities.voids.VoidSystem;
 
 import net.seep.odd.block.ModBlocks;
+import net.seep.odd.block.falseflower.FalseFlowerTracker;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
@@ -89,6 +91,7 @@ import net.seep.odd.particles.OddParticles;
 import net.seep.odd.shader.ModShaders;
 import net.seep.odd.shop.screen.ModScreenHandlers;
 import net.seep.odd.sky.CelestialCommands;
+
 import net.seep.odd.sound.ModSounds;
 
 import net.seep.odd.status.ModStatusEffects;
@@ -111,6 +114,8 @@ public final class Oddities implements ModInitializer {
 		ModStatusEffects.init();
 		net.seep.odd.recipe.ModRecipeSerializers.register();
 		ModShaders.init();
+
+
 
 		// Dabloon //
 		ModScreenHandlers.register();
@@ -181,6 +186,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new ConquerPower());
 		Powers.register(new SplashPower());
 		Powers.register(new CultistPower());
+		Powers.register(new ClimberPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -225,6 +231,7 @@ public final class Oddities implements ModInitializer {
 
 		// Net channels (server/common)
 		UmbraNet.registerServerAstral();
+		UmbraAirSwimBoostNet.initServer();
 		MistyNet.init(); // server receivers
 
 		// Tamer
@@ -345,19 +352,32 @@ public final class Oddities implements ModInitializer {
 		BuddymorphNet.init();
 
 		// Fairy
-		net.seep.odd.block.falseflower.FalseFlowerTracker.registerServer();
+
+		FairyPower.register();
+
+		FalseFlowerTracker.registerServer();
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			net.seep.odd.block.falseflower.spell.BanishEffect.tickReturns(server);
+		});
+
 
 		// Lunar
 		LunarPackets.registerServerReceivers();
 		LunarPower.register();
 		LunarDrillItem.registerHooks();
 
+
 		// Conquer
 
 		// Splash
 		SplashPower.init();
 
+
 		ShaderEffectManager.getInstance().manage(new Identifier(Oddities.MOD_ID, "shaders/post/annihilation.json"));
+
+		// Climber
+		ClimberPower.registerNetworking();
+
 
 
 

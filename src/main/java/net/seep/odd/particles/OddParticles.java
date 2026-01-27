@@ -17,6 +17,7 @@ public final class OddParticles {
     public static final DefaultParticleType SPLASH_BUBBLE_GREEN = FabricParticleTypes.simple();
     public static final DefaultParticleType SPLASH_BUBBLE_AQUA  = FabricParticleTypes.simple();
     public static final DefaultParticleType SPLASH_BUBBLE_PINK  = FabricParticleTypes.simple();
+    public static final DefaultParticleType FAIRY_SPARKLES  = FabricParticleTypes.simple();
 
     public static void register() {
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "spectral_burst"), SPECTRAL_BURST);
@@ -27,6 +28,7 @@ public final class OddParticles {
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "splash_bubble_green"), SPLASH_BUBBLE_GREEN);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "splash_bubble_aqua"), SPLASH_BUBBLE_AQUA);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "splash_bubble_pink"), SPLASH_BUBBLE_PINK);
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "fairy_sparkles"), FAIRY_SPARKLES);
 
 
     }

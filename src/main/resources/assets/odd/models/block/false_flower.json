@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "cutout",
+  "textures": {
+    "particle": "odd:block/false_flower/none"
+  }
+}

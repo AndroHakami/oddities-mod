@@ -22,6 +22,8 @@
     "client.OverdriveCameraShakeMixin",
     "client.OverdriveFovMixin",
     "client.OverdrivePerspectiveMixin",
+    "client.ParticleAccessor",
+    "client.SmokeParticleUmbraTintMixin",
     "client.VacuumNoBobMixin",
     "client.WorldRendererCloudMixin",
     "client.WorldRendererDrillMixin",
@@ -45,7 +47,15 @@
     "VillagerEntityMixin",
     "access.CropBlockInvoker",
     "access.MobEntityTargetSelectorAccessor",
-    "spectral.PlayerSpectralNoclipMixin"
+    "fairy.ServerPlayerEntityFairyFlightMixin",
+    "spectral.PlayerSpectralNoclipMixin",
+    "umbra.LivingEntityAirSwimMixin",
+    "umbra.LivingEntityJumpingAccessorMixin",
+    "umbra.PlayerEntityAirSwimTrackerMixin",
+    "umbra.PlayerEntityAirSwimTravelMixin",
+    "umbra.PlayerEntityUmbraBoostInputMixin",
+    "umbra.PlayerEntityUmbraPhaseTrackerMixin",
+    "umbra.PlayerUmbraNoclipMixin"
   ],
   "injectors": {
     "defaultRequire": 1

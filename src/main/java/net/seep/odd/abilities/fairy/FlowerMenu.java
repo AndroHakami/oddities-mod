@@ -1,8 +1,8 @@
+// src/main/java/net/seep/odd/abilities/fairy/FlowerMenu.java
 package net.seep.odd.abilities.fairy;
 
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import net.seep.odd.Oddities;
@@ -19,7 +19,7 @@ public final class FlowerMenu {
     public static final Identifier S2C_OPEN = new Identifier(Oddities.MOD_ID, "fairy/flower_menu_open");
 
     public static void openFor(ServerPlayerEntity player) {
-        // 1) push the latest flower list to client (FalseFlowerTracker must implement this)
+        // 1) push the latest flower list to client
         FalseFlowerTracker.sendSnapshot(player);
 
         // 2) instruct client to open the UI

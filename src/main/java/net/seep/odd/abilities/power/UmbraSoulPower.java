@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/power/UmbraSoulPower.java
 package net.seep.odd.abilities.power;
 
 import net.minecraft.entity.Entity;
@@ -11,8 +12,9 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.astral.AstralInventory;
-import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.net.UmbraNet;
+import net.seep.odd.abilities.astral.OddAirSwim;
+import net.seep.odd.abilities.astral.OddUmbraPhase;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -21,28 +23,20 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Umbra Soul:
- * Primary  = Shadow Form (auto-glide toward look, drains resource).
- * Secondary = Astral Projection (creative-like flight + noclip, 200m leash, cone push/pull).
- */
 public final class UmbraSoulPower implements Power {
 
     @Override public String id() { return "umbra_soul"; }
     @Override public long cooldownTicks() { return 0; }
 
-    @Override
-    public String displayName() {
-        return "Red Shadow";
-    }
+    @Override public String displayName() { return "Red Shadow"; }
 
-    @Override public long secondaryCooldownTicks() { return  60L * 20L ; }
+    @Override public long secondaryCooldownTicks() { return 60L * 20L; }
 
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
             case "primary"   -> new Identifier("odd", "textures/gui/abilities/umbra_cloud.png");
-            case "secondary" -> new Identifier("odd", "textures/gui/abilities/umbra_possess.png"); // set this texture
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/umbra_possess.png");
             default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
@@ -55,48 +49,91 @@ public final class UmbraSoulPower implements Power {
     }
 
     /* ===================== SHADOW CONFIG ===================== */
-    private static final int MAX_ENERGY      = 20 * 20;  // 10s at 20 tps
-    private static final int DRAIN_PER_TICK  = 9;        // drain while active
-    private static final int REGEN_PER_TICK  = 4;        // regen while off
-    private static final double H_SPEED      = 1.25;     // shadow glide
-    private static final double V_SPEED      = 1.25;
-    private static final double SMOOTHING    = 0.35;
+    private static final int MAX_ENERGY      = 20 * 20;
+    private static final int DRAIN_PER_TICK  = 12;
+    private static final int REGEN_PER_TICK  = 4;
     private static final int HUD_SYNC_PERIOD = 0;
 
-    // tiny smoke while shadow
     private static final int SMOKE_PERIOD_TICKS = 3;
+
+    private static final int SHADOW_EXIT_GRAVITY_DELAY_TICKS = 1;
+
+    // >>> ADJUST THIS <<<
+    // How many ticks AFTER leaving shadow before energy starts regenerating.
+    // 20 = 1 second at 20 tps.
+    private static final int SHADOW_REGEN_DELAY_TICKS = 10;
 
     /* ===================== ASTRAL CONFIG ===================== */
     private static final double ASTRAL_MAX_DISTANCE = 200.0;
 
-    // cone push/pull
     public static final int ASTRAL_MASK_PUSH = 1;
     public static final int ASTRAL_MASK_PULL = 2;
 
     private static final double ASTRAL_FORCE_RANGE = 12.0;
-    private static final double ASTRAL_CONE_COS    = 0.55;  // ~57°
-    private static final double ASTRAL_FORCE       = 0.2;  // per tick impulse
-    private static final int    INPUT_STALE_TICKS  = 6;     // ignore old masks
+    private static final double ASTRAL_CONE_COS    = 0.55;
+    private static final double ASTRAL_FORCE       = 0.2;
+    private static final int    INPUT_STALE_TICKS  = 6;
+
+
+    // SMOKE //
+    private static final int    SHADOW_SMOKE_PARTICLES_PER_BURST = 28; // density
+    private static final double SHADOW_SMOKE_RADIUS_MIN = 0.35;
+    private static final double SHADOW_SMOKE_RADIUS_MAX = 0.95;
+    private static final double SHADOW_SMOKE_INWARD_SPEED = 0.06;
 
     /* ===================== STATE ===================== */
     private static final class State {
-        // shadow
         int energy = MAX_ENERGY;
         boolean shadowActive = false;
-        boolean prevAllowFlying, prevFlying;
-
         int hudSyncCooldown = 0;
 
-        // astral
+        boolean pendingShadowGravityRestore = false;
+        int shadowGravityDelayTicks = 0;
+
+        // regen delay after shadow ends
+        int shadowRegenDelayTicks = 0;
+
         boolean astralActive = false;
         Vec3d  astralAnchor = null;
         net.minecraft.registry.RegistryKey<World> astralDim = null;
         boolean prevAllowFlyingAstral, prevFlyingAstral, prevNoClipAstral;
 
-        // client input (astral)
         int   astralMask = 0;
         int   astralMaskTick = 0;
     }
+    private static void spawnShadowSmokeCloud(ServerWorld w, ServerPlayerEntity p) {
+        var rand = w.getRandom();
+
+        // cloud centered around the player's torso
+        Vec3d center = new Vec3d(p.getX(), p.getBodyY(0.55), p.getZ());
+
+        for (int i = 0; i < SHADOW_SMOKE_PARTICLES_PER_BURST; i++) {
+            // random direction around player (slightly flattened vertically so it looks like a “cloud”)
+            double dx = rand.nextDouble() * 2.0 - 1.0;
+            double dy = (rand.nextDouble() * 2.0 - 1.0) * 0.65; // flatter vertically
+            double dz = rand.nextDouble() * 2.0 - 1.0;
+
+            Vec3d dir = new Vec3d(dx, dy, dz);
+            double len2 = dir.lengthSquared();
+            if (len2 < 1.0e-6) continue;
+            dir = dir.multiply(1.0 / Math.sqrt(len2));
+
+            double r = SHADOW_SMOKE_RADIUS_MIN + rand.nextDouble() * (SHADOW_SMOKE_RADIUS_MAX - SHADOW_SMOKE_RADIUS_MIN);
+            Vec3d pos = center.add(dir.multiply(r));
+
+            // velocity toward the center = “cloud tips” aim inward
+            Vec3d vel = center.subtract(pos).normalize().multiply(SHADOW_SMOKE_INWARD_SPEED);
+
+            // count=0 = single particle with directional velocity (offsets used as velocity)
+            w.spawnParticles(net.minecraft.particle.ParticleTypes.SMOKE,
+                    pos.x, pos.y, pos.z,
+                    0,
+                    vel.x, vel.y, vel.z,
+                    1.0
+            );
+        }
+    }
+
     private static final Map<UUID, State> STATES = new HashMap<>();
     private static @NotNull State S(ServerPlayerEntity p) { return STATES.computeIfAbsent(p.getUuid(), k -> new State()); }
 
@@ -115,13 +152,16 @@ public final class UmbraSoulPower implements Power {
     }
 
     private static void startShadow(ServerPlayerEntity p, State s) {
-        var ab = p.getAbilities();
-        s.prevAllowFlying = ab.allowFlying;
-        s.prevFlying      = ab.flying;
+        s.pendingShadowGravityRestore = false;
+        s.shadowGravityDelayTicks = 0;
 
-        ab.allowFlying = true;
-        ab.flying      = true;
-        p.sendAbilitiesUpdate();
+        // no regen delay while actively shadowing
+        s.shadowRegenDelayTicks = 0;
+
+        if (p instanceof OddAirSwim air) air.oddities$setAirSwim(true);
+        if (p instanceof OddUmbraPhase ph) ph.oddities$setUmbraPhasing(true); // <<< PHASE ON
+
+        p.setSwimming(true);
 
         p.setInvisible(true);
         p.setInvulnerable(true);
@@ -133,18 +173,20 @@ public final class UmbraSoulPower implements Power {
     }
 
     private static void stopShadow(ServerPlayerEntity p, State s) {
-        var ab = p.getAbilities();
-        ab.allowFlying = s.prevAllowFlying;
-        ab.flying      = s.prevFlying;
-        p.sendAbilitiesUpdate();
+        if (p instanceof OddAirSwim air) air.oddities$setAirSwim(false);
+        if (p instanceof OddUmbraPhase ph) ph.oddities$setUmbraPhasing(false); // <<< PHASE OFF
+
+        p.setSwimming(false);
+
+        s.pendingShadowGravityRestore = true;
+        s.shadowGravityDelayTicks = Math.max(0, SHADOW_EXIT_GRAVITY_DELAY_TICKS);
+
+        // start regen delay countdown on exit
+        s.shadowRegenDelayTicks = Math.max(0, SHADOW_REGEN_DELAY_TICKS);
 
         p.setInvisible(false);
         p.setInvulnerable(false);
-        p.setNoGravity(false);
         p.fallDistance = 0;
-
-        p.setVelocity(Vec3d.ZERO);
-        p.velocityModified = true;
 
         s.shadowActive = false;
         UmbraNet.syncShadowHud(p, s.energy, MAX_ENERGY, false);
@@ -155,12 +197,17 @@ public final class UmbraSoulPower implements Power {
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
         State s = S(player);
-        if (s.shadowActive) return; // not during shadow
+        if (s.shadowActive) return;
         if (!s.astralActive) startAstral(player, s);
         else                 stopAstral(player, s, true);
     }
 
     private static void startAstral(ServerPlayerEntity p, State s) {
+        s.pendingShadowGravityRestore = false;
+        s.shadowGravityDelayTicks = 0;
+
+        if (p instanceof OddUmbraPhase ph) ph.oddities$setUmbraPhasing(true); // <<< PHASE ON
+
         s.astralActive = true;
         s.astralAnchor = p.getPos();
         s.astralDim    = p.getWorld().getRegistryKey();
@@ -172,6 +219,7 @@ public final class UmbraSoulPower implements Power {
 
         ab.allowFlying = true;
         ab.flying      = true;
+
         p.addStatusEffect(new StatusEffectInstance(
                 StatusEffects.INVISIBILITY, 9999, 0, true, false, false
         ));
@@ -180,9 +228,8 @@ public final class UmbraSoulPower implements Power {
         p.setInvisible(true);
         p.setInvulnerable(true);
         p.fallDistance = 0;
+
         AstralInventory.enter(p);
-
-
         p.sendAbilitiesUpdate();
     }
 
@@ -196,22 +243,24 @@ public final class UmbraSoulPower implements Power {
         var ab = p.getAbilities();
         ab.allowFlying = s.prevAllowFlyingAstral;
         ab.flying      = s.prevFlyingAstral;
-        p.noClip       = s.prevNoClipAstral;
+
+        p.noClip = s.prevNoClipAstral;
         p.setNoGravity(false);
-        p.removeStatusEffect (StatusEffects.INVISIBILITY);
+        p.removeStatusEffect(StatusEffects.INVISIBILITY);
         p.setInvisible(false);
         p.setInvulnerable(false);
         p.fallDistance = 0;
+
+        if (p instanceof OddUmbraPhase ph) ph.oddities$setUmbraPhasing(false); // <<< PHASE OFF
+
         p.sendAbilitiesUpdate();
         AstralInventory.exit(p);
 
         s.astralActive = false;
         s.astralAnchor = null;
         s.astralMask   = 0;
-    
-        // Start normal secondary cooldown after Astral ends (user or forced)
+
         {
-            // Prefer reading the cooldown from the registered power; fallback to 60s if not present
             net.seep.odd.abilities.power.Power pwr =
                     net.seep.odd.abilities.power.Powers.get("umbra_soul");
             final long cd = (pwr != null)
@@ -228,70 +277,54 @@ public final class UmbraSoulPower implements Power {
                 net.seep.odd.abilities.net.PowerNetworking.sendCooldown(p, "secondary", cd);
             }
         }
-
-
-        }
-
+    }
 
     /* ===================== SERVER TICK ===================== */
 
     public static void forceStopAstral(ServerPlayerEntity p) {
         State s = S(p);
-        if (s.astralActive) {
-            // snapBack = true to return to anchor, matches normal toggle stop path
-            stopAstral(p, s, true);
-        }
+        if (s.astralActive) stopAstral(p, s, true);
     }
 
     public static void serverTick(ServerPlayerEntity p) {
         State s = S(p);
 
-        // ---- SHADOW FORM ----
+        if (!s.shadowActive && !s.astralActive && s.pendingShadowGravityRestore) {
+            if (s.shadowGravityDelayTicks > 0) {
+                p.setNoGravity(true);
+                s.shadowGravityDelayTicks--;
+            } else {
+                p.setNoGravity(false);
+                s.pendingShadowGravityRestore = false;
+            }
+        }
+
         if (s.shadowActive) {
             s.energy = Math.max(0, s.energy - DRAIN_PER_TICK);
 
-            var ab = p.getAbilities();
-            ab.allowFlying = true;
-            ab.flying      = true;
-            p.sendAbilitiesUpdate();
-
             p.setInvisible(true);
-            p.setInvulnerable(true);
             p.setNoGravity(true);
+            p.setInvulnerable(true);
             p.fallDistance = 0;
-            p.setOnGround(false);
-            p.setSprinting(false);
 
             p.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 10, 4, true, false, false));
 
-            Vec3d look = p.getRotationVec(1.0f).normalize();
-            Vec3d desired = new Vec3d(look.x * H_SPEED, look.y * V_SPEED, look.z * H_SPEED);
-            Vec3d cur = p.getVelocity();
-            Vec3d blended = cur.lerp(desired, SMOOTHING);
-            p.setVelocity(blended);
-            p.velocityModified = true;
-
             if (p.age % SMOKE_PERIOD_TICKS == 0) {
-                ((ServerWorld)p.getWorld()).spawnParticles(
-                        net.minecraft.particle.ParticleTypes.SMOKE,
-                        p.getX(), p.getBodyY(0.5), p.getZ(),
-                        2, 0.15, 0.10, 0.15, 0.01
-                );
-                ((ServerWorld)p.getWorld()).spawnParticles(
-                        net.minecraft.particle.ParticleTypes.ELECTRIC_SPARK,
-                        p.getX(), p.getBodyY(0.5), p.getZ(),
-                        1, 0.10, 0.06, 0.10, 0.0
-                );
+                spawnShadowSmokeCloud((ServerWorld) p.getWorld(), p);
             }
 
             if (s.energy <= 0) stopShadow(p, s);
         } else {
-            if (p.isOnGround() || !p.isFallFlying()) {
-                s.energy = Math.min(MAX_ENERGY, s.energy + REGEN_PER_TICK);
+            // Regen delay countdown after leaving shadow
+            if (s.shadowRegenDelayTicks > 0) {
+                s.shadowRegenDelayTicks--;
+            } else {
+                if (p.isOnGround() || !p.isFallFlying()) {
+                    s.energy = Math.min(MAX_ENERGY, s.energy + REGEN_PER_TICK);
+                }
             }
         }
 
-        // ---- ASTRAL PROJECTION ----
         if (s.astralActive) {
             var ab = p.getAbilities();
             if (!ab.allowFlying) { ab.allowFlying = true; p.sendAbilitiesUpdate(); }
@@ -304,25 +337,16 @@ public final class UmbraSoulPower implements Power {
             if (wrongDim || tooFar) {
                 stopAstral(p, s, true);
             } else {
-                if (p.age % 5 == 0) {
-                    ((ServerWorld)p.getWorld()).spawnParticles(
-                            net.minecraft.particle.ParticleTypes.ASH,
-                            p.getX(), p.getEyeY() - 0.2, p.getZ(),
-                            1, 0.02, 0.02, 0.02, 0.0
-                    );
-                }
+
                 applyAstralPushPull(p, s);
             }
         }
 
-        // ---- HUD SYNC (throttled) ----
         if (s.hudSyncCooldown-- <= 0) {
             UmbraNet.syncShadowHud(p, s.energy, MAX_ENERGY, s.shadowActive);
             s.hudSyncCooldown = HUD_SYNC_PERIOD;
         }
     }
-
-    /* ===================== ASTRAL INPUT (from client) ===================== */
 
     public static void onAstralInput(ServerPlayerEntity player, int mask) {
         State s = S(player);
@@ -330,8 +354,6 @@ public final class UmbraSoulPower implements Power {
         s.astralMask = mask;
         s.astralMaskTick = player.age;
     }
-
-    /* ===================== ASTRAL FORCE LOGIC ===================== */
 
     private static void applyAstralPushPull(ServerPlayerEntity p, State s) {
         int mask = s.astralMask;
@@ -363,10 +385,8 @@ public final class UmbraSoulPower implements Power {
             if (falloff <= 0) continue;
 
             Vec3d impulse;
-            if (doPush) {
-                impulse = look.multiply(ASTRAL_FORCE * falloff);
-            } else {
-                // pull toward the player's current position
+            if (doPush) impulse = look.multiply(ASTRAL_FORCE * falloff);
+            else {
                 Vec3d pullDir = p.getPos().subtract(e.getPos()).normalize();
                 impulse = pullDir.multiply(ASTRAL_FORCE * falloff);
             }
@@ -376,8 +396,6 @@ public final class UmbraSoulPower implements Power {
             e.velocityModified = true;
         }
     }
-
-    /* ===================== TARGETING (kept if you ever need it) ===================== */
 
     @Nullable
     private static MobEntity findMobLookAt(@NotNull ServerPlayerEntity player, double dist) {

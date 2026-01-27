@@ -13,6 +13,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.item.ModelPredicateProviderRegistry;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
 import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -24,9 +25,13 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.world.World;
 
+import net.seep.odd.abilities.astral.UmbraAirSwimBoostNetClient;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
+import net.seep.odd.abilities.climber.client.ClimberClient;
+import net.seep.odd.abilities.climber.client.render.ClimberPullTetherRenderer;
+import net.seep.odd.abilities.climber.client.render.ClimberRopeAnchorRenderer;
 import net.seep.odd.abilities.conquer.client.ConquerCorruptionClient;
 import net.seep.odd.abilities.conquer.client.render.CorruptedIronGolemRenderer;
 import net.seep.odd.abilities.conquer.client.render.CorruptedVillagerRenderer;
@@ -36,6 +41,8 @@ import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.cosmic.client.CosmicCpmBridge;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordRenderer;
+import net.seep.odd.abilities.fairy.client.FairyKeysClient;
+import net.seep.odd.abilities.fairy.client.FlowerMenuClient;
 import net.seep.odd.abilities.fallingsnow.FallingSnowClient;
 import net.seep.odd.abilities.fallingsnow.FallingSnowNet;
 import net.seep.odd.abilities.fallingsnow.FallingSnowPowerAccessor;
@@ -85,14 +92,19 @@ import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
 import net.seep.odd.abilities.zerosuit.client.AnnihilationShaderClient;
 import net.seep.odd.abilities.zerosuit.client.ZeroSuitCpmBridge;
 import net.seep.odd.block.ModBlocks;
+import net.seep.odd.block.falseflower.FalseFlowerTracker;
+import net.seep.odd.block.falseflower.client.FalseFlowerAuraClient;
+import net.seep.odd.block.falseflower.client.FalseFlowerRenderer;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
+
 
 import net.seep.odd.client.audio.RiderRadioClient;
 import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
+import net.seep.odd.entity.cultist.ShyGuyRenderer;
 import net.seep.odd.entity.cultist.SightseerRenderer;
 import net.seep.odd.entity.falsefrog.client.FalseFrogRenderer;
 import net.seep.odd.entity.firefly.client.FireflyRenderer;
@@ -114,6 +126,9 @@ import net.seep.odd.particles.client.TelekinesisParticle;
 import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
 import net.seep.odd.abilities.ghostlings.client.GhostlingRenderer;
+
+import net.seep.odd.sky.client.RottenRootsClient;
+
 
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
@@ -148,6 +163,7 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Umbra (client)
         UmbraNet.registerClient();
+        UmbraAirSwimBoostNetClient.initClient();
         PossessionClientController.register();
         AstralClientController.register();
 
@@ -317,11 +333,23 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.ORBITING_SNOWBALL, ctx -> new FlyingItemEntityRenderer<>(ctx));
 
 
-        // Rotten Roots (World)
+        // Dimensions and Sky (World)
+
+
+        RottenRootsClient.init();
+
+
 
         // Fairy (client)
-        net.seep.odd.abilities.fairy.client.FairyKeysClient.registerClient();
-        net.seep.odd.block.falseflower.FalseFlowerTracker.registerClient();
+        BlockEntityRendererFactories.register(ModBlocks.FALSE_FLOWER_BE, ctx -> new FalseFlowerRenderer());
+        FairyKeysClient.registerClient();
+        FalseFlowerTracker.registerClient();
+        FlowerMenuClient.init();
+        FalseFlowerAuraClient.init();
+        net.seep.odd.abilities.fairy.client.FairyManaHudClient.init();
+
+
+
 
         // Lunar (client)
         LunarPackets.registerClientReceivers();
@@ -349,6 +377,16 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Splash (Client)
         SplashPowerClient.init();
+
+        // Cultist (Client)
+        net.seep.odd.entity.cultist.client.ShyGuyClientSounds.init();
+
+        // Climber (Client)
+        ClimberClient.init();
+
+
+
+
 
 
 
@@ -414,6 +452,14 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.SEAL, SealRenderer::new);
         EntityRendererRegistry.register(ModEntities.ZERO_SUIT_MISSILE, ZeroSuitMissileRenderer::new);
         EntityRendererRegistry.register(ModEntities.SIGHTSEER, SightseerRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SHY_GUY, ShyGuyRenderer::new);
+        EntityRendererRegistry.register(ModEntities.WEEPING_ANGEL, net.seep.odd.entity.cultist.client.WeepingAngelRenderer::new);
+        EntityRendererRegistry.register(ModEntities.CENTIPEDE, net.seep.odd.entity.cultist.CentipedeRenderer::new);
+        EntityRendererRegistry.register(ModEntities.CLIMBER_ROPE_ANCHOR, ClimberRopeAnchorRenderer::new);
+        EntityRendererRegistry.register(ModEntities.CLIMBER_PULL_TETHER, ClimberPullTetherRenderer::new);
+
+
+
 
 
 

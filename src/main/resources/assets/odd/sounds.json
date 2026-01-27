@@ -4,6 +4,46 @@
     "sounds": [
       "odd:metal_detector_found_ore"
     ]
+
+  },
+  "shy_guy_rage": {
+    "subtitle": "odd.shy_guy_rage",
+    "sounds": [
+      "odd:shy_guy_rage"
+    ]
+  },
+  "shy_guy_rage_run": {
+    "subtitle": "odd.shy_guy_rage_run",
+    "sounds": [
+      "odd:shy_guy_rage_run"
+    ]
+  },
+  "shy_guy_attack": {
+    "subtitle": "odd.shy_guy_attack",
+    "sounds": [
+      "odd:shy_guy_attack"
+    ]
+  },
+
+
+  "shy_guy_sit_post_rage": {
+    "subtitle": "odd.shy_guy_sit_post_rage",
+    "sounds": [
+      "odd:shy_guy_sit_post_rage"
+    ]
+  },
+  "shy_guy_sit": {
+    "subtitle": "odd.shy_guy_sit",
+    "sounds": [
+      "odd:shy_guy_sit"
+    ]
+  },
+
+  "shy_guy_ambient": {
+    "subtitle": "odd.shy_guy_ambient",
+    "sounds": [
+      "odd:shy_guy_ambient"
+    ]
   },
   "creepy_pull": {
     "subtitle": "odd.creepy_pull",

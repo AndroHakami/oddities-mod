@@ -24,5 +24,5 @@
   "logical_height": 384,
 
   "infiniburn": "#minecraft:infiniburn_overworld",
-  "effects": "minecraft:overworld"
+  "effects": "odd:rotten_roots_effects"
 }

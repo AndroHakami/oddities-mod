@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/fairy/client/FlowerMenuClient.java
 package net.seep.odd.abilities.fairy.client;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;

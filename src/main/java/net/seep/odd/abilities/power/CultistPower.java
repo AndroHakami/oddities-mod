@@ -19,8 +19,11 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.event.GameEvent;
+import net.seep.odd.block.ModBlocks;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.entity.cultist.ShyGuyEntity;
 import net.seep.odd.entity.cultist.SightseerEntity;
+import net.seep.odd.entity.cultist.WeepingAngelEntity;
 import net.seep.odd.status.ModStatusEffects;
 import org.jetbrains.annotations.Nullable;
 
@@ -42,7 +45,7 @@ public final class CultistPower implements Power {
 
     @Override
     public String slotLongDescription(String slot) {
-        return "Divine Touch: Toggle Divine Protection on players, or bring a built Sightseer to life.";
+        return "Divine Touch: Toggle Divine Protection on players, or bring a built construct to life.";
     }
 
     @Override
@@ -64,7 +67,6 @@ public final class CultistPower implements Power {
         // 2) Block hit (structures)
         BlockHitResult bhr = raycastBlock(player, 6.0);
         if (bhr.getType() != HitResult.Type.BLOCK) {
-            // tiny “nothing” puff
             divineTouchFx(sw, player.getPos().add(0, player.getStandingEyeHeight() * 0.6, 0), 8, 4);
             player.sendMessage(Text.literal("Divine Touch: nothing to bless."), true);
             return;
@@ -72,18 +74,42 @@ public final class CultistPower implements Power {
 
         BlockPos hit = bhr.getBlockPos();
 
-        // Try to animate a Sightseer structure near where the player touched
+        // Sightseer
         if (trySpawnSightseerFromBuild(sw, hit)) {
-            // FX at the touched block
             divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 16, 8);
-
             sw.playSound(null, hit, SoundEvents.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
             sw.emitGameEvent(player, GameEvent.ENTITY_PLACE, hit);
             player.sendMessage(Text.literal("Divine Touch: Sightseer awakened."), true);
             return;
         }
 
-        // subtle fail feedback at the block
+        // Shy Guy
+        if (trySpawnShyGuyFromBuild(sw, hit)) {
+            divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 16, 8);
+            sw.playSound(null, hit, SoundEvents.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
+            sw.emitGameEvent(player, GameEvent.ENTITY_PLACE, hit);
+            player.sendMessage(Text.literal("Divine Touch: Shy Guy awakened."), true);
+            return;
+        }
+
+        // Weeping Angel (prop-hunt block mimic)
+        if (trySpawnWeepingAngelFromBuild(sw, hit)) {
+            divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 14, 7);
+            sw.playSound(null, hit, SoundEvents.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
+            sw.emitGameEvent(player, GameEvent.ENTITY_PLACE, hit);
+            player.sendMessage(Text.literal("Divine Touch: Weeping Angel awakened."), true);
+            return;
+        }
+        // Centipede
+        // Centipede Spawner: Respawn Anchor -> Centipede Spawn block
+        if (tryTransformCentipedeSpawn(sw, hit)) {
+            divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 16, 8);
+            sw.playSound(null, hit, SoundEvents.BLOCK_RESPAWN_ANCHOR_SET_SPAWN, SoundCategory.PLAYERS, 1.0f, 0.7f);
+            sw.emitGameEvent(player, GameEvent.BLOCK_CHANGE, hit);
+            player.sendMessage(Text.literal("Divine Touch: Centipede nest awakened."), true);
+            return;
+        }
+
         divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 10, 5);
         player.sendMessage(Text.literal("Divine Touch: no valid construct found."), true);
     }
@@ -107,7 +133,6 @@ public final class CultistPower implements Power {
         if (target.hasStatusEffect(ModStatusEffects.DIVINE_PROTECTION)) {
             target.removeStatusEffect(ModStatusEffects.DIVINE_PROTECTION);
 
-            // subtle FX
             divineTouchFx(sw, fxPos, 16, 8);
 
             sw.playSound(null, target.getBlockPos(),
@@ -129,7 +154,6 @@ public final class CultistPower implements Power {
                 true
         ));
 
-        // subtle FX
         divineTouchFx(sw, fxPos, 18, 9);
 
         sw.playSound(null, target.getBlockPos(),
@@ -142,10 +166,7 @@ public final class CultistPower implements Power {
     }
 
     /* =========================================================
-       Block structure -> Sightseer spawn
-       Pattern:
-       - Soul Sand "T": bottom(0,0,0), top(0,1,0), arms on top left/right (axis X or Z)
-       - Skeleton skulls ONLY on the outer arms (no middle skull)
+       Sightseer structure
        ========================================================= */
 
     private static boolean trySpawnSightseerFromBuild(ServerWorld sw, BlockPos hit) {
@@ -154,11 +175,11 @@ public final class CultistPower implements Power {
                 for (int dz = -2; dz <= 2; dz++) {
                     BlockPos base = hit.add(dx, dy, dz);
 
-                    if (matchesSightseer(sw, base, true)) { // arms along X
+                    if (matchesSightseer(sw, base, true)) {
                         consumeAndSpawnSightseer(sw, base, true);
                         return true;
                     }
-                    if (matchesSightseer(sw, base, false)) { // arms along Z
+                    if (matchesSightseer(sw, base, false)) {
                         consumeAndSpawnSightseer(sw, base, false);
                         return true;
                     }
@@ -184,7 +205,6 @@ public final class CultistPower implements Power {
         if (!isSkeletonSkull(sw.getBlockState(skullA))) return false;
         if (!isSkeletonSkull(sw.getBlockState(skullB))) return false;
 
-        // No middle skull above the top center
         if (!sw.getBlockState(base.up(2)).isAir()) return false;
 
         return true;
@@ -197,7 +217,6 @@ public final class CultistPower implements Power {
         BlockPos skullA = armA.up(1);
         BlockPos skullB = armB.up(1);
 
-        // remove blocks like golems do
         setAir(sw, skullA);
         setAir(sw, skullB);
         setAir(sw, armA);
@@ -205,7 +224,6 @@ public final class CultistPower implements Power {
         setAir(sw, base.up(1));
         setAir(sw, base);
 
-        // spawn entity
         SightseerEntity sightseer = ModEntities.SIGHTSEER.create(sw);
         if (sightseer == null) return;
 
@@ -215,11 +233,130 @@ public final class CultistPower implements Power {
 
         sw.spawnEntity(sightseer);
 
-        // subtle awaken FX at spawn
         divineTouchFx(sw, Vec3d.ofCenter(base).add(0, 0.9, 0), 20, 10);
-
         sw.playSound(null, base, SoundEvents.ENTITY_WITHER_SPAWN, SoundCategory.HOSTILE, 0.6f, 1.6f);
     }
+
+    /* =========================================================
+       Shy Guy structure:
+       - 3 soul sand stacked
+       - wither skeleton skull on top
+       ========================================================= */
+
+    private static boolean trySpawnShyGuyFromBuild(ServerWorld sw, BlockPos hit) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    BlockPos base = hit.add(dx, dy, dz);
+
+                    if (matchesShyGuy(sw, base)) {
+                        consumeAndSpawnShyGuy(sw, base);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesShyGuy(ServerWorld sw, BlockPos base) {
+        if (!isSoul(sw.getBlockState(base))) return false;
+        if (!isSoul(sw.getBlockState(base.up(1)))) return false;
+        if (!isSoul(sw.getBlockState(base.up(2)))) return false;
+
+        BlockState skull = sw.getBlockState(base.up(3));
+        return isWitherSkull(skull);
+    }
+
+    private static void consumeAndSpawnShyGuy(ServerWorld sw, BlockPos base) {
+        setAir(sw, base.up(3)); // skull
+        setAir(sw, base.up(2));
+        setAir(sw, base.up(1));
+        setAir(sw, base);
+
+        ShyGuyEntity shy = ModEntities.SHY_GUY.create(sw);
+        if (shy == null) return;
+
+        shy.setHomePos(base);
+        shy.refreshPositionAndAngles(base.getX() + 0.5, base.getY() + 0.05, base.getZ() + 0.5, 0.0f, 0.0f);
+        shy.setPersistent();
+
+        sw.spawnEntity(shy);
+
+        divineTouchFx(sw, Vec3d.ofCenter(base).add(0, 1.0, 0), 20, 10);
+        sw.playSound(null, base, SoundEvents.ENTITY_WITHER_SPAWN, SoundCategory.HOSTILE, 0.55f, 0.9f);
+    }
+
+    /* =========================================================
+       Weeping Angel structure:
+       - 1 soul sand
+       - creeper head on top
+       ========================================================= */
+
+    private static boolean trySpawnWeepingAngelFromBuild(ServerWorld sw, BlockPos hit) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    BlockPos base = hit.add(dx, dy, dz);
+
+                    if (matchesWeepingAngel(sw, base)) {
+                        consumeAndSpawnWeepingAngel(sw, base);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesWeepingAngel(ServerWorld sw, BlockPos base) {
+        if (!isSoul(sw.getBlockState(base))) return false;
+        return isCreeperHead(sw.getBlockState(base.up(1)));
+    }
+
+    private static boolean isCreeperHead(BlockState s) {
+        return s.isOf(Blocks.CREEPER_HEAD) || s.isOf(Blocks.CREEPER_WALL_HEAD);
+    }
+    private static boolean tryTransformCentipedeSpawn(ServerWorld sw, BlockPos hit) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    BlockPos p = hit.add(dx, dy, dz);
+                    if (sw.getBlockState(p).isOf(Blocks.RESPAWN_ANCHOR)) {
+                        sw.setBlockState(p, ModBlocks.CENTIPEDE_SPAWN.getDefaultState(), Block.NOTIFY_ALL);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void consumeAndSpawnWeepingAngel(ServerWorld sw, BlockPos base) {
+        setAir(sw, base.up(1)); // head
+        setAir(sw, base);       // soul sand
+
+        WeepingAngelEntity angel = ModEntities.WEEPING_ANGEL.create(sw);
+        if (angel == null) return;
+
+        angel.setHomePos(base);
+
+// LOCK disguise once, based on block under the original construct:
+        angel.initCreationDisguise(sw, base);
+
+        angel.refreshPositionAndAngles(base.getX() + 0.5, base.getY() + 0.05, base.getZ() + 0.5, 0.0f, 0.0f);
+        angel.setPersistent();
+
+        sw.spawnEntity(angel);
+
+
+        divineTouchFx(sw, Vec3d.ofCenter(base).add(0, 0.75, 0), 18, 9);
+        sw.playSound(null, base, SoundEvents.BLOCK_SCULK_SENSOR_CLICKING, SoundCategory.HOSTILE, 0.9f, 0.9f);
+    }
+
+    /* =========================================================
+       Shared helpers
+       ========================================================= */
 
     private static void setAir(ServerWorld sw, BlockPos pos) {
         sw.setBlockState(pos, Blocks.AIR.getDefaultState(), Block.NOTIFY_ALL);
@@ -236,9 +373,9 @@ public final class CultistPower implements Power {
                 || s.isOf(Blocks.WITHER_SKELETON_WALL_SKULL);
     }
 
-    /* =========================================================
-       FX (subtle enchant letters + purple ender)
-       ========================================================= */
+    private static boolean isWitherSkull(BlockState s) {
+        return s.isOf(Blocks.WITHER_SKELETON_SKULL) || s.isOf(Blocks.WITHER_SKELETON_WALL_SKULL);
+    }
 
     private static void divineTouchFx(ServerWorld sw, Vec3d pos, int enchantCount, int portalCount) {
         sw.spawnParticles(ParticleTypes.ENCHANT,
