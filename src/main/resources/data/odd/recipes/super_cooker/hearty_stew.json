@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:bowl" },
+    { "item": "minecraft:beef" },
+    { "item": "minecraft:carrot" }
+  ],
+  "result": { "item": "minecraft:rabbit_stew", "count": 1 },
+  "cookTime": 200,
+  "minStirs": 3
+}

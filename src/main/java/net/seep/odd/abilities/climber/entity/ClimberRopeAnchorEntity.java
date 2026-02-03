@@ -1,19 +1,18 @@
 package net.seep.odd.abilities.climber.entity;
 
-import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
-import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
 import net.seep.odd.abilities.power.ClimberPower;
 
 import java.util.Optional;
@@ -49,7 +48,8 @@ public class ClimberRopeAnchorEntity extends Entity {
     }
 
     public void setRopeLength(float len) {
-        this.dataTracker.set(ROPE_LEN, Math.max(2.0f, Math.min(20.0f, len)));
+        // max is now 30m
+        this.dataTracker.set(ROPE_LEN, Math.max(2.0f, Math.min(30.0f, len)));
     }
 
     public float getRopeLength() {
@@ -103,45 +103,88 @@ public class ClimberRopeAnchorEntity extends Entity {
         }
         setRopeLength(L);
 
-        // Swing physics: constraint-based “rope” with tangential preservation
+        // Rope vectors
         Vec3d anchor = this.getPos();
-        Vec3d waist = ClimberPower.ropeOrigin(owner);
+        Vec3d waist  = ClimberPower.ropeOrigin(owner);
 
         Vec3d r = waist.subtract(anchor);
         double d = r.length();
         if (d < 1.0e-4) {
-            owner.fallDistance = 0;
+            owner.fallDistance = 0.0f;
             return;
         }
 
         double ropeLen = getRopeLength();
+        Vec3d dir = r.multiply(1.0 / d); // anchor -> player
 
-        // Only apply tension if stretched beyond rope length
+        // =========================
+        // Tiny swing pump (WASD -> tangential impulse)
+        // =========================
+        boolean f = (in & ClimberPower.IN_FORWARD) != 0;
+        boolean b = (in & ClimberPower.IN_BACK) != 0;
+        boolean l = (in & ClimberPower.IN_LEFT) != 0;
+        boolean rgt = (in & ClimberPower.IN_RIGHT) != 0;
+
+        if (f || b || l || rgt) {
+            Vec3d look = owner.getRotationVec(1.0f);
+            Vec3d forward = new Vec3d(look.x, 0.0, look.z);
+            if (forward.lengthSquared() > 1.0e-6) forward = forward.normalize();
+            Vec3d right = new Vec3d(-forward.z, 0.0, forward.x);
+
+            Vec3d wish = Vec3d.ZERO;
+            if (f)   wish = wish.add(forward);
+            if (b)   wish = wish.subtract(forward);
+            if (l)   wish = wish.subtract(right);
+            if (rgt) wish = wish.add(right);
+
+            if (wish.lengthSquared() > 1.0e-6) {
+                Vec3d wishDir = wish.normalize();
+
+                // tangential (remove component along rope)
+                Vec3d tang = wishDir.subtract(dir.multiply(wishDir.dotProduct(dir)));
+                if (tang.lengthSquared() > 1.0e-6) {
+                    double pump = 0.055; // tiny boost
+
+                    // if slack, reduce pump
+                    if (d < ropeLen * 0.95) pump *= 0.40;
+
+                    Vec3d v = owner.getVelocity().add(tang.normalize().multiply(pump));
+                    owner.setVelocity(v);
+                    owner.fallDistance = 0.0f;
+                    owner.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(owner));
+                }
+            }
+        }
+
+        // =========================
+        // Rope tension constraint (when taut)
+        // =========================
         if (d > ropeLen) {
-            Vec3d dir = r.multiply(1.0 / d);
             double error = d - ropeLen;
 
             Vec3d v = owner.getVelocity();
 
-            // Remove outward radial velocity (prevents “rubberband away”)
+            // Remove outward radial velocity
             double vRad = v.dotProduct(dir);
-            if (vRad > 0) {
+            if (vRad > 0.0) {
                 v = v.subtract(dir.multiply(vRad));
             }
 
-            // Pull strength: proportional correction, clamped
-            double pull = Math.min(1.25, error * 0.45);
+            // Snappy constraint
+            double pull = Math.min(1.45, error * 0.65);
             v = v.subtract(dir.multiply(pull));
 
             owner.setVelocity(v);
             owner.fallDistance = 0.0f;
-
-            // Force a quick velocity sync (server authoritative rope feels WAY better with this)
             owner.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(owner));
         } else {
-            // Even when slack, prevent fall damage while tethered
             owner.fallDistance = 0.0f;
         }
+
+        // Gentle horizontal drag while tethered (keeps things from going infinite)
+        Vec3d v = owner.getVelocity();
+        double drag = 0.992;
+        owner.setVelocity(v.x * drag, v.y, v.z * drag);
     }
 
     @Override
@@ -175,10 +218,9 @@ public class ClimberRopeAnchorEntity extends Entity {
 
     @Override
     public boolean shouldRender(double distance) {
-        return true; // we want rope to render from far away
+        return true;
     }
 
-    /** Utility to find an anchor by UUID across worlds (same style as ConquerPower.findHorse). */
     public static ClimberRopeAnchorEntity findAnchor(MinecraftServer server, UUID id) {
         for (ServerWorld w : server.getWorlds()) {
             Entity e = w.getEntity(id);

@@ -112,6 +112,7 @@ public final class IceWitchPower implements Power {
         sw.spawnParticles(OddParticles.ICE_FLAKE, victim.getX(), victim.getY() + victim.getStandingEyeHeight()*0.6, victim.getZ(), 6, 0.2,0.2,0.2, 0.01);
     }
 
+
     /* ===== inputs ===== */
     @Override
     public void activate(ServerPlayerEntity player) {

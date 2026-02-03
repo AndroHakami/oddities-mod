@@ -1,6 +1,7 @@
 package net.seep.odd.abilities.climber.client.render;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.Frustum;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
@@ -16,13 +17,18 @@ import net.seep.odd.abilities.climber.entity.ClimberPullTetherEntity;
 
 import java.util.UUID;
 
-public class ClimberPullTetherRenderer extends EntityRenderer<ClimberPullTetherEntity> {
+public final class ClimberPullTetherRenderer extends EntityRenderer<ClimberPullTetherEntity> {
 
-    private static final Identifier LEAD = new Identifier("minecraft", "textures/entity/lead.png");
+    private static final Identifier DUMMY = new Identifier("minecraft", "textures/entity/lead.png");
 
     public ClimberPullTetherRenderer(EntityRendererFactory.Context ctx) {
         super(ctx);
         this.shadowRadius = 0.0f;
+    }
+
+    @Override
+    public boolean shouldRender(ClimberPullTetherEntity entity, Frustum frustum, double x, double y, double z) {
+        return true;
     }
 
     @Override
@@ -32,30 +38,29 @@ public class ClimberPullTetherRenderer extends EntityRenderer<ClimberPullTetherE
         UUID ownerId = entity.getOwnerUuid();
         if (ownerId == null) return;
 
-        PlayerEntity owner = entity.getWorld().getPlayerByUuid(ownerId);
+        MinecraftClient mc = MinecraftClient.getInstance();
+        PlayerEntity owner = (mc.player != null && mc.player.getUuid().equals(ownerId))
+                ? mc.player
+                : entity.getWorld().getPlayerByUuid(ownerId);
+
         if (owner == null) return;
 
         Entity target = entity.getWorld().getEntityById(entity.getTargetId());
         if (target == null) return;
 
-        Vec3d targetPos = lerpPos(target, tickDelta).add(0.0, target.getHeight() * 0.5, 0.0);
-        Vec3d ownerPos  = lerpPos(owner, tickDelta).add(0.0, owner.getHeight() * 0.45, 0.0);
+        Vec3d startWorld = lerpPos(entity, tickDelta); // tether entity lives at target
+        Vec3d waistWorld = lerpPos(owner, tickDelta).add(0.0, owner.getHeight() * 0.45, 0.0);
 
-        matrices.push();
-        Vec3d cam = MinecraftClient.getInstance().gameRenderer.getCamera().getPos();
-        matrices.translate(targetPos.x - cam.x, targetPos.y - cam.y, targetPos.z - cam.z);
+        Vec3d d = waistWorld.subtract(startWorld);
 
         VertexConsumer vc = vertexConsumers.getBuffer(RenderLayer.getLeash());
 
-        float dx = (float) (ownerPos.x - targetPos.x);
-        float dy = (float) (ownerPos.y - targetPos.y);
-        float dz = (float) (ownerPos.z - targetPos.z);
+        Vec3d camFromStart = mc.gameRenderer.getCamera().getPos().subtract(startWorld);
 
-        // Reuse the same “leash-like ribbon” as anchor
-        ClimberRopeAnchorRenderer.renderLeashLike(vc, matrices, dx, dy, dz, light);
-
-        matrices.pop();
-        super.render(entity, yaw, tickDelta, matrices, vertexConsumers, light);
+        ClimberLeashRenderUtil.drawLeashLocal(vc, matrices,
+                (float)d.x, (float)d.y, (float)d.z,
+                camFromStart,
+                light);
     }
 
     private static Vec3d lerpPos(Entity e, float tickDelta) {
@@ -67,6 +72,6 @@ public class ClimberPullTetherRenderer extends EntityRenderer<ClimberPullTetherE
 
     @Override
     public Identifier getTexture(ClimberPullTetherEntity entity) {
-        return LEAD;
+        return DUMMY;
     }
 }

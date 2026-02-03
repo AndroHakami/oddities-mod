@@ -1,0 +1,6 @@
+{
+  "message_id": "necro_bolt",
+  "scaling": "never",
+  "exhaustion": 0.1,
+  "bypasses_armor": true
+}

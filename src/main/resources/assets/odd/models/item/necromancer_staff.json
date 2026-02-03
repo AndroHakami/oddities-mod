@@ -1,0 +1,39 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "odd:item/necromancer_staff"
+  },
+  "gui_light": "front",
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [39.01, 76.94, 7.55],
+      "translation": [0, 0, 3],
+      "scale": [1.42, 1.42, 1.42]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [39.01, 76.94, 7.55],
+      "translation": [0, 0, 3],
+      "scale": [1.42, 1.42, 1.42]
+    },
+    "firstperson_righthand": {
+      "rotation": [20.59, -54.87, 16.32],
+      "translation": [0, -2.5, 0]
+    },
+    "firstperson_lefthand": {
+      "rotation": [20.59, -54.87, 16.32],
+      "translation": [0, -2.5, 0]
+    },
+    "ground": {
+      "translation": [0, 3.75, 0]
+    },
+    "gui": {
+      "rotation": [0, 0, -44.5],
+      "translation": [-2.25, -2, 0],
+      "scale": [0.84, 0.84, 0.84]
+    },
+    "fixed": {
+      "rotation": [0, 0, 45.75],
+      "translation": [2, -2.25, 0]
+    }
+  }
+}

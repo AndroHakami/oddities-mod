@@ -32,6 +32,8 @@ import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.climber.client.ClimberClient;
 import net.seep.odd.abilities.climber.client.render.ClimberPullTetherRenderer;
 import net.seep.odd.abilities.climber.client.render.ClimberRopeAnchorRenderer;
+import net.seep.odd.abilities.climber.client.render.ClimberRopeShotRenderer;
+import net.seep.odd.abilities.climber.net.ClimberClimbNetworking;
 import net.seep.odd.abilities.conquer.client.ConquerCorruptionClient;
 import net.seep.odd.abilities.conquer.client.render.CorruptedIronGolemRenderer;
 import net.seep.odd.abilities.conquer.client.render.CorruptedVillagerRenderer;
@@ -62,12 +64,17 @@ import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.looker.LookerClient;
 import net.seep.odd.abilities.lunar.item.LunarDrillItem;
 import net.seep.odd.abilities.lunar.net.LunarPackets;
+import net.seep.odd.abilities.necromancer.NecromancerNet;
+import net.seep.odd.abilities.necromancer.client.NecromancerClient;
+import net.seep.odd.abilities.necromancer.client.NecromancerSummonCircleClient;
+import net.seep.odd.abilities.necromancer.client.render.NecroBoltRenderer;
 import net.seep.odd.abilities.net.*;
 import net.seep.odd.abilities.overdrive.client.OverdriveCpmBridge;
 import net.seep.odd.abilities.power.*;
 
 import net.seep.odd.abilities.rider.RiderClientInput;
 import net.seep.odd.abilities.rider.RiderNet;
+import net.seep.odd.abilities.rise.client.render.RisenZombieRenderer;
 import net.seep.odd.abilities.spectral.SpectralClientState;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
@@ -80,6 +87,7 @@ import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
 import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
+import net.seep.odd.abilities.vampire.client.render.BloodCrystalProjectileRenderer;
 import net.seep.odd.abilities.voids.client.VoidCpmBridge;
 
 import net.seep.odd.abilities.artificer.client.ArtificerHud;
@@ -109,6 +117,7 @@ import net.seep.odd.entity.cultist.SightseerRenderer;
 import net.seep.odd.entity.falsefrog.client.FalseFrogRenderer;
 import net.seep.odd.entity.firefly.client.FireflyRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
+import net.seep.odd.entity.necromancer.client.CorpseRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
 import net.seep.odd.entity.seal.client.SealRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
@@ -383,6 +392,47 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Climber (Client)
         ClimberClient.init();
+        ClimberClimbNetworking.registerClient();
+
+        // Owl (client)
+        net.seep.odd.abilities.owl.net.OwlNetworking.registerClient();
+        net.seep.odd.abilities.owl.client.render.OwlWingsFeatureRegistration.register();
+        net.seep.odd.abilities.owl.client.OwlSonarFx.init();
+
+        // Rise (Client)
+        net.seep.odd.abilities.rise.client.RiseClientNetworking.registerClient();
+        net.seep.odd.abilities.rise.client.RiseSoulParticlesClient.init();
+
+        // Necromancer (Client)
+        NecromancerSummonCircleClient.init();
+        NecromancerClient.init();
+        NecromancerNet.initClient();
+
+        // Vampire (Client)
+        net.seep.odd.abilities.vampire.client.VampireClientFlag.init();
+        // in your client init (whatever class you use)
+        BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.BLOOD_CRYSTAL, RenderLayer.getCutout());
+
+        net.seep.odd.abilities.vampire.client.VampireClientNet.init();
+
+        // Druid (Client)
+        DruidPower.Client.init();
+
+        // Chef (Client)
+        net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry.register(
+                net.seep.odd.registry.ModBlockEntities.SUPER_COOKER,
+                ctx -> new net.seep.odd.block.supercooker.client.SuperCookerRenderer()
+        );
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -457,6 +507,24 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.CENTIPEDE, net.seep.odd.entity.cultist.CentipedeRenderer::new);
         EntityRendererRegistry.register(ModEntities.CLIMBER_ROPE_ANCHOR, ClimberRopeAnchorRenderer::new);
         EntityRendererRegistry.register(ModEntities.CLIMBER_PULL_TETHER, ClimberPullTetherRenderer::new);
+        EntityRendererRegistry.register(ModEntities.CLIMBER_ROPE_SHOT, ClimberRopeShotRenderer::new);
+        EntityRendererRegistry.register(ModEntities.RISEN_ZOMBIE, RisenZombieRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ZOMBIE_CORPSE,
+                ctx -> new net.seep.odd.entity.necromancer.client.CorpseRenderer<>(ctx,
+                        net.seep.odd.entity.necromancer.client.CorpseRenderer.ZOMBIE_TEX));
+
+        EntityRendererRegistry.register(ModEntities.SKELETON_CORPSE,
+                ctx -> new net.seep.odd.entity.necromancer.client.CorpseRenderer<>(ctx,
+                        net.seep.odd.entity.necromancer.client.CorpseRenderer.SKELETON_TEX));
+        EntityRendererRegistry.register(ModEntities.NECRO_BOLT, NecroBoltRenderer::new);
+        EntityRendererRegistry.register(
+                ModEntities.BLOOD_CRYSTAL_PROJECTILE,
+                BloodCrystalProjectileRenderer::new
+        );
+
+
+
+
 
 
 

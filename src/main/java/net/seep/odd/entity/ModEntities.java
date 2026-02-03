@@ -25,9 +25,11 @@ import net.seep.odd.abilities.firesword.entity.FireSwordProjectileEntity;
 import net.seep.odd.abilities.icewitch.IceProjectileEntity;
 import net.seep.odd.abilities.icewitch.IceSpellAreaEntity;
 import net.seep.odd.abilities.lunar.entity.LunarMarkProjectileEntity;
+import net.seep.odd.abilities.necromancer.entity.NecroBoltEntity;
 import net.seep.odd.abilities.tamer.entity.VillagerEvoEntity;
 import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
+import net.seep.odd.abilities.vampire.entity.BloodCrystalProjectileEntity;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.cultist.CentipedeEntity;
@@ -46,7 +48,12 @@ import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 // Falling Snow
 import net.seep.odd.abilities.fallingsnow.HealingSnowballEntity;
 import net.seep.odd.abilities.fallingsnow.BigSnowballEntity;
+
 import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
+
+// ===== NEW: Necromancer corpses =====
+import net.seep.odd.entity.necromancer.ZombieCorpseEntity;
+import net.seep.odd.entity.necromancer.SkeletonCorpseEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -73,7 +80,7 @@ public final class ModEntities {
     public static final Identifier PHANTOM_BUDDY_ID      = new Identifier(Oddities.MOD_ID, "phantom_buddy");
 
     public static final Identifier ZERO_BEAM_ID          = new Identifier(Oddities.MOD_ID, "zero_beam");
-    public static final Identifier ZERO_SUIT_MISSILE_ID          = new Identifier(Oddities.MOD_ID, "zero_suit_missile");
+    public static final Identifier ZERO_SUIT_MISSILE_ID  = new Identifier(Oddities.MOD_ID, "zero_suit_missile");
 
     public static final Identifier HEALING_SNOWBALL_ID   = new Identifier(Oddities.MOD_ID, "healing_snowball");
     public static final Identifier BIG_SNOWBALL_ID       = new Identifier(Oddities.MOD_ID, "big_snowball");
@@ -90,26 +97,68 @@ public final class ModEntities {
     public static final Identifier DARK_HORSE_ID           = new Identifier(Oddities.MOD_ID, "dark_horse");
     public static final Identifier CORRUPTED_VILLAGER_ID   = new Identifier(Oddities.MOD_ID, "corrupted_villager");
     public static final Identifier CORRUPTED_IRON_GOLEM_ID = new Identifier(Oddities.MOD_ID, "corrupted_iron_golem");
+
     public static final Identifier SEAL_ID = new Identifier(Oddities.MOD_ID, "seal");
     public static final Identifier SIGHTSEER_ID = new Identifier(Oddities.MOD_ID, "sightseer");
     public static final Identifier SHY_GUY_ID = new Identifier(Oddities.MOD_ID, "shy_guy");
 
     public static final Identifier WEEPING_ANGEL_ID = new Identifier(Oddities.MOD_ID, "weeping_angel");
     public static final Identifier CENTIPEDE_ID = new Identifier(Oddities.MOD_ID, "centipede");
+
     // Climber
     public static final Identifier CLIMBER_ROPE_SHOT_ID   = new Identifier(Oddities.MOD_ID, "climber_rope_shot");
     public static final Identifier CLIMBER_ROPE_ANCHOR_ID = new Identifier(Oddities.MOD_ID, "climber_rope_anchor");
     public static final Identifier CLIMBER_PULL_TETHER_ID = new Identifier(Oddities.MOD_ID, "climber_pull_tether");
 
+    // Rise
+    public static final Identifier RISEN_ZOMBIE_ID = new Identifier(Oddities.MOD_ID, "risen_zombie");
+
+    // ===== NEW: Necromancer corpses (IDs) =====
+    public static final Identifier ZOMBIE_CORPSE_ID   = new Identifier(Oddities.MOD_ID, "zombie_corpse");
+    public static final Identifier SKELETON_CORPSE_ID = new Identifier(Oddities.MOD_ID, "skeleton_corpse");
+    public static final Identifier NECRO_BOLT_ID = new Identifier(Oddities.MOD_ID, "necro_bolt");
+    public static final Identifier BLOOD_CRYSTAL_PROJECTILE_ID = new Identifier(Oddities.MOD_ID, "blood_crystal_project");
 
 
     /* =========================================================
        EntityType registration — “static final” style
        ========================================================= */
-    // Centipede (Cultist)
+    public static final EntityType<BloodCrystalProjectileEntity> BLOOD_CRYSTAL_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            BLOOD_CRYSTAL_PROJECTILE_ID,
+            FabricEntityTypeBuilder.<BloodCrystalProjectileEntity>create(SpawnGroup.MISC, BloodCrystalProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+    public static final EntityType<NecroBoltEntity> NECRO_BOLT = Registry.register(
+            Registries.ENTITY_TYPE,
+            NECRO_BOLT_ID,
+            FabricEntityTypeBuilder.<NecroBoltEntity>create(SpawnGroup.MISC, NecroBoltEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
+
+    // Rise: Risen Zombie
+    public static final EntityType<net.seep.odd.abilities.rise.entity.RisenZombieEntity> RISEN_ZOMBIE =
+            Registry.register(Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "risen_zombie"),
+                    FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, net.seep.odd.abilities.rise.entity.RisenZombieEntity::new)
+                            .dimensions(EntityDimensions.fixed(0.6F, 1.95F))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(3)
+                            .build()
+            );
+
     // =========================
-// Climber: Rope shot / Anchor / Pull tether
-// =========================
+    // Climber: Rope shot / Anchor / Pull tether
+    // =========================
 
     // Rope shot (arcing projectile)
     public static final EntityType<ClimberRopeShotEntity> CLIMBER_ROPE_SHOT = Registry.register(
@@ -144,6 +193,7 @@ public final class ModEntities {
                     .build()
     );
 
+    // Cultist: Centipede
     public static final EntityType<CentipedeEntity> CENTIPEDE = Registry.register(
             Registries.ENTITY_TYPE,
             CENTIPEDE_ID,
@@ -153,17 +203,19 @@ public final class ModEntities {
                     .trackedUpdateRate(2)
                     .build()
     );
-    // Weeping Angel (CUltist)
+
+    // Cultist: Weeping Angel
     public static final EntityType<WeepingAngelEntity> WEEPING_ANGEL = Registry.register(
             Registries.ENTITY_TYPE,
             WEEPING_ANGEL_ID,
             FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, WeepingAngelEntity::new)
-                    .dimensions(EntityDimensions.fixed(0.98f, 0.98f)) // block-ish
+                    .dimensions(EntityDimensions.fixed(0.98f, 0.98f))
                     .trackRangeBlocks(64)
                     .trackedUpdateRate(2)
                     .build()
     );
-    // Shyguy (Cultist)
+
+    // Cultist: Shy Guy
     public static final EntityType<ShyGuyEntity> SHY_GUY = Registry.register(
             Registries.ENTITY_TYPE,
             SHY_GUY_ID,
@@ -177,7 +229,7 @@ public final class ModEntities {
                     .build()
     );
 
-    // Sightseer (Cultist)
+    // Cultist: Sightseer
     public static final EntityType<SightseerEntity> SIGHTSEER = Registry.register(
             Registries.ENTITY_TYPE,
             SIGHTSEER_ID,
@@ -190,6 +242,7 @@ public final class ModEntities {
                     .trackedUpdateRate(2)
                     .build()
     );
+
     // Seal
     public static final EntityType<SealEntity> SEAL = Registry.register(
             Registries.ENTITY_TYPE,
@@ -236,18 +289,18 @@ public final class ModEntities {
                     .trackedUpdateRate(10)
                     .build()
     );
+
+    // Zero Suit: Missile
     public static final EntityType<ZeroSuitMissileEntity> ZERO_SUIT_MISSILE = Registry.register(
             Registries.ENTITY_TYPE,
             ZERO_SUIT_MISSILE_ID,
             FabricEntityTypeBuilder.<ZeroSuitMissileEntity>create(SpawnGroup.MONSTER, ZeroSuitMissileEntity::new)
                     .dimensions(EntityDimensions.fixed(1.1f, 0.25f))
                     .trackRangeBlocks(200)
-                    .trackedUpdateRate(1)               // key: gives interpolation room
-                    .forceTrackedVelocityUpdates(true)  // key: smoother flight
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
                     .build()
     );
-
-
 
     // Fire Sword projectile
     public static final EntityType<FireSwordProjectileEntity> FIRE_SWORD_PROJECTILE = Registry.register(
@@ -514,23 +567,19 @@ public final class ModEntities {
     );
 
     // =========================
-    // Conquer: Dark Horse (Milo)
+    // Conquer: Dark Horse
     // =========================
     public static final EntityType<DarkHorseEntity> DARK_HORSE = Registry.register(
             Registries.ENTITY_TYPE,
             DARK_HORSE_ID,
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, DarkHorseEntity::new)
-                    // vanilla horse-ish size
                     .dimensions(EntityDimensions.fixed(1.95507816F, 2.24F))
                     .trackRangeBlocks(96)
                     .trackedUpdateRate(3)
                     .build()
     );
 
-    // =====================================
-    // Conquer: Corrupted Villager / Iron Golem
-    // =====================================
-
+    // Conquer: Corrupted Villager
     public static final EntityType<CorruptedVillagerEntity> CORRUPTED_VILLAGER = Registry.register(
             Registries.ENTITY_TYPE,
             CORRUPTED_VILLAGER_ID,
@@ -538,12 +587,13 @@ public final class ModEntities {
                             SpawnGroup.MISC,
                             (EntityType<CorruptedVillagerEntity> t, World w) -> new CorruptedVillagerEntity(t, w)
                     )
-                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f)) // villager size
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
                     .trackRangeBlocks(80)
                     .trackedUpdateRate(3)
                     .build()
     );
 
+    // Conquer: Corrupted Iron Golem
     public static final EntityType<CorruptedIronGolemEntity> CORRUPTED_IRON_GOLEM = Registry.register(
             Registries.ENTITY_TYPE,
             CORRUPTED_IRON_GOLEM_ID,
@@ -551,9 +601,32 @@ public final class ModEntities {
                             SpawnGroup.MISC,
                             (EntityType<CorruptedIronGolemEntity> t, World w) -> new CorruptedIronGolemEntity(t, w)
                     )
-                    .dimensions(EntityDimensions.fixed(1.4f, 2.7f)) // iron golem size
+                    .dimensions(EntityDimensions.fixed(1.4f, 2.7f))
                     .trackRangeBlocks(96)
                     .trackedUpdateRate(3)
+                    .build()
+    );
+
+    // =========================================================
+    // ===== NEW: Necromancer corpses (MISC, flat, renderer-only)
+    // =========================================================
+    public static final EntityType<ZombieCorpseEntity> ZOMBIE_CORPSE = Registry.register(
+            Registries.ENTITY_TYPE,
+            ZOMBIE_CORPSE_ID,
+            FabricEntityTypeBuilder.<ZombieCorpseEntity>create(SpawnGroup.MISC, ZombieCorpseEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.9f, 0.2f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    public static final EntityType<SkeletonCorpseEntity> SKELETON_CORPSE = Registry.register(
+            Registries.ENTITY_TYPE,
+            SKELETON_CORPSE_ID,
+            FabricEntityTypeBuilder.<SkeletonCorpseEntity>create(SpawnGroup.MISC, SkeletonCorpseEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.9f, 0.2f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(1)
                     .build()
     );
 
@@ -577,12 +650,17 @@ public final class ModEntities {
         // Conquer: Corrupted villager / golem
         FabricDefaultAttributeRegistry.register(CORRUPTED_VILLAGER, VillagerEntity.createVillagerAttributes());
         FabricDefaultAttributeRegistry.register(CORRUPTED_IRON_GOLEM, IronGolemEntity.createIronGolemAttributes());
-        // cultist
+
+        // Cultist
         FabricDefaultAttributeRegistry.register(SIGHTSEER, SightseerEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(SHY_GUY, ShyGuyEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(WEEPING_ANGEL, WeepingAngelEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(CENTIPEDE, CentipedeEntity.createAttributes());
 
+        // Rise
+        FabricDefaultAttributeRegistry.register(RISEN_ZOMBIE,
+                net.seep.odd.abilities.rise.entity.RisenZombieEntity.createRisenZombieAttributes());
 
+        // NOTE: corpses have no attributes (not LivingEntity)
     }
 }

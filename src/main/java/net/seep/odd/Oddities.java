@@ -30,8 +30,10 @@ import net.seep.odd.abilities.buddymorph.BuddymorphData;
 import net.seep.odd.abilities.buddymorph.BuddymorphNet;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphScreen;
+import net.seep.odd.abilities.climber.net.ClimberClimbNetworking;
 import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.druid.DruidNet;
 import net.seep.odd.abilities.effect.ModEffects;
 import net.seep.odd.abilities.fairy.client.ManageFlowersScreen;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
@@ -46,7 +48,11 @@ import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.lunar.item.LunarDrillItem;
 import net.seep.odd.abilities.lunar.net.LunarPackets;
+import net.seep.odd.abilities.necromancer.NecromancerCorpseDetonator;
+import net.seep.odd.abilities.necromancer.NecromancerNet;
 import net.seep.odd.abilities.net.*;
+import net.seep.odd.abilities.owl.client.OwlSonarClient;
+import net.seep.odd.abilities.owl.net.OwlNetworking;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
 import net.seep.odd.abilities.rat.PehkuiUtil;
@@ -57,6 +63,7 @@ import net.seep.odd.abilities.spectral.SpectralRenderState;
 import net.seep.odd.abilities.spotted.SpottedNet;
 import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.abilities.tamer.TamerMoves;
+import net.seep.odd.abilities.vampire.VampireTempCrystalManager;
 import net.seep.odd.abilities.voids.VoidRegistry;
 import net.seep.odd.abilities.voids.VoidSystem;
 
@@ -114,6 +121,9 @@ public final class Oddities implements ModInitializer {
 		ModStatusEffects.init();
 		net.seep.odd.recipe.ModRecipeSerializers.register();
 		ModShaders.init();
+		PowerNetworking.initServer();
+		net.seep.odd.recipe.ModRecipes.init();
+		net.seep.odd.screen.ModScreenHandlers.init();
 
 
 
@@ -187,6 +197,12 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new SplashPower());
 		Powers.register(new CultistPower());
 		Powers.register(new ClimberPower());
+		Powers.register(new OwlPower());
+		Powers.register(new RisePower());
+		Powers.register(new NecromancerPower());
+		Powers.register(new VampirePower());
+		Powers.register(new DruidPower());
+		Powers.register(new ChefPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -376,7 +392,32 @@ public final class Oddities implements ModInitializer {
 		ShaderEffectManager.getInstance().manage(new Identifier(Oddities.MOD_ID, "shaders/post/annihilation.json"));
 
 		// Climber
-		ClimberPower.registerNetworking();
+		net.seep.odd.abilities.climber.ClimberBootstrap.initCommon();
+		ClimberClimbNetworking.registerServer();
+
+		// Owl
+
+		OwlPower.registerNetworking();
+
+		// Rise
+		RisePower.registerNetworking();
+
+		// Necromancer
+		NecromancerNet.initServer();
+		NecromancerPower.init();
+		NecromancerCorpseDetonator.init();
+
+		// Vampire
+		VampirePower.register();
+		VampireTempCrystalManager.init();
+
+		// Druid
+		DruidNet.init();
+
+
+
+
+
 
 
 

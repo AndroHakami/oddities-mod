@@ -20,6 +20,7 @@ import net.seep.odd.entity.seal.item.SealSpawnEggItem;
 import net.seep.odd.item.custom.CosmicKatanaItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
 import net.seep.odd.item.ghost.GhostHandItem;
+import net.seep.odd.item.necromancer.NecromancerStaffItem;
 
 public class ModItems {
     public static final Item RUBY = registerItem("ruby", new Item(new FabricItemSettings()));
@@ -43,6 +44,11 @@ public class ModItems {
     public static final Item BIG_METALIC_FROST_SPAWN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "big_metallic_frost_spawn"), new net.seep.odd.abilities.conquer.item.BigMetalicFrostSpawnItem(new Item.Settings().maxCount(1)));
     public static final Item DABLOON = registerItem("dabloon", new Item(new FabricItemSettings().maxCount(64)));
     public static final Item SEAL_SPAWN_EGG = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "seal_spawn_egg"), new SealSpawnEggItem(new Item.Settings().maxCount(1)));
+    public static final Item NECROMANCER_STAFF = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "necromancer_staff"), new NecromancerStaffItem(new Item.Settings().maxCount(1)));
+    public static final Item NECRO_BOLT = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "necro_bolt"), new Item(new Item.Settings()));
+    public static final Item BLOOD_CRYSTAL_PROJECTILE = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "blood_crystal_projectile"), new Item(new Item.Settings().maxCount(1)));
+
+
 
 
 

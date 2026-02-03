@@ -1,4 +1,3 @@
-// src/main/java/net/seep/odd/block/ModBlocks.java
 package net.seep.odd.block;
 
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
@@ -33,6 +32,10 @@ import net.seep.odd.sound.ModSounds;
 // False Flower
 import net.seep.odd.block.falseflower.FalseFlowerBlock;
 import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
+
+// ✅ Chef: Super Cooker
+import net.seep.odd.block.supercooker.SuperCookerBlock;
+import net.seep.odd.block.supercooker.SuperCookerBlockEntity;
 
 public class ModBlocks {
 
@@ -101,6 +104,18 @@ public class ModBlocks {
     public static Block DABLOONS_MACHINE;
     public static Item  DABLOONS_MACHINE_ITEM;
 
+    /* ---------- VAMPIRE: Blood Crystal Blocks ---------- */
+    public static Block BLOOD_CRYSTAL_BLOCK;      // “core” wall block
+    public static Item  BLOOD_CRYSTAL_BLOCK_ITEM;
+
+    public static Block BLOOD_CRYSTAL;            // “shard” wall block (amethyst-like)
+    public static Item  BLOOD_CRYSTAL_ITEM;
+
+    /* ---------- CHEF: Super Cooker ---------- */
+    public static Block SUPER_COOKER;
+    public static Item  SUPER_COOKER_ITEM;
+    public static BlockEntityType<SuperCookerBlockEntity> SUPER_COOKER_BE;
+
     public static void registerModBlocks() {
         Oddities.LOGGER.info("Registering ModBlocks for " + Oddities.MOD_ID);
 
@@ -154,7 +169,7 @@ public class ModBlocks {
         FALSE_FLOWER = Registry.register(
                 Registries.BLOCK, id("false_flower"),
                 new FalseFlowerBlock(
-                        AbstractBlock.Settings.copy(Blocks.DANDELION) // plant-like defaults
+                        AbstractBlock.Settings.copy(Blocks.DANDELION)
                                 .noCollision()
                                 .nonOpaque()
                                 .strength(0.4f)
@@ -181,6 +196,56 @@ public class ModBlocks {
         DABLOONS_MACHINE_ITEM = Registry.register(
                 Registries.ITEM, id("dabloons_machine"),
                 new BlockItem(DABLOONS_MACHINE, new Item.Settings())
+        );
+
+        /* --------- REGISTER: Vampire Blood Crystal Blocks --------- */
+
+        // Core block (solid)
+        BLOOD_CRYSTAL_BLOCK = Registry.register(
+                Registries.BLOCK, id("blood_crystal_block"),
+                new Block(AbstractBlock.Settings.copy(Blocks.AMETHYST_BLOCK)
+                        .strength(-1.0f, 3600000.0f) // unbreakable + blast resistant
+                        .dropsNothing()
+                        .requiresTool().nonOpaque()
+                        .sounds(BlockSoundGroup.AMETHYST_BLOCK))
+        );
+
+        BLOOD_CRYSTAL_BLOCK_ITEM = Registry.register(
+                Registries.ITEM, id("blood_crystal_block"),
+                new BlockItem(BLOOD_CRYSTAL_BLOCK, new Item.Settings())
+        );
+
+        // Shard block (amethyst-like)
+        BLOOD_CRYSTAL = Registry.register(
+                Registries.BLOCK, id("blood_crystal"),
+                new Block(AbstractBlock.Settings.copy(Blocks.AMETHYST_BLOCK)
+                        .strength(-1.0f, 3600000.0f) // unbreakable
+                        .dropsNothing()
+                        .sounds(BlockSoundGroup.AMETHYST_BLOCK)
+                        .nonOpaque())
+        );
+
+        BLOOD_CRYSTAL_ITEM = Registry.register(
+                Registries.ITEM, id("blood_crystal"),
+                new BlockItem(BLOOD_CRYSTAL, new Item.Settings())
+        );
+
+        /* --------- REGISTER: CHEF Super Cooker (block + item + BE) --------- */
+        SUPER_COOKER = Registry.register(
+                Registries.BLOCK, id("super_cooker"),
+                new SuperCookerBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
+                        .strength(2.5f)
+                        .nonOpaque())
+        );
+
+        SUPER_COOKER_ITEM = Registry.register(
+                Registries.ITEM, id("super_cooker"),
+                new BlockItem(SUPER_COOKER, new Item.Settings())
+        );
+
+        SUPER_COOKER_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("super_cooker"),
+                FabricBlockEntityTypeBuilder.create(SuperCookerBlockEntity::new, SUPER_COOKER).build(null)
         );
     }
 }

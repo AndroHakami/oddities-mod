@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:block/block",
+  "ambientocclusion": true,
+  "textures": {
+    "all": "odd:block/blood_crystal",
+    "particle": "odd:block/blood_crystal"
+  },
+  "elements": [
+    {
+      "from": [3, 0, 3],
+      "to":   [13, 2, 13],
+      "faces": { "north": {"texture":"#all"}, "south": {"texture":"#all"}, "west": {"texture":"#all"}, "east": {"texture":"#all"}, "up": {"texture":"#all"}, "down": {"texture":"#all"} }
+    },
+
+    {
+      "from": [7, 2, 7],
+      "to":   [9, 15, 9],
+      "faces": { "north": {"texture":"#all"}, "south": {"texture":"#all"}, "west": {"texture":"#all"}, "east": {"texture":"#all"}, "up": {"texture":"#all"}, "down": {"texture":"#all"} }
+    },
+    {
+      "from": [5, 2, 6],
+      "to":   [7, 12, 8],
+      "faces": { "north": {"texture":"#all"}, "south": {"texture":"#all"}, "west": {"texture":"#all"}, "east": {"texture":"#all"}, "up": {"texture":"#all"}, "down": {"texture":"#all"} }
+    },
+    {
+      "from": [9, 2, 8],
+      "to":   [11, 11, 10],
+      "faces": { "north": {"texture":"#all"}, "south": {"texture":"#all"}, "west": {"texture":"#all"}, "east": {"texture":"#all"}, "up": {"texture":"#all"}, "down": {"texture":"#all"} }
+    },
+    {
+      "from": [6, 2, 9],
+      "to":   [8, 10, 11],
+      "faces": { "north": {"texture":"#all"}, "south": {"texture":"#all"}, "west": {"texture":"#all"}, "east": {"texture":"#all"}, "up": {"texture":"#all"}, "down": {"texture":"#all"} }
+    },
+    {
+      "from": [8, 2, 5],
+      "to":   [10, 9, 7],
+      "faces": { "north": {"texture":"#all"}, "south": {"texture":"#all"}, "west": {"texture":"#all"}, "east": {"texture":"#all"}, "up": {"texture":"#all"}, "down": {"texture":"#all"} }
+    }
+  ]
+}
