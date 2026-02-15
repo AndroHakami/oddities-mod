@@ -1,4 +1,4 @@
-// src/main/java/net/seep/odd/entity/ModEntities.java
+// FILE: src/main/java/net/seep/odd/entity/ModEntities.java
 package net.seep.odd.entity;
 
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
@@ -30,6 +30,8 @@ import net.seep.odd.abilities.tamer.entity.VillagerEvoEntity;
 import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
 import net.seep.odd.abilities.vampire.entity.BloodCrystalProjectileEntity;
+import net.seep.odd.abilities.wizard.entity.*;
+import net.seep.odd.entity.booklet.BookletEntity;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.cultist.CentipedeEntity;
@@ -45,6 +47,7 @@ import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 
+
 // Falling Snow
 import net.seep.odd.abilities.fallingsnow.HealingSnowballEntity;
 import net.seep.odd.abilities.fallingsnow.BigSnowballEntity;
@@ -54,6 +57,10 @@ import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 // ===== NEW: Necromancer corpses =====
 import net.seep.odd.entity.necromancer.ZombieCorpseEntity;
 import net.seep.odd.entity.necromancer.SkeletonCorpseEntity;
+
+// ===== NEW: Sniper grapple =====
+import net.seep.odd.abilities.sniper.entity.SniperGrappleAnchorEntity;
+import net.seep.odd.abilities.sniper.entity.SniperGrappleShotEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -110,6 +117,10 @@ public final class ModEntities {
     public static final Identifier CLIMBER_ROPE_ANCHOR_ID = new Identifier(Oddities.MOD_ID, "climber_rope_anchor");
     public static final Identifier CLIMBER_PULL_TETHER_ID = new Identifier(Oddities.MOD_ID, "climber_pull_tether");
 
+    // ===== NEW: Sniper grapple (IDs) =====
+    public static final Identifier SNIPER_GRAPPLE_SHOT_ID   = new Identifier(Oddities.MOD_ID, "sniper_grapple_shot");
+    public static final Identifier SNIPER_GRAPPLE_ANCHOR_ID = new Identifier(Oddities.MOD_ID, "sniper_grapple_anchor");
+
     // Rise
     public static final Identifier RISEN_ZOMBIE_ID = new Identifier(Oddities.MOD_ID, "risen_zombie");
 
@@ -119,10 +130,140 @@ public final class ModEntities {
     public static final Identifier NECRO_BOLT_ID = new Identifier(Oddities.MOD_ID, "necro_bolt");
     public static final Identifier BLOOD_CRYSTAL_PROJECTILE_ID = new Identifier(Oddities.MOD_ID, "blood_crystal_project");
 
+    // Atheneum
+    public static final Identifier BOOKLET_ID = new Identifier(Oddities.MOD_ID, "booklet");
+
+    // Wizard
+    public static final Identifier WIZARD_FIRE_PROJECTILE_ID   = new Identifier(Oddities.MOD_ID, "wizard_fire_projectile");
+    public static final Identifier WIZARD_WATER_PROJECTILE_ID  = new Identifier(Oddities.MOD_ID, "wizard_water_projectile");
+    public static final Identifier WIZARD_EARTH_PROJECTILE_ID  = new Identifier(Oddities.MOD_ID, "wizard_earth_projectile");
+
+    // Big/area effects that must keep ticking even if wizard dies/leaves
+    public static final Identifier WIZARD_TORNADO_ID           = new Identifier(Oddities.MOD_ID, "wizard_tornado");
+    public static final Identifier WIZARD_STEAM_CLOUD_ID       = new Identifier(Oddities.MOD_ID, "wizard_steam_cloud");
+    public static final Identifier WIZARD_EARTHQUAKE_ID        = new Identifier(Oddities.MOD_ID, "wizard_earthquake");
+    public static final Identifier WIZARD_FIRE_TORNADO_ID      = new Identifier(Oddities.MOD_ID, "wizard_fire_tornado");
+
+    // Familiar
+    public static final Identifier CAPYBARA_FAMILIAR_ID        = new Identifier(Oddities.MOD_ID, "capybara_familiar");
+
+
+
 
     /* =========================================================
        EntityType registration — “static final” style
        ========================================================= */
+    // ADD TO ModEntities
+    public static final EntityType<WizardMeteorEntity> WIZARD_METEOR =
+            Registry.register(Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "wizard_meteor"),
+                    FabricEntityTypeBuilder.create(SpawnGroup.MISC, WizardMeteorEntity::new)
+                            .dimensions(EntityDimensions.fixed(1.0f, 1.0f))
+                            .trackRangeBlocks(96).trackedUpdateRate(1)
+                            .build()
+            );
+
+    // Wizard: Fire projectile
+    public static final EntityType<WizardFireProjectileEntity> WIZARD_FIRE_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_FIRE_PROJECTILE_ID,
+            FabricEntityTypeBuilder.<WizardFireProjectileEntity>create(SpawnGroup.MISC, WizardFireProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
+    // Wizard: Water projectile
+    public static final EntityType<WizardWaterProjectileEntity> WIZARD_WATER_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_WATER_PROJECTILE_ID,
+            FabricEntityTypeBuilder.<WizardWaterProjectileEntity>create(SpawnGroup.MISC, WizardWaterProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
+    // Wizard: Earth projectile
+    public static final EntityType<WizardEarthProjectileEntity> WIZARD_EARTH_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_EARTH_PROJECTILE_ID,
+            FabricEntityTypeBuilder.<WizardEarthProjectileEntity>create(SpawnGroup.MISC, WizardEarthProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.9f, 1.9f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
+    // Wizard: Tornado (big air)
+    public static final EntityType<WizardTornadoEntity> WIZARD_TORNADO = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_TORNADO_ID,
+            FabricEntityTypeBuilder.<WizardTornadoEntity>create(SpawnGroup.MISC, WizardTornadoEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.4f, 3.0f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    // Wizard: Steam cloud (combo)
+    public static final EntityType<WizardSteamCloudEntity> WIZARD_STEAM_CLOUD = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_STEAM_CLOUD_ID,
+            FabricEntityTypeBuilder.<WizardSteamCloudEntity>create(SpawnGroup.MISC, WizardSteamCloudEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.1f, 0.1f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    // Wizard: Earthquake (big earth)
+    public static final EntityType<WizardEarthquakeEntity> WIZARD_EARTHQUAKE = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_EARTHQUAKE_ID,
+            FabricEntityTypeBuilder.<WizardEarthquakeEntity>create(SpawnGroup.MISC, WizardEarthquakeEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.1f, 0.1f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    // Wizard: Fire tornado (combo)
+    public static final EntityType<WizardFireTornadoEntity> WIZARD_FIRE_TORNADO = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIZARD_FIRE_TORNADO_ID,
+            FabricEntityTypeBuilder.<WizardFireTornadoEntity>create(SpawnGroup.MISC, WizardFireTornadoEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.4f, 3.0f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    // Wizard: Capybara familiar
+    public static final EntityType<CapybaraFamiliarEntity> CAPYBARA_FAMILIAR = Registry.register(
+            Registries.ENTITY_TYPE,
+            CAPYBARA_FAMILIAR_ID,
+            FabricEntityTypeBuilder.<CapybaraFamiliarEntity>create(SpawnGroup.CREATURE, CapybaraFamiliarEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.9f, 0.8f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+
+    public static final EntityType<BookletEntity> BOOKLET = Registry.register(
+            Registries.ENTITY_TYPE,
+            BOOKLET_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, BookletEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.75f, 0.85f))
+                    .trackRangeChunks(8)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
+
     public static final EntityType<BloodCrystalProjectileEntity> BLOOD_CRYSTAL_PROJECTILE = Registry.register(
             Registries.ENTITY_TYPE,
             BLOOD_CRYSTAL_PROJECTILE_ID,
@@ -133,6 +274,7 @@ public final class ModEntities {
                     .forceTrackedVelocityUpdates(true)
                     .build()
     );
+
     public static final EntityType<NecroBoltEntity> NECRO_BOLT = Registry.register(
             Registries.ENTITY_TYPE,
             NECRO_BOLT_ID,
@@ -143,7 +285,6 @@ public final class ModEntities {
                     .forceTrackedVelocityUpdates(true)
                     .build()
     );
-
 
     // Rise: Risen Zombie
     public static final EntityType<net.seep.odd.abilities.rise.entity.RisenZombieEntity> RISEN_ZOMBIE =
@@ -160,7 +301,6 @@ public final class ModEntities {
     // Climber: Rope shot / Anchor / Pull tether
     // =========================
 
-    // Rope shot (arcing projectile)
     public static final EntityType<ClimberRopeShotEntity> CLIMBER_ROPE_SHOT = Registry.register(
             Registries.ENTITY_TYPE,
             CLIMBER_ROPE_SHOT_ID,
@@ -171,7 +311,6 @@ public final class ModEntities {
                     .build()
     );
 
-    // Rope anchor (invisible, renders lead line)
     public static final EntityType<ClimberRopeAnchorEntity> CLIMBER_ROPE_ANCHOR = Registry.register(
             Registries.ENTITY_TYPE,
             CLIMBER_ROPE_ANCHOR_ID,
@@ -182,7 +321,6 @@ public final class ModEntities {
                     .build()
     );
 
-    // Pull tether (invisible, follows target briefly to pull + renders lead line)
     public static final EntityType<ClimberPullTetherEntity> CLIMBER_PULL_TETHER = Registry.register(
             Registries.ENTITY_TYPE,
             CLIMBER_PULL_TETHER_ID,
@@ -190,6 +328,30 @@ public final class ModEntities {
                     .dimensions(EntityDimensions.fixed(0.10f, 0.10f))
                     .trackRangeBlocks(96)
                     .trackedUpdateRate(1)
+                    .build()
+    );
+
+    // =========================
+    // ===== NEW: Sniper grapple (shot + anchor)
+    // =========================
+
+    public static final EntityType<SniperGrappleShotEntity> SNIPER_GRAPPLE_SHOT = Registry.register(
+            Registries.ENTITY_TYPE,
+            SNIPER_GRAPPLE_SHOT_ID,
+            FabricEntityTypeBuilder.<SniperGrappleShotEntity>create(SpawnGroup.MISC, SniperGrappleShotEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(10)
+                    .build()
+    );
+
+    public static final EntityType<SniperGrappleAnchorEntity> SNIPER_GRAPPLE_ANCHOR = Registry.register(
+            Registries.ENTITY_TYPE,
+            SNIPER_GRAPPLE_ANCHOR_ID,
+            FabricEntityTypeBuilder.<SniperGrappleAnchorEntity>create(SpawnGroup.MISC, SniperGrappleAnchorEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.10f, 0.10f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(20)
                     .build()
     );
 
@@ -348,7 +510,7 @@ public final class ModEntities {
                             (EntityType<net.seep.odd.entity.zerosuit.ZeroBeamEntity> t, World w) ->
                                     new net.seep.odd.entity.zerosuit.ZeroBeamEntity(t, w)
                     )
-                    .dimensions(EntityDimensions.fixed(0.1f, 0.1f))
+                    .dimensions(EntityDimensions.fixed(1f, 1f))
                     .trackRangeBlocks(128)
                     .trackedUpdateRate(1)
                     .build()
@@ -566,9 +728,7 @@ public final class ModEntities {
                     .build()
     );
 
-    // =========================
     // Conquer: Dark Horse
-    // =========================
     public static final EntityType<DarkHorseEntity> DARK_HORSE = Registry.register(
             Registries.ENTITY_TYPE,
             DARK_HORSE_ID,
@@ -607,9 +767,7 @@ public final class ModEntities {
                     .build()
     );
 
-    // =========================================================
-    // ===== NEW: Necromancer corpses (MISC, flat, renderer-only)
-    // =========================================================
+    // Necromancer corpses
     public static final EntityType<ZombieCorpseEntity> ZOMBIE_CORPSE = Registry.register(
             Registries.ENTITY_TYPE,
             ZOMBIE_CORPSE_ID,
@@ -644,10 +802,8 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(FALSE_FROG, net.seep.odd.entity.falsefrog.FalseFrogEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(FIREFLY, FireflyEntity.createAttributes());
 
-        // Conquer: Dark Horse
+        // Conquer
         FabricDefaultAttributeRegistry.register(DARK_HORSE, DarkHorseEntity.createDarkHorseAttributes());
-
-        // Conquer: Corrupted villager / golem
         FabricDefaultAttributeRegistry.register(CORRUPTED_VILLAGER, VillagerEntity.createVillagerAttributes());
         FabricDefaultAttributeRegistry.register(CORRUPTED_IRON_GOLEM, IronGolemEntity.createIronGolemAttributes());
 
@@ -660,7 +816,12 @@ public final class ModEntities {
         // Rise
         FabricDefaultAttributeRegistry.register(RISEN_ZOMBIE,
                 net.seep.odd.abilities.rise.entity.RisenZombieEntity.createRisenZombieAttributes());
+        FabricDefaultAttributeRegistry.register(BOOKLET, BookletEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(CAPYBARA_FAMILIAR, CapybaraFamiliarEntity.createAttributes());
 
-        // NOTE: corpses have no attributes (not LivingEntity)
+
+
+        // NOTE: sniper grapple + climber rope are not LivingEntities (no attributes)
+        // NOTE: corpses have no attributes
     }
 }

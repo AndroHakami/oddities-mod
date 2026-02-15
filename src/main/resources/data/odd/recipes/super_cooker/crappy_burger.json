@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:bread" },
+    { "item": "minecraft:ender_pearl" },
+    { "item": "minecraft:beef" }
+  ],
+  "result": { "item": "odd:crappy_burger", "count": 1 },
+  "cookTime": 300,
+  "minStirs": 3
+}

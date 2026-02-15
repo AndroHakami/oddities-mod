@@ -1,0 +1,11 @@
+{
+  "blend": { "func": "add", "srcrgb": "srcalpha", "dstrgb": "1-srcalpha" },
+  "vertex": "odd:atheneum_sky",
+  "fragment": "odd:atheneum_sky",
+  "attributes": [ "Position" ],
+  "uniforms": [
+    { "name": "iTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "InvProjMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "InvViewMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] }
+  ]
+}

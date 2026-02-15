@@ -1,0 +1,12 @@
+{
+  "type": "odd:atheneum",
+  "generator": {
+    "type": "odd:atheneum",
+    "seed": 0,
+    "cell_size": 6,
+    "biome_source": {
+      "type": "minecraft:fixed",
+      "biome": "odd:atheneum"
+    }
+  }
+}

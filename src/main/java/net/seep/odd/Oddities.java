@@ -30,6 +30,7 @@ import net.seep.odd.abilities.buddymorph.BuddymorphData;
 import net.seep.odd.abilities.buddymorph.BuddymorphNet;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphScreen;
+import net.seep.odd.abilities.chef.net.ChefNet;
 import net.seep.odd.abilities.climber.net.ClimberClimbNetworking;
 import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
 import net.seep.odd.abilities.cosmic.CosmicNet;
@@ -67,8 +68,11 @@ import net.seep.odd.abilities.vampire.VampireTempCrystalManager;
 import net.seep.odd.abilities.voids.VoidRegistry;
 import net.seep.odd.abilities.voids.VoidSystem;
 
+import net.seep.odd.abilities.wizard.client.WizardClientInit;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.falseflower.FalseFlowerTracker;
+import net.seep.odd.block.gate.DimensionalGateBlockEntity;
+import net.seep.odd.block.gate.GateCommands;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
@@ -123,7 +127,10 @@ public final class Oddities implements ModInitializer {
 		ModShaders.init();
 		PowerNetworking.initServer();
 		net.seep.odd.recipe.ModRecipes.init();
-		net.seep.odd.screen.ModScreenHandlers.init();
+		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+			GateCommands.register(dispatcher, registryAccess);
+		});
+
 
 
 
@@ -203,6 +210,8 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new VampirePower());
 		Powers.register(new DruidPower());
 		Powers.register(new ChefPower());
+		Powers.register(new SniperPower());
+		Powers.register(new WizardPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -413,6 +422,27 @@ public final class Oddities implements ModInitializer {
 
 		// Druid
 		DruidNet.init();
+
+		//Chef
+
+		// Diomensinal Gate
+		net.seep.odd.block.gate.GateTeleportSystem.init();
+		net.seep.odd.block.gate.GateTeleportQueue.init();
+
+		// Sniper
+		SniperPower.init();
+		net.seep.odd.abilities.sniper.net.SniperGlideServer.init();
+
+		// Wizard
+		WizardPower.register();
+
+
+
+
+
+
+
+
 
 
 

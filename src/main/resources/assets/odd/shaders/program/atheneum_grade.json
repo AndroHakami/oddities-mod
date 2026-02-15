@@ -1,0 +1,32 @@
+{
+  "vertex": "odd:atheneum_grade",
+  "fragment": "odd:atheneum_grade",
+  "attributes": [ "Position" ],
+  "samplers": [
+    { "name": "DiffuseSampler" }
+  ],
+  "uniforms": [
+    { "name": "ProjMat", "type": "matrix4x4", "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "ModelViewMat", "type": "matrix4x4", "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "OutSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+
+    { "name": "iTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Intensity", "type": "float", "count": 1, "values": [ 0.62 ] },
+
+    { "name": "Tint", "type": "float", "count": 3, "values": [ 0.94, 1.03, 1.18 ] },
+
+    { "name": "Pastel", "type": "float", "count": 1, "values": [ 0.55 ] },
+    { "name": "Contrast", "type": "float", "count": 1, "values": [ 0.78 ] },
+
+    { "name": "Lift", "type": "float", "count": 3, "values": [ 0.020, 0.022, 0.040 ] },
+
+    { "name": "ShadowTint", "type": "float", "count": 3, "values": [ 0.96, 1.02, 1.10 ] },
+    { "name": "HighTint",   "type": "float", "count": 3, "values": [ 1.05, 1.05, 1.10 ] }
+
+
+
+
+  ]
+}

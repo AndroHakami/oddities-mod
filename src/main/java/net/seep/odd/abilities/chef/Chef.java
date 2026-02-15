@@ -13,12 +13,14 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.random.Random;
 import net.seep.odd.Oddities;
 
-import java.lang.reflect.Method;
+// ✅ use your actual power system like the other powers
+import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.abilities.power.Powers;
+import net.seep.odd.abilities.power.ChefPower;
 
 public final class Chef {
     private Chef() {}
 
-    public static final String POWER_ID = "chef";
     public static final float DOUBLE_LOOT_CHANCE = 0.25f;
 
     public static final TagKey<Item> INGREDIENTS_TAG =
@@ -28,31 +30,11 @@ public final class Chef {
         return !stack.isEmpty() && stack.isIn(INGREDIENTS_TAG);
     }
 
-    /** Replace this with your real power system check when you want. */
+    /** ✅ Proper power check (same style as your other powers). */
     public static boolean hasChefPower(Entity e) {
-        if (!(e instanceof PlayerEntity p)) return false;
-
-        // Fast path: scoreboard tags (easy to test)
-        if (p.getScoreboardTags().contains("chef")) return true;
-        if (p.getScoreboardTags().contains("odd:chef")) return true;
-        if (p.getScoreboardTags().contains("odd_power:chef")) return true;
-
-        // Optional reflection hooks (won't crash if missing)
-        try {
-            Class<?> cls = Class.forName("net.seep.odd.abilities.power.PowerManager");
-            Method m = cls.getMethod("hasPower", PlayerEntity.class, String.class);
-            Object res = m.invoke(null, p, POWER_ID);
-            if (res instanceof Boolean b && b) return true;
-        } catch (Throwable ignored) {}
-
-        try {
-            Class<?> cls = Class.forName("net.seep.odd.abilities.power.Powers");
-            Method m = cls.getMethod("getId", PlayerEntity.class);
-            Object res = m.invoke(null, p);
-            if (res instanceof String s && POWER_ID.equals(s)) return true;
-        } catch (Throwable ignored) {}
-
-        return false;
+        if (!(e instanceof PlayerEntity player)) return false;
+        if (!PowerAPI.has((ServerPlayerEntity) player)) return false;
+        return Powers.get(PowerAPI.get((ServerPlayerEntity) player)) instanceof ChefPower;
     }
 
     /** Server-side roll for doubling loot. */

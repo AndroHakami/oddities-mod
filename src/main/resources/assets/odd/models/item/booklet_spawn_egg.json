@@ -1,0 +1,6 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "odd:item/booklet_spawn_egg"
+  }
+}

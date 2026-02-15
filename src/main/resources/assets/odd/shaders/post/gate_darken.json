@@ -1,0 +1,7 @@
+{
+  "targets": ["gate_darken"],
+  "passes": [
+    { "name": "odd:gate_darken", "intarget": "minecraft:main", "outtarget": "gate_darken" },
+    { "name": "blit", "intarget": "gate_darken", "outtarget": "minecraft:main" }
+  ]
+}

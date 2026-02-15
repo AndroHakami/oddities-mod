@@ -1,0 +1,15 @@
+{
+  "targets": [ "gate_portal" ],
+  "passes": [
+    {
+      "name": "odd:gate_portal_rotten_roots",
+      "intarget": "minecraft:main",
+      "outtarget": "gate_portal"
+    },
+    {
+      "name": "blit",
+      "intarget": "gate_portal",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

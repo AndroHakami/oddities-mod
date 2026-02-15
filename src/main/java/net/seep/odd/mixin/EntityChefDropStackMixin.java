@@ -6,6 +6,7 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.chef.Chef;
+import net.seep.odd.mixin.access.ItemEntityAccessor;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -13,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Entity.class)
 public abstract class EntityChefDropStackMixin {
+
     @Inject(method = "dropStack(Lnet/minecraft/item/ItemStack;F)Lnet/minecraft/entity/ItemEntity;", at = @At("RETURN"))
     private void odd$chef_duplicate(ItemStack stack, float yOffset, CallbackInfoReturnable<ItemEntity> cir) {
         LivingEntity victim = Chef.LootTL.CURRENT.get();
@@ -35,7 +37,10 @@ public abstract class EntityChefDropStackMixin {
         try {
             ItemStack extraStack = stack.copy();
             ItemEntity extra = new ItemEntity(w, original.getX(), original.getY(), original.getZ(), extraStack);
-            extra.setPickupDelay(original.pickupDelay);
+
+            int delay = ((ItemEntityAccessor)(Object) original).odd$getPickupDelay();
+            extra.setPickupDelay(delay);
+
             extra.setVelocity(original.getVelocity());
             w.spawnEntity(extra);
         } finally {

@@ -230,7 +230,7 @@ public final class ZeroSuitPower implements Power {
         return switch (slot) {
             case "primary"   -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_gravity.png");
             case "secondary" -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_blast.png");
-            case "third"     -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
+            case "third"     -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_nuke.png");
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
     }

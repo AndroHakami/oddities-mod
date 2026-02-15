@@ -27,6 +27,8 @@ import net.minecraft.world.World;
 
 import net.seep.odd.abilities.astral.UmbraAirSwimBoostNetClient;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
+import net.seep.odd.abilities.chef.client.ChefClient;
+import net.seep.odd.abilities.chef.net.ChefNet;
 import net.seep.odd.abilities.client.*;
 import net.seep.odd.abilities.client.hud.AstralHudOverlay;
 import net.seep.odd.abilities.climber.client.ClimberClient;
@@ -75,6 +77,7 @@ import net.seep.odd.abilities.power.*;
 import net.seep.odd.abilities.rider.RiderClientInput;
 import net.seep.odd.abilities.rider.RiderNet;
 import net.seep.odd.abilities.rise.client.render.RisenZombieRenderer;
+import net.seep.odd.abilities.sniper.item.SniperItem;
 import net.seep.odd.abilities.spectral.SpectralClientState;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
@@ -96,6 +99,10 @@ import net.seep.odd.abilities.artificer.mixer.MixerNet;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerHud;
 import net.seep.odd.abilities.artificer.mixer.client.PotionMixerScreen;
 
+
+import net.seep.odd.abilities.wizard.client.WizardClientInit;
+import net.seep.odd.abilities.wizard.client.WizardNoRenderRenderer;
+import net.seep.odd.abilities.wizard.entity.client.CapybaraFamiliarRenderer;
 import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
 import net.seep.odd.abilities.zerosuit.client.AnnihilationShaderClient;
 import net.seep.odd.abilities.zerosuit.client.ZeroSuitCpmBridge;
@@ -103,6 +110,9 @@ import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.falseflower.FalseFlowerTracker;
 import net.seep.odd.block.falseflower.client.FalseFlowerAuraClient;
 import net.seep.odd.block.falseflower.client.FalseFlowerRenderer;
+import net.seep.odd.block.gate.client.DimensionalGateDarkenFx;
+import net.seep.odd.block.gate.client.DimensionalGateProximityDistortFx;
+import net.seep.odd.block.gate.client.DimensionalGateRenderer;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
 
@@ -110,6 +120,7 @@ import net.seep.odd.block.grandanvil.client.GrandAnvilScreen;
 import net.seep.odd.client.audio.RiderRadioClient;
 import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.entity.booklet.client.BookletRenderer;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.cultist.ShyGuyRenderer;
@@ -136,6 +147,8 @@ import net.seep.odd.sky.CelestialEventClient;
 import net.seep.odd.sky.CelestialEventS2C;
 import net.seep.odd.abilities.ghostlings.client.GhostlingRenderer;
 
+import net.seep.odd.sky.client.AtheneumClient;
+import net.seep.odd.sky.client.AtheneumGradeFx;
 import net.seep.odd.sky.client.RottenRootsClient;
 
 
@@ -419,10 +432,29 @@ public final class OdditiesClient implements ClientModInitializer {
         DruidPower.Client.init();
 
         // Chef (Client)
-        net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry.register(
-                net.seep.odd.registry.ModBlockEntities.SUPER_COOKER,
-                ctx -> new net.seep.odd.block.supercooker.client.SuperCookerRenderer()
-        );
+        ChefClient.init();
+
+        // DIMENSIONAL GATE
+        BlockEntityRendererFactories.register(ModBlocks.DIMENSIONAL_GATE_BE, DimensionalGateRenderer::new);
+        net.seep.odd.block.gate.client.DimensionalGatePortalFx.init();
+        DimensionalGateDarkenFx.init();
+        DimensionalGateProximityDistortFx.init();
+
+        // Atheneum
+        AtheneumClient.init();
+        AtheneumGradeFx.init();
+
+        // Sniper (Client)
+        SniperItem.initClientHooks();
+
+        // Wizard (Client)
+        net.seep.odd.abilities.wizard.client.WizardClientInit.initClient();
+
+
+
+
+
+
 
 
 
@@ -521,6 +553,17 @@ public final class OdditiesClient implements ClientModInitializer {
                 ModEntities.BLOOD_CRYSTAL_PROJECTILE,
                 BloodCrystalProjectileRenderer::new
         );
+        EntityRendererRegistry.register(ModEntities.SNIPER_GRAPPLE_SHOT,
+                net.seep.odd.abilities.sniper.client.render.SniperGrappleShotRenderer::new);
+
+        EntityRendererRegistry.register(ModEntities.SNIPER_GRAPPLE_ANCHOR,
+                net.seep.odd.abilities.sniper.client.render.SniperGrappleAnchorRenderer::new);
+        EntityRendererRegistry.register(ModEntities.BOOKLET, BookletRenderer::new);
+
+
+
+
+
 
 
 

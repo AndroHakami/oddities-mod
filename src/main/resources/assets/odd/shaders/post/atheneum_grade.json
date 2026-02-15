@@ -1,0 +1,15 @@
+{
+  "targets": [ "atheneum_grade" ],
+  "passes": [
+    {
+      "name": "odd:atheneum_grade",
+      "intarget": "minecraft:main",
+      "outtarget": "atheneum_grade"
+    },
+    {
+      "name": "blit",
+      "intarget": "atheneum_grade",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

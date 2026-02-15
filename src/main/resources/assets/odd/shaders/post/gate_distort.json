@@ -1,0 +1,7 @@
+{
+  "targets": [ "gate_distort" ],
+  "passes": [
+    { "name": "odd:gate_distort", "intarget": "minecraft:main", "outtarget": "gate_distort" },
+    { "name": "blit", "intarget": "gate_distort", "outtarget": "minecraft:main" }
+  ]
+}

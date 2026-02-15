@@ -15,7 +15,7 @@ public final class ModRecipes {
     public static final RecipeType<SuperCookerRecipe> SUPER_COOKER_TYPE =
             Registry.register(Registries.RECIPE_TYPE,
                     new Identifier(Oddities.MOD_ID, "super_cooker"),
-                    new RecipeType<>() {});
+                    new RecipeType<SuperCookerRecipe>() {});
 
     public static final RecipeSerializer<SuperCookerRecipe> SUPER_COOKER_SERIALIZER =
             Registry.register(Registries.RECIPE_SERIALIZER,

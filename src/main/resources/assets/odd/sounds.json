@@ -24,6 +24,13 @@
       "odd:shy_guy_attack"
     ]
   },
+  "wizard_charge": {
+    "subtitle": "odd.wizard_charge",
+    "sounds": [
+      "odd:wizard_charge"
+    ]
+  },
+
 
 
   "shy_guy_sit_post_rage": {
@@ -317,6 +324,15 @@
     "sounds": [
       {
         "name": "odd:rotten_roots",
+        "stream": true
+      }
+    ]
+  },
+  "atheneum": {
+    "subtitle": "odd.atheneum",
+    "sounds": [
+      {
+        "name": "odd:atheneum",
         "stream": true
       }
     ]

@@ -1,0 +1,51 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.unknown",
+				"texture_width": 128,
+				"texture_height": 128,
+				"visible_bounds_width": 2,
+				"visible_bounds_height": 2.5,
+				"visible_bounds_offset": [0, 0.75, 0]
+			},
+			"bones": [
+				{
+					"name": "spoon",
+					"pivot": [0.5, 16, 0],
+					"cubes": [
+						{"origin": [3, 19, -1], "size": [0.5, 5, 2], "pivot": [2.5, 19, 0], "rotation": [0, 0, 35], "uv": [103, 82]},
+						{"origin": [3, 16, -1.75], "size": [0.5, 3, 3.5], "pivot": [2.5, 19, 0], "rotation": [0, 0, 35], "uv": [92, 82]}
+					]
+				},
+				{
+					"name": "fridge",
+					"pivot": [0, 7, 0],
+					"cubes": [
+						{"origin": [-7, 8, -7], "size": [14, 4, 14], "uv": [0, 24]}
+					]
+				},
+				{
+					"name": "furnace",
+					"pivot": [0, 7.4, 0],
+					"cubes": [
+						{"origin": [-5, 12, -5], "size": [10, 2, 10], "uv": [0, 42]},
+						{"origin": [-8, 0, -8], "size": [16, 8, 16], "uv": [0, 0]}
+					]
+				},
+				{
+					"name": "cooking_area",
+					"pivot": [0.025, 14, -0.3],
+					"cubes": [
+						{"origin": [-3, 16, -5], "size": [6, 2, 2], "uv": [56, 24]},
+						{"origin": [-3, 16, 3], "size": [6, 2, 2], "uv": [24, 54]},
+						{"origin": [3, 16, -5], "size": [2, 2, 10], "uv": [0, 54]},
+						{"origin": [-5, 16, -5], "size": [2, 2, 10], "uv": [40, 52]},
+						{"origin": [-4, 14, -4], "size": [8, 2, 8], "uv": [40, 42]}
+					]
+				}
+			]
+		}
+	]
+}

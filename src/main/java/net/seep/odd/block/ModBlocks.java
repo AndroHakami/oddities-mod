@@ -37,6 +37,12 @@ import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
 import net.seep.odd.block.supercooker.SuperCookerBlock;
 import net.seep.odd.block.supercooker.SuperCookerBlockEntity;
 
+// ✅ Dimensional Gate (NEW)
+// Put these classes where you like; update imports accordingly.
+// Suggested path: net/seep/odd/block/gate/...
+import net.seep.odd.block.gate.DimensionalGateBlock;
+import net.seep.odd.block.gate.DimensionalGateBlockEntity;
+
 public class ModBlocks {
 
     private static Identifier id(String path) {
@@ -68,6 +74,29 @@ public class ModBlocks {
                     .sounds(BlockSoundGroup.GLASS)
                     .dropsNothing())
     );
+    public static final Block DREAM_BOOKSHELF = Registry.register(
+            Registries.BLOCK, id("dream_bookshelf"),
+            new Block(AbstractBlock.Settings.copy(Blocks.BOOKSHELF)
+                    .strength(-1.0f, 3600000.0f)
+                    .nonOpaque()
+                    .sounds(BlockSoundGroup.CHISELED_BOOKSHELF)
+                    .dropsNothing())
+    );
+    public static final Block SUSPICIOUS_BOOKSHELF = Registry.register(
+            Registries.BLOCK, id("suspicious_bookshelf"),
+            new SuspiciousBookshelfBlock(AbstractBlock.Settings.copy(Blocks.BOOKSHELF)
+                    .sounds(BlockSoundGroup.CHISELED_BOOKSHELF))
+    );
+
+
+
+    public static final Item SUSPICIOUS_BOOKSHELF_ITEM = Registry.register(
+            Registries.ITEM, id("suspicious_bookshelf"),
+            new BlockItem(SUSPICIOUS_BOOKSHELF, new Item.Settings())
+    );
+
+
+
 
     public static final Block CRAPPY_BLOCK = Registry.register(
             Registries.BLOCK, id("crappy_block"),
@@ -80,6 +109,28 @@ public class ModBlocks {
                     80
             )
     );
+    public static final Block DABLOON_BOOKSHELF = Registry.register(
+            Registries.BLOCK, id("dabloon_bookshelf"),
+            new DabloonBookshelfBlock(AbstractBlock.Settings.copy(Blocks.BOOKSHELF)
+                    .sounds(BlockSoundGroup.CHISELED_BOOKSHELF))
+    );
+
+    public static final Block USED_DABLOON_BOOKSHELF = Registry.register(
+            Registries.BLOCK, id("used_dabloon_bookshelf"),
+            new UsedDabloonBookshelfBlock(AbstractBlock.Settings.copy(Blocks.BOOKSHELF)
+                    .sounds(BlockSoundGroup.CHISELED_BOOKSHELF))
+    );
+
+    public static final Item DABLOON_BOOKSHELF_ITEM = Registry.register(
+            Registries.ITEM, id("dabloon_bookshelf"),
+            new BlockItem(DABLOON_BOOKSHELF, new Item.Settings())
+    );
+
+    public static final Item USED_DABLOON_BOOKSHELF_ITEM = Registry.register(
+            Registries.ITEM, id("used_dabloon_bookshelf"),
+            new BlockItem(USED_DABLOON_BOOKSHELF, new Item.Settings())
+    );
+
 
     /* ---------------- Cultist: Centipede Spawn ---------------- */
     public static Block CENTIPEDE_SPAWN;
@@ -115,6 +166,11 @@ public class ModBlocks {
     public static Block SUPER_COOKER;
     public static Item  SUPER_COOKER_ITEM;
     public static BlockEntityType<SuperCookerBlockEntity> SUPER_COOKER_BE;
+
+    /* ---------- DIMENSIONAL GATE (NEW) ---------- */
+    public static Block DIMENSIONAL_GATE;
+    public static Item  DIMENSIONAL_GATE_ITEM;
+    public static BlockEntityType<DimensionalGateBlockEntity> DIMENSIONAL_GATE_BE;
 
     public static void registerModBlocks() {
         Oddities.LOGGER.info("Registering ModBlocks for " + Oddities.MOD_ID);
@@ -246,6 +302,25 @@ public class ModBlocks {
         SUPER_COOKER_BE = Registry.register(
                 Registries.BLOCK_ENTITY_TYPE, id("super_cooker"),
                 FabricBlockEntityTypeBuilder.create(SuperCookerBlockEntity::new, SUPER_COOKER).build(null)
+        );
+
+        /* --------- REGISTER: DIMENSIONAL GATE (block + item + BE) --------- */
+        DIMENSIONAL_GATE = Registry.register(
+                Registries.BLOCK, id("dimensional_gate"),
+                new DimensionalGateBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
+                        .strength(4.0f)
+                        .requiresTool()
+                        .nonOpaque())
+        );
+
+        DIMENSIONAL_GATE_ITEM = Registry.register(
+                Registries.ITEM, id("dimensional_gate"),
+                new BlockItem(DIMENSIONAL_GATE, new Item.Settings())
+        );
+
+        DIMENSIONAL_GATE_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("dimensional_gate"),
+                FabricBlockEntityTypeBuilder.create(DimensionalGateBlockEntity::new, DIMENSIONAL_GATE).build(null)
         );
     }
 }

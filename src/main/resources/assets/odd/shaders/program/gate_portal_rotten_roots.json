@@ -1,0 +1,33 @@
+{
+  "vertex": "odd:gate_portal_rotten_roots",
+  "fragment": "odd:gate_portal_rotten_roots",
+  "attributes": [ "Position" ],
+  "samplers": [
+    { "name": "DiffuseSampler" },
+    { "name": "DepthSampler" }
+  ],
+  "uniforms": [
+    { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "InverseTransformMatrix", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "OutSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+
+    { "name": "CameraPosition", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+
+    { "name": "GateCenter", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+    { "name": "GateRight",  "type": "float", "count": 3, "values": [ 1.0, 0.0, 0.0 ] },
+    { "name": "GateUp",     "type": "float", "count": 3, "values": [ 0.0, 1.0, 0.0 ] },
+    { "name": "GateNormal", "type": "float", "count": 3, "values": [ 0.0, 0.0, 1.0 ] },
+
+    { "name": "GateHalfWidth",  "type": "float", "count": 1, "values": [ 2.0 ] },
+    { "name": "GateHalfHeight", "type": "float", "count": 1, "values": [ 2.5 ] },
+
+    { "name": "GlowStrength",   "type": "float", "count": 1, "values": [ 0.85 ] },
+    { "name": "GlowColor",      "type": "float", "count": 3, "values": [ 0.08, 0.65, 0.28 ] },
+    { "name": "GlowHalfWidth",  "type": "float", "count": 1, "values": [ 3.4 ] },
+    { "name": "GlowHalfHeight", "type": "float", "count": 1, "values": [ 4.1 ] },
+
+    { "name": "iTime",     "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Intensity", "type": "float", "count": 1, "values": [ 0.0 ] }
+  ]
+}

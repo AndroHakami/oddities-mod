@@ -1,0 +1,102 @@
+{
+  "credit": "Made with Blockbench",
+  "parent": "builtin/entity",
+  "texture_size": [
+    32,
+    32
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [
+        44.5,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        -9,
+        -6
+      ],
+      "scale": [
+        1.55,
+        1.55,
+        1.55
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        44.5,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        -9,
+        -6
+      ],
+      "scale": [
+        1.55,
+        1.55,
+        1.55
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        -2,
+        0,
+        0
+      ],
+      "translation": [
+        -0.25,
+        -9.5,
+        0.75
+      ]
+    },
+    "firstperson_lefthand": {
+      "translation": [
+        0,
+        -9.5,
+        0
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        -2.5,
+        0
+      ]
+    },
+    "gui": {
+      "rotation": [
+        98.2,
+        40.44,
+        -95.38
+      ],
+      "translation": [
+        -7.25,
+        -7.25,
+        0
+      ],
+      "scale": [
+        0.84,
+        0.83,
+        0.83
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        87.57,
+        -43.44,
+        88.35
+      ],
+      "translation": [
+        8.75,
+        -8.5,
+        0
+      ]
+    }
+  },
+  "textures": {
+    "particle": "odd:item/walking_stick_fire"
+  }
+}

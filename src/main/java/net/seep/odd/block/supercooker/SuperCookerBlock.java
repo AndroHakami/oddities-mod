@@ -1,12 +1,11 @@
 package net.seep.odd.block.supercooker;
 
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockEntityProvider;
-import net.minecraft.block.BlockRenderType;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.BlockWithEntity;
+import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.screen.GenericContainerScreenHandler;
+import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.screen.SimpleNamedScreenHandlerFactory;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
@@ -22,19 +21,15 @@ import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.chef.Chef;
-import net.seep.odd.block.supercooker.screen.SuperCookerFridgeScreenHandler;
-import net.seep.odd.block.supercooker.screen.SuperCookerFuelScreenHandler;
 
 public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProvider {
     public static final net.minecraft.state.property.DirectionProperty FACING =
             net.minecraft.state.property.Properties.HORIZONTAL_FACING;
 
     private static final double U = 1.0 / 16.0;
-    private static final double Y_FURNACE_TOP = 8 * U;   // 0.5
-    private static final double Y_FRIDGE_TOP  = 12 * U;  // 0.75
-    private static final double Y_CAP_TOP     = 14 * U;  // 0.875
-    private static final double Y_COOK_TOP    = 18 * U;  // 1.125 (geo is 18 tall) :contentReference[oaicite:2]{index=2}
-
+    private static final double Y_FURNACE_TOP = 8 * U;
+    private static final double Y_FRIDGE_TOP  = 12 * U;
+    private static final double Y_CAP_TOP     = 14 * U;
     private static final VoxelShape OUTLINE = Block.createCuboidShape(0, 0, 0, 16, 18, 16);
 
     private enum Part { FURNACE, FRIDGE, COOKTOP }
@@ -59,25 +54,16 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
         return BlockRenderType.ENTITYBLOCK_ANIMATED;
     }
 
-    @Override public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, net.minecraft.entity.ShapeContext context) {
-        return OUTLINE;
-    }
-    @Override public VoxelShape getRaycastShape(BlockState state, BlockView world, BlockPos pos) {
-        return OUTLINE;
-    }
-
-    // Keep collision normal height (feels better); outline/raycast still tall for clicks
-    @Override public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, net.minecraft.entity.ShapeContext context) {
-        return VoxelShapes.fullCube();
-    }
+    @Override public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) { return OUTLINE; }
+    @Override public VoxelShape getRaycastShape(BlockState state, BlockView world, BlockPos pos) { return OUTLINE; }
+    @Override public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) { return VoxelShapes.fullCube(); }
 
     private static Part partFromHit(BlockPos pos, BlockHitResult hit) {
         double localY = hit.getPos().y - pos.getY();
-
         if (localY < Y_FURNACE_TOP) return Part.FURNACE;
         if (localY < Y_FRIDGE_TOP)  return Part.FRIDGE;
-        if (localY < Y_CAP_TOP)     return Part.FURNACE; // 12..14 is furnace cap
-        return Part.COOKTOP; // 14..18
+        if (localY < Y_CAP_TOP)     return Part.FURNACE;
+        return Part.COOKTOP;
     }
 
     @Override
@@ -90,20 +76,36 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
             switch (part) {
                 case FURNACE -> {
                     player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
-                            (syncId, inv, p) -> new SuperCookerFuelScreenHandler(syncId, inv, be),
+                            (syncId, playerInv, p) ->
+                                    new GenericContainerScreenHandler(
+                                            ScreenHandlerType.GENERIC_9X1,
+                                            syncId,
+                                            (PlayerInventory) playerInv,
+                                            be.fuelUiInventory(),
+                                            1
+                                    ),
                             Text.literal("Super Cooker - Fuel")
                     ));
                     return ActionResult.SUCCESS;
                 }
                 case FRIDGE -> {
+                    world.playSound(null, pos, SoundEvents.BLOCK_CHEST_OPEN, SoundCategory.BLOCKS, 0.8f, 1.0f);
+
                     player.openHandledScreen(new SimpleNamedScreenHandlerFactory(
-                            (syncId, inv, p) -> new SuperCookerFridgeScreenHandler(syncId, inv, be),
+                            (syncId, playerInv, p) ->
+                                    new GenericContainerScreenHandler(
+                                            ScreenHandlerType.GENERIC_9X3,
+                                            syncId,
+                                            (PlayerInventory) playerInv,
+                                            be.fridgeUiInventory(player), // ✅ shared fridge
+                                            3
+                                    ),
                             Text.literal("Super Cooker - Fridge")
                     ));
                     return ActionResult.SUCCESS;
                 }
                 case COOKTOP -> {
-                    // Collect finished dish
+                    // finished dish pickup
                     if (be.isFinished()) {
                         if (be.tryGiveResult(player)) {
                             world.playSound(null, pos, SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.BLOCKS, 0.9f, 1.1f);
@@ -111,9 +113,19 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
                         return ActionResult.SUCCESS;
                     }
 
+                    // ✅ shift-right-click recollect ingredients (only when not cooking)
+                    if (player.isSneaking()) {
+                        if (be.tryTakeOneIngredient(player)) {
+                            world.playSound(null, pos, SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.BLOCKS, 0.8f, 1.2f);
+                        } else {
+                            player.sendMessage(Text.literal("No ingredients to take."), true);
+                        }
+                        return ActionResult.SUCCESS;
+                    }
+
                     var held = player.getStackInHand(hand);
 
-                    // Insert ingredient (max 5), only if not cooking
+                    // add ingredient
                     if (!held.isEmpty() && Chef.isIngredient(held)) {
                         if (be.tryInsertIngredient(player, hand)) {
                             world.playSound(null, pos, SoundEvents.BLOCK_WOOL_PLACE, SoundCategory.BLOCKS, 0.8f, 1.2f);
@@ -123,14 +135,9 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
                         return ActionResult.SUCCESS;
                     }
 
-                    // Stir with empty or non-ingredient
-                    if (be.canStir()) {
-                        be.serverStir();
-                        world.playSound(null, pos, SoundEvents.BLOCK_BREWING_STAND_BREW, SoundCategory.BLOCKS, 0.7f, 1.3f);
-                        return ActionResult.SUCCESS;
-                    }
-
-                    player.sendMessage(Text.literal("Add ingredients first."), true);
+                    // stir
+                    be.serverStir(player);
+                    world.playSound(null, pos, SoundEvents.BLOCK_BREWING_STAND_BREW, SoundCategory.BLOCKS, 0.7f, 1.3f);
                     return ActionResult.SUCCESS;
                 }
             }
@@ -138,6 +145,7 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
 
         return ActionResult.SUCCESS;
     }
+
 
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {

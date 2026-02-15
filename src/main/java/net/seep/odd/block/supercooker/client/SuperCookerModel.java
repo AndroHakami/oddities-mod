@@ -18,7 +18,7 @@ public class SuperCookerModel extends GeoModel<SuperCookerBlockEntity> {
 
     @Override
     public Identifier getTextureResource(SuperCookerBlockEntity animatable) {
-        return animatable.isEnabledTexture()
+        return animatable.isFueledVisual()
                 ? new Identifier(Oddities.MOD_ID, "textures/block/super_cooker_enabled.png")
                 : new Identifier(Oddities.MOD_ID, "textures/block/super_cooker.png");
     }

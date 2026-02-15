@@ -1,0 +1,15 @@
+{
+  "targets": [ "swap" ],
+  "passes": [
+    {
+      "name": "odd:sniper_scope",
+      "intarget": "minecraft:main",
+      "outtarget": "swap"
+    },
+    {
+      "name": "blit",
+      "intarget": "swap",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

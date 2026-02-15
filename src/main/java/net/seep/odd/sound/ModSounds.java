@@ -90,6 +90,13 @@ public class ModSounds {
     public static final SoundEvent SHY_GUY_RAGE_RUN = registerSoundEvent("shy_guy_rage_run");
     public static final SoundEvent SHY_GUY_ATTACK = registerSoundEvent("shy_guy_attack");
 
+    // Atheneum
+    public static final SoundEvent ATHENEUM = registerSoundEvent("atheneum");
+
+    // Wizard
+    public static final SoundEvent WIZARD_CHARGE = registerSoundEvent("wizard_charge");
+
+
 
 
     public static final BlockSoundGroup SOUND_BLOCK_SOUNDS = new BlockSoundGroup(1, 1,
