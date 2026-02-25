@@ -9,8 +9,8 @@ import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.util.math.BlockPos;
 
 public class PotionMixerScreenHandler extends ScreenHandler {
-    // NOTE: keep this as ScreenHandlerType; we assign it in the registry.
-    public static ScreenHandlerType<PotionMixerScreenHandler> TYPE;
+
+    public static ScreenHandlerType<PotionMixerScreenHandler> TYPE; // assigned in registry
 
     public final BlockPos pos;
 
@@ -29,7 +29,6 @@ public class PotionMixerScreenHandler extends ScreenHandler {
         return player.getWorld().getBlockEntity(pos) instanceof PotionMixerBlockEntity;
     }
 
-    /** Factory used by ExtendedScreenHandlerType in the registry. */
     public static ExtendedScreenHandlerType.ExtendedFactory<PotionMixerScreenHandler> factory() {
         return (syncId, inv, buf) -> new PotionMixerScreenHandler(syncId, inv, buf.readBlockPos());
     }

@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:milk_bucket" },
+    { "item": "minecraft:shulker_shell" },
+    { "item": "minecraft:sugar" }
+  ],
+  "result": { "item": "odd:shulker_icecream", "count": 3 },
+  "cookTime": 100,
+  "minStirs": 4
+}

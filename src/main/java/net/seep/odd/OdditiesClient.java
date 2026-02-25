@@ -1,5 +1,6 @@
 package net.seep.odd;
 
+import dev.architectury.registry.client.rendering.BlockEntityRendererRegistry;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -25,6 +26,14 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.GlobalPos;
 import net.minecraft.world.World;
 
+import net.seep.odd.abilities.accelerate.client.AccelerateFx;
+import net.seep.odd.abilities.accelerate.client.AccelerateWorldBurstFx;
+import net.seep.odd.abilities.artificer.mixer.IceStatueNet;
+import net.seep.odd.abilities.artificer.mixer.brew.RadiantBrambleEffect;
+import net.seep.odd.abilities.artificer.mixer.brew.client.AmplifiedJudgementFx;
+import net.seep.odd.abilities.artificer.mixer.brew.client.BlackFlameFx;
+import net.seep.odd.abilities.artificer.mixer.brew.client.DismantleFx;
+import net.seep.odd.abilities.artificer.mixer.brew.client.SnowgraveAuroraFx;
 import net.seep.odd.abilities.astral.UmbraAirSwimBoostNetClient;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.abilities.chef.client.ChefClient;
@@ -45,11 +54,15 @@ import net.seep.odd.abilities.cosmic.CosmicNet;
 import net.seep.odd.abilities.cosmic.client.CosmicCpmBridge;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordRenderer;
+import net.seep.odd.abilities.fairy.client.FairyBeamClient;
 import net.seep.odd.abilities.fairy.client.FairyKeysClient;
 import net.seep.odd.abilities.fairy.client.FlowerMenuClient;
 import net.seep.odd.abilities.fallingsnow.FallingSnowClient;
 import net.seep.odd.abilities.fallingsnow.FallingSnowNet;
 import net.seep.odd.abilities.fallingsnow.FallingSnowPowerAccessor;
+import net.seep.odd.abilities.firesword.FireSwordNet;
+import net.seep.odd.abilities.firesword.client.FireSwordCpmBridge;
+import net.seep.odd.abilities.firesword.client.FireSwordFx;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
 import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
@@ -62,6 +75,7 @@ import net.seep.odd.abilities.icewitch.client.IceProjectileRenderer;
 import net.seep.odd.abilities.icewitch.client.IceSpellAreaRenderer;
 import net.seep.odd.abilities.icewitch.client.IceWitchHud;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
+import net.seep.odd.abilities.init.ArtificerMixerClient;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.looker.LookerClient;
 import net.seep.odd.abilities.lunar.item.LunarDrillItem;
@@ -107,6 +121,10 @@ import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
 import net.seep.odd.abilities.zerosuit.client.AnnihilationShaderClient;
 import net.seep.odd.abilities.zerosuit.client.ZeroSuitCpmBridge;
 import net.seep.odd.block.ModBlocks;
+import net.seep.odd.block.combiner.client.CombinerRenderer;
+import net.seep.odd.block.combiner.client.CombinerScreen;
+import net.seep.odd.block.combiner.enchant.client.GazeOfTheEndClient;
+import net.seep.odd.block.combiner.net.CombinerNet;
 import net.seep.odd.block.falseflower.FalseFlowerTracker;
 import net.seep.odd.block.falseflower.client.FalseFlowerAuraClient;
 import net.seep.odd.block.falseflower.client.FalseFlowerRenderer;
@@ -122,6 +140,7 @@ import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.booklet.client.BookletRenderer;
 import net.seep.odd.entity.car.RiderCarRenderer;
+import net.seep.odd.entity.client.IceStatueEntityRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.cultist.ShyGuyRenderer;
 import net.seep.odd.entity.cultist.SightseerRenderer;
@@ -139,6 +158,8 @@ import net.seep.odd.entity.zerosuit.ZeroBeamRenderer;
 import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
 import net.seep.odd.entity.zerosuit.client.ZeroSuitMissileRenderer;
+import net.seep.odd.event.alien.client.AlienInvasionSkyClient;
+import net.seep.odd.event.alien.client.AlienOverworldGradeClient;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.particles.client.OddParticlesClient;
 import net.seep.odd.particles.client.SpottedStepsParticle;
@@ -182,6 +203,15 @@ public final class OdditiesClient implements ClientModInitializer {
         HandledScreens.register(ModScreens.GRAND_ANVIL, GrandAnvilScreen::new);
         BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.GRAND_ANVIL, RenderLayer.getCutout());
         BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.CRAPPY_BLOCK, RenderLayer.getTranslucent());
+
+        CombinerNet.initClient();
+        BlockEntityRendererRegistry.register(ModBlocks.COMBINER_BE, CombinerRenderer::new);
+        HandledScreens.register(ModScreens.COMBINER, CombinerScreen::new);
+        GazeOfTheEndClient.init();
+
+        // Blockade
+        net.seep.odd.abilities.blockade.client.BlockadeFx.init();
+        net.seep.odd.abilities.blockade.net.BlockadeNet.initClient();
 
         // Umbra (client)
         UmbraNet.registerClient();
@@ -252,6 +282,7 @@ public final class OdditiesClient implements ClientModInitializer {
         ArtificerCondenserRegistry.registerClient();
         net.seep.odd.abilities.artificer.fluid.client.ArtificerFluidsClient.registerClient();
         ArtificerMixerRegistry.Client.register();
+
         // Item tint (overlay layer index 1)
 
         // HUD overlay for mixer
@@ -261,6 +292,26 @@ public final class OdditiesClient implements ClientModInitializer {
                 net.seep.odd.entity.ModEntities.BREW_BOTTLE,
                 ctx -> new net.minecraft.client.render.entity.FlyingItemEntityRenderer<>(ctx)
         );
+        net.seep.odd.abilities.artificer.mixer.brew.AtomicRefractionEffect.Client.init();
+        net.seep.odd.abilities.artificer.mixer.brew.CloudOfEntropyEffect.Client.init();
+        RadiantBrambleEffect.Client.init();
+        net.seep.odd.abilities.artificer.mixer.brew.GeoThermalReleaseEffect.Client.init();
+        net.seep.odd.abilities.artificer.mixer.brew.LifeAuroraEffect.Client.init();
+        BlackFlameFx.init();
+        DismantleFx.init();
+        net.seep.odd.abilities.artificer.mixer.brew.FrostyStepsEffect.Client.init();
+        net.seep.odd.abilities.artificer.mixer.brew.client.AutoColdFx.init();
+
+        SnowgraveAuroraFx.init();
+
+        AmplifiedJudgementFx.init();
+        EntityRendererRegistry.register(ModEntities.ICE_STATUE, IceStatueEntityRenderer::new);
+        IceStatueNet.initClient();
+
+
+
+
+
 
         // Spectral Phase (client)
         SpectralRenderState.installClientTickKeepAlive();
@@ -276,6 +327,15 @@ public final class OdditiesClient implements ClientModInitializer {
         CosmicPower.Client.init();
         net.seep.odd.abilities.cosmic.CosmicNet.Client.register();
         CosmicCpmBridge.init();
+        net.seep.odd.abilities.cosmic.client.CosmicChargeFx.init();
+        net.seep.odd.abilities.cosmic.client.CosmicDashTrailFx.init();
+        net.seep.odd.abilities.cosmic.CosmicFxNet.initClient();
+        net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry.register(
+                net.seep.odd.block.ModBlocks.COSMIC_KATANA_BLOCK_BE,
+                net.seep.odd.block.cosmic_katana.client.CosmicKatanaBlockRenderer::new
+        );
+
+        net.seep.odd.block.cosmic_katana.CosmicKatanaBlockNet.initClient();
 
         // Ghostling (Client)
         net.seep.odd.abilities.ghostlings.registry.GhostScreens.register();
@@ -369,6 +429,7 @@ public final class OdditiesClient implements ClientModInitializer {
         FlowerMenuClient.init();
         FalseFlowerAuraClient.init();
         net.seep.odd.abilities.fairy.client.FairyManaHudClient.init();
+        FairyBeamClient.init();
 
 
 
@@ -384,6 +445,9 @@ public final class OdditiesClient implements ClientModInitializer {
         // Client init ONLY
         EntityRendererRegistry.register(ModEntities.FIRE_SWORD_PROJECTILE,
                 net.seep.odd.abilities.firesword.client.FireSwordProjectileRenderer::new);
+        FireSwordFx.init();
+        FireSwordNet.initClient();
+
 
         // Glitch Power (Client)
         GlitchPower.Client.init();
@@ -393,6 +457,9 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Accelerate Power (Client)
         AcceleratePower.Client.init();
+        AccelerateFx.init();
+        AccelerateWorldBurstFx.init();
+
 
         // Conquer (Client)
 
@@ -402,6 +469,7 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Cultist (Client)
         net.seep.odd.entity.cultist.client.ShyGuyClientSounds.init();
+        net.seep.odd.abilities.cultist.CultistNet.initClient();
 
         // Climber (Client)
         ClimberClient.init();
@@ -449,6 +517,18 @@ public final class OdditiesClient implements ClientModInitializer {
 
         // Wizard (Client)
         net.seep.odd.abilities.wizard.client.WizardClientInit.initClient();
+
+        // EVENT (ALIEN INVASION CLIENT)
+        net.seep.odd.event.alien.net.AlienInvasionNet.registerClientReceivers();
+        net.seep.odd.event.alien.client.fx.AlienOverworldSkyFx.init();
+        net.seep.odd.event.alien.client.fx.AlienPillarFx.init();
+
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client ->
+                net.seep.odd.event.alien.client.AlienInvasionClientState.clientTick()
+        );
+        net.seep.odd.event.alien.client.sky.AlienOverworldSkyCore.init();
+        AlienOverworldGradeClient.init();
+
 
 
 

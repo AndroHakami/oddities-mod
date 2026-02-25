@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/block/supercooker/SuperCookerBlockEntity.java
 package net.seep.odd.block.supercooker;
 
 import net.fabricmc.fabric.api.registry.FuelRegistry;
@@ -17,6 +18,7 @@ import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.BlockPos;
 import net.seep.odd.abilities.chef.Chef;
 import net.seep.odd.abilities.chef.ChefFridgeData;
+import net.seep.odd.abilities.chef.ChefFuelData;
 import net.seep.odd.abilities.chef.net.ChefNet;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.supercooker.recipe.SuperCookerRecipe;
@@ -27,18 +29,29 @@ import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache
 import software.bernie.geckolib.core.animation.*;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Optional;
+import java.util.UUID;
 
 public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntity {
 
-    private final DefaultedList<ItemStack> fuelInv = DefaultedList.ofSize(1, ItemStack.EMPTY);
+    /* =========================
+       Fuel (persistent like fridge)
+       ========================= */
 
-    // cooktop
-    private final DefaultedList<ItemStack> cookInv = DefaultedList.ofSize(5, ItemStack.EMPTY);
-    private final DefaultedList<ItemStack> cookingDisplay = DefaultedList.ofSize(5, ItemStack.EMPTY);
+    @Nullable private UUID owner = null;    // whoever first used this cooker
+    private boolean fuelPresent = false;     // synced to client for visuals
 
     private int burnTime = 0;
     private int burnTimeTotal = 0;
+
+    /* =========================
+       Cooktop
+       ========================= */
+
+    private final DefaultedList<ItemStack> cookInv = DefaultedList.ofSize(5, ItemStack.EMPTY);
+    private final DefaultedList<ItemStack> cookingDisplay = DefaultedList.ofSize(5, ItemStack.EMPTY);
 
     private boolean cooking = false;
     private boolean finished = false;
@@ -92,7 +105,7 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
 
     /** Texture swap ONLY when there’s fuel present/burning. */
     public boolean isFueledVisual() {
-        return burnTime > 0 || !fuelInv.get(0).isEmpty();
+        return burnTime > 0 || fuelPresent;
     }
 
     /** Used by renderer: show ingredients while cooking; otherwise show placed. */
@@ -105,45 +118,118 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
         return finished ? result : ItemStack.EMPTY;
     }
 
-    public boolean hasFuelAvailable() {
+    /* =========================
+       Owner + persistent fuel helpers
+       ========================= */
+
+    private UUID ensureOwner(PlayerEntity p) {
+        if (owner == null) {
+            owner = p.getUuid();
+            // refresh visual cache immediately on server
+            if (world instanceof ServerWorld sw) refreshFuelPresent(sw);
+            markDirtyAndSync();
+        }
+        return owner;
+    }
+
+    private void refreshFuelPresent(ServerWorld sw) {
+        if (owner == null) { fuelPresent = false; return; }
+        ChefFuelData data = ChefFuelData.get(sw);
+        ItemStack fuel = data.getList(owner).get(0);
+        fuelPresent = fuel != null && !fuel.isEmpty();
+    }
+
+    private boolean hasFuelAvailable(ServerWorld sw, PlayerEntity context) {
         if (burnTime > 0) return true;
-        ItemStack fuel = fuelInv.get(0);
+
+        UUID key = (owner != null) ? owner : context.getUuid();
+        ChefFuelData data = ChefFuelData.get(sw);
+        ItemStack fuel = data.getList(key).get(0);
+
         if (fuel.isEmpty()) return false;
         Integer t = FuelRegistry.INSTANCE.get(fuel.getItem());
         return t != null && t > 0;
     }
 
+    private void tryConsumeFuelIfNeeded(ServerWorld sw) {
+        if (burnTime > 0) return;
+        if (owner == null) return;
+
+        ChefFuelData data = ChefFuelData.get(sw);
+        var list = data.getList(owner);
+        ItemStack fuel = list.get(0);
+
+        Integer t = fuel.isEmpty() ? null : FuelRegistry.INSTANCE.get(fuel.getItem());
+        if (t == null || t <= 0) return;
+
+        burnTime = t;
+        burnTimeTotal = t;
+
+        fuel.decrement(1);
+        if (fuel.isEmpty()) list.set(0, ItemStack.EMPTY);
+
+        data.markDirty();
+        refreshFuelPresent(sw);
+        markDirtyAndSync();
+    }
+
     /* ----------------- UI inventories ----------------- */
 
-    /** Vanilla 9x1 UI; only slot 0 is real. Invalid items are spat out. */
-    public Inventory fuelUiInventory() {
+    /** Vanilla 9x1 UI; only slot 0 is real. Fuel is stored per-player persistently (like fridge). */
+    public Inventory fuelUiInventory(PlayerEntity player) {
+        if (!(world instanceof ServerWorld sw)) return new SimpleInventory(9);
+
+        UUID key = ensureOwner(player);
+        ChefFuelData data = ChefFuelData.get(sw);
+        var list = data.getList(key);
+
+        // keep visual cache fresh when UI opens
+        refreshFuelPresent(sw);
+
         return new UiInventory(9) {
             @Override public ItemStack getStack(int slot) {
-                return slot == 0 ? fuelInv.get(0) : ItemStack.EMPTY;
+                return slot == 0 ? list.get(0) : ItemStack.EMPTY;
             }
+
             @Override public void setStack(int slot, ItemStack stack) {
                 if (slot != 0 || !isValid(slot, stack)) {
                     spill(stack);
-                    // keep UI slot empty
+                    data.markDirty();
+                    refreshFuelPresent(sw);
                     markDirtyAndSync();
                     return;
                 }
-                fuelInv.set(0, stack == null ? ItemStack.EMPTY : stack);
+
+                list.set(0, stack == null ? ItemStack.EMPTY : stack);
                 if (stack != null && stack.getCount() > getMaxCountPerStack()) stack.setCount(getMaxCountPerStack());
+
+                data.markDirty();
+                refreshFuelPresent(sw);
                 markDirtyAndSync();
             }
+
             @Override public ItemStack removeStack(int slot, int amount) {
                 if (slot != 0) return ItemStack.EMPTY;
-                ItemStack out = Inventories.splitStack(fuelInv, 0, amount);
-                if (!out.isEmpty()) markDirtyAndSync();
+                ItemStack out = Inventories.splitStack(list, 0, amount);
+                if (!out.isEmpty()) {
+                    data.markDirty();
+                    refreshFuelPresent(sw);
+                    markDirtyAndSync();
+                }
                 return out;
             }
+
             @Override public ItemStack removeStack(int slot) {
                 if (slot != 0) return ItemStack.EMPTY;
-                ItemStack out = Inventories.removeStack(fuelInv, 0);
-                if (!out.isEmpty()) markDirtyAndSync();
+                ItemStack out = Inventories.removeStack(list, 0);
+                if (!out.isEmpty()) {
+                    data.markDirty();
+                    refreshFuelPresent(sw);
+                    markDirtyAndSync();
+                }
                 return out;
             }
+
             @Override public boolean isValid(int slot, ItemStack stack) {
                 if (slot != 0) return false;
                 if (stack == null || stack.isEmpty()) return true;
@@ -155,7 +241,7 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
 
     /**
      * Vanilla 9x3 UI (27 slots) but only first 20 are used.
-     * Enderchest-like: shared per-player via ChefFridgeData (stored in overworld state).
+     * Enderchest-like: shared per-player via ChefFridgeData.
      */
     public Inventory fridgeUiInventory(PlayerEntity player) {
         if (!(world instanceof ServerWorld sw)) return new SimpleInventory(27);
@@ -176,7 +262,6 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
                 }
 
                 if (stack != null && !stack.isEmpty() && !Chef.isIngredient(stack)) {
-                    // don't delete—throw it out
                     spill(stack);
                     data.markDirty();
                     return;
@@ -202,11 +287,7 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
             }
 
             @Override public void markDirty() { data.markDirty(); }
-
-            @Override public boolean isValid(int slot, ItemStack stack) {
-                // allow handler to try insert; we enforce + spill in setStack
-                return true;
-            }
+            @Override public boolean isValid(int slot, ItemStack stack) { return true; }
         };
     }
 
@@ -275,10 +356,8 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
         return false;
     }
 
-    /** Despawn/break helper: drops fuel + ingredients + in-progress + result (NOT fridge). */
+    /** Despawn/break helper: drops ingredients + in-progress + result. Fuel is NOT dropped anymore. */
     public void dropAllCookerContents(ServerWorld sw) {
-        dropStack(sw, fuelInv.get(0)); fuelInv.set(0, ItemStack.EMPTY);
-
         for (int i = 0; i < cookInv.size(); i++) {
             dropStack(sw, cookInv.get(i));
             cookInv.set(i, ItemStack.EMPTY);
@@ -302,11 +381,13 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
         sw.spawnEntity(e);
     }
 
-    /** Right-click stir: requires ingredients + fuel to START; anim once; minigame scoring. */
+    /** Right-click stir: requires ingredients + fuel to START; minigame scoring. */
     public void serverStir(PlayerEntity player) {
         if (!(world instanceof ServerWorld sw)) return;
 
-        // If not started yet, require ingredients first
+        ensureOwner(player);
+        refreshFuelPresent(sw);
+
         if (!cooking && !finished) {
             boolean hasAny = false;
             for (int i = 0; i < cookInv.size(); i++) {
@@ -317,20 +398,15 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
                 return;
             }
 
-            // require fuel to begin cooking
-            if (!hasFuelAvailable()) {
+            if (!hasFuelAvailable(sw, player)) {
                 player.sendMessage(net.minecraft.text.Text.literal("Fuel the cooker first!"), true);
                 return;
             }
         }
 
-        // visual swirl for renderer
         stirVisualTicks = 12;
-
-        // trigger geckolib stir animation once
         ChefNet.s2cCookerAnim(sw, pos, "stir");
 
-        // First stir starts cooking attempt
         if (!cooking && !finished) {
             startCookingOrMush(sw);
             markDirtyAndSync();
@@ -350,8 +426,12 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
     }
 
     private void startCookingOrMush(ServerWorld sw) {
+        // ✅ always consume/ignite fuel when you begin cooking attempt
+        tryConsumeFuelIfNeeded(sw);
+
         Optional<SuperCookerRecipe> match = findMatchingRecipe(sw);
         if (match.isEmpty()) {
+            // ✅ mush should consume ingredients too
             finishIntoMush(sw);
             return;
         }
@@ -377,7 +457,6 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
         misses = 0;
         stirWindow = 8;
 
-        tryConsumeFuelIfNeeded();
         scheduleFirstStir(sw);
     }
 
@@ -395,23 +474,7 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
     private Optional<SuperCookerRecipe> findMatchingRecipe(ServerWorld sw) {
         SimpleInventory inv = new SimpleInventory(cookInv.size());
         for (int i = 0; i < cookInv.size(); i++) inv.setStack(i, cookInv.get(i));
-
         return sw.getRecipeManager().getFirstMatch(ModRecipes.SUPER_COOKER_TYPE, inv, sw);
-    }
-
-
-    private void tryConsumeFuelIfNeeded() {
-        if (burnTime > 0) return;
-
-        ItemStack fuel = fuelInv.get(0);
-        Integer t = fuel.isEmpty() ? null : FuelRegistry.INSTANCE.get(fuel.getItem());
-        if (t == null || t <= 0) return;
-
-        burnTime = t;
-        burnTimeTotal = t;
-
-        fuel.decrement(1);
-        if (fuel.isEmpty()) fuelInv.set(0, ItemStack.EMPTY);
     }
 
     private void finishIntoMush(ServerWorld sw) {
@@ -420,6 +483,8 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
         result = new ItemStack(ModItems.MUSH);
         plannedOutput = ItemStack.EMPTY;
 
+        // ✅ CONSUME ingredients even on failure
+        for (int i = 0; i < cookInv.size(); i++) cookInv.set(i, ItemStack.EMPTY);
         for (int i = 0; i < cookingDisplay.size(); i++) cookingDisplay.set(i, ItemStack.EMPTY);
 
         spawnDoneSparkles(sw, false);
@@ -485,9 +550,8 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
         if (be.burnTime > 0) be.burnTime--;
 
         if (be.cooking) {
-            if (be.burnTime == 0) be.tryConsumeFuelIfNeeded();
+            if (be.burnTime == 0) be.tryConsumeFuelIfNeeded(sw);
 
-            // smoke while cooking (top)
             if (be.burnTime > 0 && sw.random.nextFloat() < 0.18f) {
                 double x = pos.getX() + 0.5;
                 double y = pos.getY() + (18.0 / 16.0) + 0.03;
@@ -536,13 +600,12 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
 
     /* ----------------- drops ----------------- */
 
-    /** Used on block-break. Note: fridge is global, so it is NOT dropped. */
+    /** Used on block-break. Fuel is persistent, so it is NOT dropped. */
     public Inventory asDropInventory() {
-        // fuel(1) + cookInv(5) + cookingDisplay(5) + result(1)
-        SimpleInventory inv = new SimpleInventory(12);
+        // cookInv(5) + cookingDisplay(5) + result(1) = 11
+        SimpleInventory inv = new SimpleInventory(11);
         int i = 0;
 
-        inv.setStack(i++, fuelInv.get(0));
         for (ItemStack s : cookInv) inv.setStack(i++, s);
         for (ItemStack s : cookingDisplay) inv.setStack(i++, s);
         inv.setStack(i, result);
@@ -569,9 +632,9 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
     public void writeNbt(NbtCompound nbt) {
         super.writeNbt(nbt);
 
-        NbtCompound fuel = new NbtCompound();
-        Inventories.writeNbt(fuel, fuelInv);
-        nbt.put("FuelInv", fuel);
+        // owner + fuel presence cache (fuel itself is in ChefFuelData)
+        if (owner != null) nbt.putUuid("Owner", owner);
+        nbt.putBoolean("FuelPresent", fuelPresent);
 
         NbtCompound cook = new NbtCompound();
         Inventories.writeNbt(cook, cookInv);
@@ -614,8 +677,8 @@ public class SuperCookerBlockEntity extends BlockEntity implements GeoBlockEntit
     public void readNbt(NbtCompound nbt) {
         super.readNbt(nbt);
 
-        clear(fuelInv);
-        Inventories.readNbt(nbt.getCompound("FuelInv"), fuelInv);
+        owner = nbt.contains("Owner") ? nbt.getUuid("Owner") : null;
+        fuelPresent = nbt.getBoolean("FuelPresent");
 
         clear(cookInv);
         Inventories.readNbt(nbt.getCompound("CookInv"), cookInv);

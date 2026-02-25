@@ -1,3 +1,4 @@
+// FILE: src/main/java/net/seep/odd/abilities/artificer/item/client/ArtificerVacuumRenderer.java
 package net.seep.odd.abilities.artificer.item.client;
 
 import net.minecraft.client.render.RenderLayer;
@@ -11,13 +12,16 @@ public final class ArtificerVacuumRenderer extends GeoItemRenderer<ArtificerVacu
 
     public ArtificerVacuumRenderer() {
         super(new ArtificerVacuumModel());
+
+        // ✅ init looping sounds (safe to call multiple times)
+
+
         this.addRenderLayer(new AutoGlowingGeoLayer<>(this));
-        this.addRenderLayer(new VacuumBeamLayer(this)); //
-        // No extra layers -> no glow.
+        this.addRenderLayer(new VacuumBeamLayer(this)); // now particle tornado
     }
 
     public RenderLayer getRenderType(ArtificerVacuumItem anim, Identifier texture,
                                      VertexConsumerProvider buffers, float pt) {
-        return RenderLayer.getEntityTranslucent(texture); // enables alpha blending
+        return RenderLayer.getEntityTranslucent(texture);
     }
 }

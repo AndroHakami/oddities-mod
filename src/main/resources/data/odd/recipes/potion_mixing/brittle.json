@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["gaia", "death", "light"],
+  "per": 450,
+  "kind": "THROW",
+  "count": 3,
+  "brewId": "brittle",
+  "color": 13631460
+}

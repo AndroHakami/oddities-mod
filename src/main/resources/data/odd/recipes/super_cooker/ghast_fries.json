@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:potato" },
+    { "item": "minecraft:ghast_tear" },
+    { "item": "minecraft:bowl" }
+  ],
+  "result": { "item": "odd:ghast_fries", "count": 2 },
+  "cookTime": 600,
+  "minStirs": 2
+}

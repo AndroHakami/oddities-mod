@@ -14,6 +14,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.power.ClimberPower;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -39,47 +40,31 @@ public class ClimberRopeAnchorEntity extends Entity {
         this.dataTracker.startTracking(ROPE_LEN, 6.0f);
     }
 
-    public void setOwnerUuid(UUID id) {
-        this.dataTracker.set(OWNER, Optional.ofNullable(id));
-    }
-
-    public UUID getOwnerUuid() {
-        return this.dataTracker.get(OWNER).orElse(null);
-    }
+    public void setOwnerUuid(UUID id) { this.dataTracker.set(OWNER, Optional.ofNullable(id)); }
+    public UUID getOwnerUuid() { return this.dataTracker.get(OWNER).orElse(null); }
 
     public void setRopeLength(float len) {
-        // max is now 30m
         this.dataTracker.set(ROPE_LEN, Math.max(2.0f, Math.min(30.0f, len)));
     }
+    public float getRopeLength() { return this.dataTracker.get(ROPE_LEN); }
 
-    public float getRopeLength() {
-        return this.dataTracker.get(ROPE_LEN);
-    }
-
-    public void setAttachedBlockPos(BlockPos pos) {
-        this.attachedBlockPos = pos;
-    }
-
-    public BlockPos getAttachedBlockPos() {
-        return attachedBlockPos;
-    }
+    public void setAttachedBlockPos(BlockPos pos) { this.attachedBlockPos = pos; }
+    public BlockPos getAttachedBlockPos() { return attachedBlockPos; }
 
     @Override
     public void tick() {
         super.tick();
-
         if (this.getWorld().isClient) return;
-
-        UUID ownerId = getOwnerUuid();
-        if (ownerId == null) {
-            this.discard();
-            return;
-        }
-
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
 
+        UUID ownerId = getOwnerUuid();
+        if (ownerId == null) { this.discard(); return; }
+
         ServerPlayerEntity owner = sw.getServer().getPlayerManager().getPlayer(ownerId);
-        if (owner == null || !owner.isAlive()) {
+        if (owner == null || !owner.isAlive()) { this.discard(); return; }
+
+        // ✅ POWERLESS OR LOST POWER: drop rope immediately
+        if (owner.hasStatusEffect(ModStatusEffects.POWERLESS) || !ClimberPower.hasClimber(owner)) {
             this.discard();
             return;
         }
@@ -96,14 +81,10 @@ public class ClimberRopeAnchorEntity extends Entity {
         boolean sneak = (in & ClimberPower.IN_SNEAK) != 0;
 
         float L = getRopeLength();
-        if (jump && !sneak) {
-            L -= 0.32f;
-        } else if (sneak && !jump) {
-            L += 0.32f;
-        }
+        if (jump && !sneak) L -= 0.32f;
+        else if (sneak && !jump) L += 0.32f;
         setRopeLength(L);
 
-        // Rope vectors
         Vec3d anchor = this.getPos();
         Vec3d waist  = ClimberPower.ropeOrigin(owner);
 
@@ -117,9 +98,7 @@ public class ClimberRopeAnchorEntity extends Entity {
         double ropeLen = getRopeLength();
         Vec3d dir = r.multiply(1.0 / d); // anchor -> player
 
-        // =========================
-        // Tiny swing pump (WASD -> tangential impulse)
-        // =========================
+        // swing pump (WASD -> tangential impulse)
         boolean f = (in & ClimberPower.IN_FORWARD) != 0;
         boolean b = (in & ClimberPower.IN_BACK) != 0;
         boolean l = (in & ClimberPower.IN_LEFT) != 0;
@@ -139,13 +118,9 @@ public class ClimberRopeAnchorEntity extends Entity {
 
             if (wish.lengthSquared() > 1.0e-6) {
                 Vec3d wishDir = wish.normalize();
-
-                // tangential (remove component along rope)
                 Vec3d tang = wishDir.subtract(dir.multiply(wishDir.dotProduct(dir)));
                 if (tang.lengthSquared() > 1.0e-6) {
-                    double pump = 0.055; // tiny boost
-
-                    // if slack, reduce pump
+                    double pump = 0.055;
                     if (d < ropeLen * 0.95) pump *= 0.40;
 
                     Vec3d v = owner.getVelocity().add(tang.normalize().multiply(pump));
@@ -156,21 +131,14 @@ public class ClimberRopeAnchorEntity extends Entity {
             }
         }
 
-        // =========================
-        // Rope tension constraint (when taut)
-        // =========================
+        // tension constraint
         if (d > ropeLen) {
             double error = d - ropeLen;
-
             Vec3d v = owner.getVelocity();
 
-            // Remove outward radial velocity
             double vRad = v.dotProduct(dir);
-            if (vRad > 0.0) {
-                v = v.subtract(dir.multiply(vRad));
-            }
+            if (vRad > 0.0) v = v.subtract(dir.multiply(vRad));
 
-            // Snappy constraint
             double pull = Math.min(1.45, error * 0.65);
             v = v.subtract(dir.multiply(pull));
 
@@ -181,7 +149,6 @@ public class ClimberRopeAnchorEntity extends Entity {
             owner.fallDistance = 0.0f;
         }
 
-        // Gentle horizontal drag while tethered (keeps things from going infinite)
         Vec3d v = owner.getVelocity();
         double drag = 0.992;
         owner.setVelocity(v.x * drag, v.y, v.z * drag);
@@ -211,15 +178,9 @@ public class ClimberRopeAnchorEntity extends Entity {
         }
     }
 
+    public boolean collides() { return false; }
 
-    public boolean collides() {
-        return false;
-    }
-
-    @Override
-    public boolean shouldRender(double distance) {
-        return true;
-    }
+    @Override public boolean shouldRender(double distance) { return true; }
 
     public static ClimberRopeAnchorEntity findAnchor(MinecraftServer server, UUID id) {
         for (ServerWorld w : server.getWorlds()) {

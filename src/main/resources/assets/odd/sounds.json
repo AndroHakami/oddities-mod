@@ -12,6 +12,66 @@
       "odd:shy_guy_rage"
     ]
   },
+  "vacuum_essence": {
+    "subtitle": "odd.vacuum_essence",
+    "sounds": [
+      "odd:vacuum_essence"
+    ]
+  },
+  "cosmic_prepare": {
+    "subtitle": "odd.cosmic_prepare",
+    "sounds": [
+      "odd:cosmic_prepare"
+    ]
+  },
+  "cosmic_dash": {
+    "subtitle": "odd.cosmic_dash",
+    "sounds": [
+      "odd:cosmic_dash"
+    ]
+  },
+  "vacuum_suck": {
+    "subtitle": "odd.vacuum_suck",
+    "sounds": [
+      "odd:vacuum_suck"
+    ]
+  },
+  "vacuum_idle": {
+    "subtitle": "odd.vacuum_idle",
+    "sounds": [
+      "odd:vacuum_idle"
+    ]
+  },
+  "flash_recall": {
+    "subtitle": "odd.flash_recall",
+    "sounds": [
+      "odd:flash_recall"
+    ]
+  },
+  "cultist_divine": {
+    "subtitle": "odd.cultist_divine",
+    "sounds": [
+      "odd:cultist_divine"
+    ]
+  },
+  "holy_ray": {
+    "subtitle": "odd.holy_ray",
+    "sounds": [
+      "odd:holy_ray"
+    ]
+  },
+  "creation": {
+    "subtitle": "odd.creation",
+    "sounds": [
+      "odd:creation"
+    ]
+  },
+  "refraction": {
+    "subtitle": "odd.refraction",
+    "sounds": [
+      "odd:refraction"
+    ]
+  },
   "shy_guy_rage_run": {
     "subtitle": "odd.shy_guy_rage_run",
     "sounds": [
@@ -296,6 +356,12 @@
     "subtitle": "drill",
     "sounds": [
       "odd:drill"
+    ]
+  },
+  "alien_invasion": {
+    "subtitle": "odd.alien_invasion",
+    "sounds": [
+      "odd:alien_invasion"
     ]
   },
   "drill_charge": {

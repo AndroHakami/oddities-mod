@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:milk_bucket" },
+    { "item": "minecraft:heart_of_the_sea" },
+    { "item": "minecraft:sugar" }
+  ],
+  "result": { "item": "odd:yanbu_icecream", "count": 3 },
+  "cookTime": 100,
+  "minStirs": 4
+}

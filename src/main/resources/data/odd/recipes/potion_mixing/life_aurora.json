@@ -1,0 +1,9 @@
+{
+    "type": "odd:potion_mixing",
+    "essences": ["hot", "light", "life"],
+    "per": 500,
+    "kind": "THROW",
+    "count": 1,
+    "brewId": "life_aurora",
+    "color": 16757755
+}

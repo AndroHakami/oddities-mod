@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/cosmic/ability/DimensionalSlashAbility.java
 package net.seep.odd.abilities.cosmic.ability;
 
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
@@ -16,21 +17,18 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.cosmic.CosmicFxNet;
+import net.seep.odd.item.ModItems;
+import net.seep.odd.sound.ModSounds;
 
 import java.util.List;
 
-/**
- * Dimensional Slash:
- *  - beginCharge: subtle audio cue.
- *  - releaseAndSlash(heldTicks): raycast, damage along a fat line, blink to a safe endpoint,
- *    then spawn a rift visual bridging start/end.
- */
 public final class DimensionalSlashAbility {
 
-    private static final int   CHARGE_MAX_TICKS    = 14;   // matches CosmicPower.STANCE_MAX_TICKS
+    private static final int   CHARGE_MAX_TICKS    = 14;
     private static final double RANGE_MIN          = 6.0;
     private static final double RANGE_MAX          = 14.0;
-    private static final double LINE_RADIUS        = 1.6;  // wider “line”
+    private static final double LINE_RADIUS        = 1.6;
     private static final float  DAMAGE_MIN         = 7.0f;
     private static final float  DAMAGE_MAX         = 16.0f;
     private static final double KNOCKBACK_STRENGTH = 0.65;
@@ -38,54 +36,68 @@ public final class DimensionalSlashAbility {
 
     private static final double MIN_TRAVEL = 1.25;
 
+    private static boolean hasKatana(ServerPlayerEntity p) {
+        return p.getMainHandStack().isOf(ModItems.COSMIC_KATANA) || p.getOffHandStack().isOf(ModItems.COSMIC_KATANA);
+    }
+
     public void beginCharge(ServerPlayerEntity p) {
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
+
+        // if you somehow started charge without katana, don't do cues
+        if (!hasKatana(p)) return;
+
         sw.playSound(null, p.getX(), p.getY(), p.getZ(),
-                SoundEvents.BLOCK_RESPAWN_ANCHOR_CHARGE, SoundCategory.PLAYERS, 0.35f, 1.55f);
+                ModSounds.COSMIC_PREPARE, SoundCategory.PLAYERS, 1f, 1.0f);
     }
 
     public void releaseAndSlash(ServerPlayerEntity p, int heldTicks) {
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
 
+        // server-authoritative gate
+        if (!hasKatana(p)) return;
+
         float t      = MathHelper.clamp(heldTicks / (float)CHARGE_MAX_TICKS, 0.0f, 1.0f);
         double range = MathHelper.lerp(t, RANGE_MIN, RANGE_MAX);
         float dmg    = (float)MathHelper.lerp(t, DAMAGE_MIN, DAMAGE_MAX);
 
-        Vec3d start = p.getEyePos();
+        Vec3d startEye = p.getEyePos();
         Vec3d look  = p.getRotationVec(1.0f).normalize();
-        Vec3d endWanted = start.add(look.multiply(range));
+        Vec3d endWanted = startEye.add(look.multiply(range));
 
         BlockHitResult bhr = p.getWorld().raycast(new RaycastContext(
-                start, endWanted, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, p));
+                startEye, endWanted, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, p));
 
         Vec3d end = (bhr.getType() == HitResult.Type.BLOCK)
                 ? bhr.getPos().subtract(look.multiply(0.35))
                 : endWanted;
 
-        Vec3d safe = findNearestSafeFeetPos(sw, p, end, look, 0.6, 14);
-        if (safe.squaredDistanceTo(p.getPos()) < (MIN_TRAVEL * MIN_TRAVEL)) {
+        Vec3d safeFeet = findNearestSafeFeetPos(sw, p, end, look, 0.6, 14);
+        if (safeFeet.squaredDistanceTo(p.getPos()) < (MIN_TRAVEL * MIN_TRAVEL)) {
             Vec3d nudged = p.getPos().add(look.multiply(MIN_TRAVEL));
             Vec3d again  = findNearestSafeFeetPos(sw, p, nudged, look, 0.4, 10);
-            if (again.squaredDistanceTo(p.getPos()) >= (0.6 * 0.6)) safe = again;
+            if (again.squaredDistanceTo(p.getPos()) >= (0.6 * 0.6)) safeFeet = again;
         }
 
-        // Damage + FX along [start -> safe]
-        slashLineDamage(sw, p, start, safe, look, dmg, LINE_RADIUS);
-        drawLineParticles(sw, start, safe);
+        slashLineDamage(sw, p, startEye, safeFeet, look, dmg, LINE_RADIUS);
+        drawLineParticles(sw, startEye, safeFeet);
 
-        // Sounds
         sw.playSound(null, p.getX(), p.getY(), p.getZ(),
                 SoundEvents.ENTITY_ENDERMAN_TELEPORT, SoundCategory.PLAYERS, 0.8f, 1.4f);
-        sw.playSound(null, safe.x, safe.y, safe.z,
-                SoundEvents.ENTITY_WARDEN_SONIC_BOOM, SoundCategory.PLAYERS, 0.35f, 1.6f);
+        sw.playSound(null, safeFeet.x, safeFeet.y, safeFeet.z,
+                ModSounds.COSMIC_DASH, SoundCategory.PLAYERS, 1.0f, 1.0f);
+
+        // Satin world trail (true dash path)
+        Vec3d endEye = safeFeet.add(0.0, p.getStandingEyeHeight(), 0.0);
+        float trailRadius = 0.85f + 0.03f * heldTicks;
+        int trailDur = 6 + (heldTicks / 2);
+        CosmicFxNet.broadcastDashTrail(p, startEye, endEye, trailRadius, trailDur);
 
         // Blink
         p.fallDistance = 0;
         p.setVelocity(0, 0, 0);
-        p.networkHandler.requestTeleport(safe.x, safe.y, safe.z, p.getYaw(), p.getPitch());
+        p.networkHandler.requestTeleport(safeFeet.x, safeFeet.y, safeFeet.z, p.getYaw(), p.getPitch());
 
-        // Rift visual (client can replace this with a textured beam)
-        CosmicNet.sendRift(sw, start, safe, 20 * 8);
+        CosmicNet.sendRift(sw, startEye, safeFeet, 20 * 8);
     }
 
     /* ------------ internals ------------ */

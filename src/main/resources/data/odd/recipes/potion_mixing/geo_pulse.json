@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "gaia", "life"],
+  "per": 300,
+  "kind": "THROW",
+  "count": 3,
+  "brewId": "geologic_pulse",
+  "color": 11557965
+}

@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["light", "death", "life"],
+  "per": 600,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "amplified_judgement",
+  "color": 16776614
+}

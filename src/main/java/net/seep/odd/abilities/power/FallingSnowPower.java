@@ -1,6 +1,7 @@
 // src/main/java/net/seep/odd/abilities/power/FallingSnowPower.java
 package net.seep.odd.abilities.power;
 
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.entity.Entity;
@@ -25,13 +26,16 @@ import net.seep.odd.abilities.fallingsnow.FallingSnowClient;
 import net.seep.odd.abilities.fallingsnow.FallingSnowNet;
 import net.seep.odd.abilities.fallingsnow.HealingSnowballEntity;
 import net.seep.odd.abilities.fallingsnow.OrbitingSnowballEntity;
+import net.seep.odd.status.ModStatusEffects;
+
+import java.util.UUID;
 
 public final class FallingSnowPower implements Power, ChargedPower, HoldReleasePower {
 
     /* ===== tuning ===== */
-    private static final double BLINK_RANGE = 6.0;
+    private static final double BLINK_RANGE = 8.0;
     private static final int PRIMARY_MAX_CHARGES = 2;
-    private static final int PRIMARY_RECHARGE_TICKS = 160; // ~8s per pip
+    private static final int PRIMARY_RECHARGE_TICKS = 80; // ~8s per pip
 
     private static final float LANDING_DAMAGE = 8.0f; // 4♥, armor-respecting
     private static final int BIG_MIN_HOLD_TICKS = 20; // 1s
@@ -75,9 +79,35 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
     @Override public int maxCharges(String slot)      { return "primary".equals(slot) ? PRIMARY_MAX_CHARGES : 0; }
     @Override public long rechargeTicks(String slot)  { return "primary".equals(slot) ? PRIMARY_RECHARGE_TICKS : 0L; }
 
+    /* =========================
+       POWERLESS gating (no cancel of active projectiles)
+       ========================= */
+
+    private static final Object2LongOpenHashMap<UUID> LAST_POWERLESS_MSG = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    /** Returns true if we should block ability use (POWERLESS). */
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
+
+        // don’t spam the actionbar every tick if they hold the key
+        long now = p.getServerWorld().getTime();
+        long last = LAST_POWERLESS_MSG.getOrDefault(p.getUuid(), Long.MIN_VALUE);
+        if (now - last >= 20) {
+            LAST_POWERLESS_MSG.put(p.getUuid(), now);
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
+        }
+        return true;
+    }
+
     /* ===== PRIMARY: blink ===== */
     @Override
     public void activate(ServerPlayerEntity p) {
+        if (blockIfPowerless(p)) return;
+
         ServerWorld sw = (ServerWorld) p.getWorld();
 
         Vec3d eye  = p.getCameraPosVec(1.0f);
@@ -126,6 +156,8 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
     @Override
     public void onHoldStart(ServerPlayerEntity p, String slot) {
         if (!"secondary".equals(slot)) return;
+        if (blockIfPowerless(p)) return;
+
         ServerWorld sw = (ServerWorld) p.getWorld();
 
         // spawn a single front-facing “core” if not present
@@ -140,13 +172,23 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
     @Override
     public void onHoldTick(ServerPlayerEntity p, String slot, int heldTicks) {
         if (!"secondary".equals(slot)) return;
+
+        // ✅ If POWERLESS kicks in mid-hold, remove only the *visual* core so it can’t get stuck.
+        // (Does NOT cancel any launched snowballs/projectiles.)
+        if (isPowerless(p)) {
+            ServerWorld sw = (ServerWorld) p.getWorld();
+            OrbitingSnowballEntity core = findOrbiting(sw, p);
+            if (core != null) core.discard();
+            blockIfPowerless(p);
+            return;
+        }
+
         ServerWorld sw = (ServerWorld) p.getWorld();
 
         // sucking snowflakes into the core
         OrbitingSnowballEntity core = findOrbiting(sw, p);
         if (core != null) {
             Vec3d c = core.getPos();
-            // a quick ring of flakes that look like they drift inward
             for (int i = 0; i < 6; i++) {
                 double a = (i / 6.0) * Math.PI * 2.0;
                 double r = 0.8 + sw.random.nextDouble() * 0.4;
@@ -157,7 +199,6 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
                         (c.x - x) * 0.2, (c.y - y) * 0.2, (c.z - z) * 0.2, 0.01);
             }
 
-            // flip to BIG at threshold (visual turns to a snow block)
             if (heldTicks == BIG_MIN_HOLD_TICKS) {
                 core.setBig(true);
                 sw.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_LARGE_AMETHYST_BUD_BREAK, SoundCategory.PLAYERS, 0.9f, 0.9f);
@@ -167,8 +208,18 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
 
     @Override
     public void onHoldRelease(ServerPlayerEntity p, String slot, int heldTicks, boolean canceled) {
-        if (!"secondary".equals(slot) || canceled) return;
+        if (!"secondary".equals(slot)) return;
+
         ServerWorld sw = (ServerWorld) p.getWorld();
+
+        // If canceled OR powerless: just clean up the visual core and do nothing else.
+        if (canceled || isPowerless(p)) {
+            OrbitingSnowballEntity core = findOrbiting(sw, p);
+            if (core != null) core.discard();
+            if (isPowerless(p)) blockIfPowerless(p);
+            return;
+        }
+
         boolean big = heldTicks >= BIG_MIN_HOLD_TICKS;
 
         // remove the visual core if present

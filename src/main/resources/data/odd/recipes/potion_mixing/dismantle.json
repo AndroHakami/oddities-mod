@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "gaia", "death"],
+  "per": 500,
+  "kind": "THROW",
+  "count": 3,
+  "brewId": "dismantle",
+  "color": 16718381
+}

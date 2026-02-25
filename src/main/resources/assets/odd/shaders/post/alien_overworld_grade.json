@@ -1,0 +1,15 @@
+{
+  "targets": ["alien_overworld_grade"],
+  "passes": [
+    {
+      "name": "odd:alien_overworld_grade",
+      "intarget": "minecraft:main",
+      "outtarget": "alien_overworld_grade"
+    },
+    {
+      "name": "blit",
+      "intarget": "alien_overworld_grade",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

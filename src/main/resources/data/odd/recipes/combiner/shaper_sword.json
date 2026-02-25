@@ -1,0 +1,7 @@
+{
+  "type": "odd:combiner_forging",
+  "gear_kind": "sword",
+  "trim": { "item": "minecraft:shaper_armor_trim_smithing_template" },
+  "difficulty": 4,
+  "level": 1
+}

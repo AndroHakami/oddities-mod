@@ -184,14 +184,22 @@ public final class SuperChargePower implements Power {
     /* ======================= helpers ======================= */
     public static boolean isSupercharged(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
-        var nbt = stack.getOrCreateNbt();
-        return nbt.contains(NBT_KEY) && nbt.getBoolean(NBT_KEY);
+        var nbt = stack.getNbt(); // ✅ DO NOT create
+        return nbt != null && nbt.getBoolean(NBT_KEY);
     }
+
     public static void markSupercharged(ItemStack stack) {
-        stack.getOrCreateNbt().putBoolean(NBT_KEY, true);
+        if (stack == null || stack.isEmpty()) return;
+        stack.getOrCreateNbt().putBoolean(NBT_KEY, true); // ✅ ok (writing)
     }
+
     public static void clearSupercharged(ItemStack stack) {
-        stack.getOrCreateNbt().remove(NBT_KEY);
+        if (stack == null || stack.isEmpty()) return;
+        var nbt = stack.getNbt(); // ✅ do not create
+        if (nbt == null) return;
+        nbt.remove(NBT_KEY);
+        // optional: if you want, remove tag if empty (prevents leftover {})
+        if (nbt.isEmpty()) stack.setNbt(null);
     }
 
     private static void throwStack(ServerWorld sw, ServerPlayerEntity sp, ItemStack stack, float speed) {

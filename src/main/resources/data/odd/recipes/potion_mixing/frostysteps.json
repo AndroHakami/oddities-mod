@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["gaia", "cold", "death"],
+  "per": 400,
+  "kind": "DRINK",
+  "count": 2,
+  "brewId": "frosty_steps",
+  "color": 57343
+}

@@ -1,0 +1,15 @@
+{
+  "targets": [ "cosmic_dash" ],
+  "passes": [
+    {
+      "name": "odd:cosmic_dash",
+      "intarget": "minecraft:main",
+      "outtarget": "cosmic_dash"
+    },
+    {
+      "name": "blit",
+      "intarget": "cosmic_dash",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

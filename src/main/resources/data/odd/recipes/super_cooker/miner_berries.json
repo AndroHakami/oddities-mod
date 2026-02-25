@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:glow_berries" },
+    { "item": "minecraft:sugar" },
+    { "item": "minecraft:cocoa_beans" }
+  ],
+  "result": { "item": "odd:miner_berries", "count": 3 },
+  "cookTime": 200,
+  "minStirs": 2
+}

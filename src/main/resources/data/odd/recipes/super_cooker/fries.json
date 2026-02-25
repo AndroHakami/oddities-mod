@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:potato" },
+    { "item": "minecraft:potato" },
+    { "item": "minecraft:bowl" }
+  ],
+  "result": { "item": "odd:fries", "count": 2 },
+  "cookTime": 600,
+  "minStirs": 2
+}

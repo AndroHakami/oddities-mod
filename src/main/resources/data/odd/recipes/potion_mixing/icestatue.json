@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["life", "cold", "death"],
+  "per": 500,
+  "kind": "DRINK",
+  "count": 1,
+  "brewId": "ice_statue",
+  "color": 12450303
+}

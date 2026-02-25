@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "light", "death"],
+  "per": 150,
+  "kind": "THROW",
+  "count": 2,
+  "brewId": "black_flame",
+  "color": 4134218
+}

@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:sugar" },
+    { "item": "minecraft:honeycomb" },
+    { "item": "minecraft:bread" }
+  ],
+  "result": { "item": "odd:masoub", "count": 2 },
+  "cookTime": 300,
+  "minStirs": 5
+}

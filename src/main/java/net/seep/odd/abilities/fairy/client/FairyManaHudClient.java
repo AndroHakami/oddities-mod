@@ -1,4 +1,3 @@
-// src/main/java/net/seep/odd/abilities/fairy/client/FairyManaHudClient.java
 package net.seep.odd.abilities.fairy.client;
 
 import net.fabricmc.api.EnvType;
@@ -18,44 +17,44 @@ public final class FairyManaHudClient {
 
     private static boolean inited = false;
 
-    private static boolean hasFairy = false;
     private static float mana = 0f;
-    private static float max = 100f;
+    private static float max  = 100f;
+
+    // ✅ “heartbeat” gate: HUD is visible only if we recently got S2C mana sync
+    private static int ticksSinceSync = 9999;
+    private static final int SHOW_TIMEOUT_TICKS = 40; // ~2s (sync is every 5 ticks)
 
     /** Call once from client init. */
     public static void init() {
         if (inited) return;
         inited = true;
 
-        // ✅ server -> client mana HUD sync
+        // If you have the beam client file, init it here
+        try { FairyBeamClient.init(); } catch (Throwable ignored) {}
+
         ClientPlayNetworking.registerGlobalReceiver(FairyPower.S2C_MANA_SYNC, (client, handler, buf, resp) -> {
-            boolean hf = buf.readBoolean();
-            float m = buf.readFloat();
+            boolean hf = buf.readBoolean(); // keep reading (compat)
+            float m  = buf.readFloat();
             float mx = buf.readFloat();
             client.execute(() -> {
-                hasFairy = hf;                 // ✅ this is the "show/hide" gate
                 mana = m;
-                max = (mx <= 0f) ? 100f : mx;
-
-                // ✅ hard-hide if server says no fairy
-                if (!hasFairy) {
-                    mana = 0f;
-                    max = 100f;
-                }
+                max  = (mx <= 0f) ? 100f : mx;
+                ticksSinceSync = 0;
             });
         });
 
-        // ✅ hard reset on disconnect / world unload (prevents “stuck HUD”)
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> reset());
 
-        // ✅ draw
         HudRenderCallback.EVENT.register((ctx, tickDelta) -> {
             MinecraftClient mc = MinecraftClient.getInstance();
             if (mc.player == null) return;
 
-            // ✅ ONLY visible while fairy
-            if (!hasFairy) return;
+            // ✅ count up locally
+            ticksSinceSync++;
+
+            // ✅ only show while receiving fairy mana sync packets
+            if (ticksSinceSync > SHOW_TIMEOUT_TICKS) return;
 
             int sw = mc.getWindow().getScaledWidth();
             int sh = mc.getWindow().getScaledHeight();
@@ -63,16 +62,14 @@ public final class FairyManaHudClient {
             int barW = 120;
             int barH = 8;
             int x = (sw - barW) / 2;
-            int y = sh - 49; // a bit above hotbar
+            int y = sh - 49;
 
             float frac = (max <= 0f) ? 0f : MathHelper.clamp(mana / max, 0f, 1f);
             int fillW = (int) (barW * frac);
 
-            // border + bg
             ctx.fill(x - 1, y - 1, x + barW + 1, y + barH + 1, 0xAAFFFFFF);
             ctx.fill(x, y, x + barW, y + barH, 0x66000000);
 
-            // iridescent fill (animated)
             long t = (mc.world != null ? mc.world.getTime() : (System.currentTimeMillis() / 50L));
             float baseHue = (t % 240L) / 240f;
 
@@ -84,11 +81,10 @@ public final class FairyManaHudClient {
         });
     }
 
-    /** Force-hide the HUD locally. */
     public static void reset() {
-        hasFairy = false;
         mana = 0f;
         max = 100f;
+        ticksSinceSync = 9999;
     }
 
     private static int hsvToRgb(float h, float s, float v) {
@@ -109,13 +105,9 @@ public final class FairyManaHudClient {
         else if (hh < 5f) { r1 = x; g1 = 0; b1 = c; }
         else              { r1 = c; g1 = 0; b1 = x; }
 
-        int r = (int) ((r1 + m) * 255f);
-        int g = (int) ((g1 + m) * 255f);
-        int b = (int) ((b1 + m) * 255f);
-
-        r = MathHelper.clamp(r, 0, 255);
-        g = MathHelper.clamp(g, 0, 255);
-        b = MathHelper.clamp(b, 0, 255);
+        int r = MathHelper.clamp((int)((r1 + m) * 255f), 0, 255);
+        int g = MathHelper.clamp((int)((g1 + m) * 255f), 0, 255);
+        int b = MathHelper.clamp((int)((b1 + m) * 255f), 0, 255);
 
         return (r << 16) | (g << 8) | b;
     }

@@ -1,0 +1,7 @@
+{
+  "targets": [ "dismantle" ],
+  "passes": [
+    { "name": "odd:dismantle", "intarget": "minecraft:main", "outtarget": "dismantle" },
+    { "name": "blit", "intarget": "dismantle", "outtarget": "minecraft:main" }
+  ]
+}

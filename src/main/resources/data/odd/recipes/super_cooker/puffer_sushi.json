@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:dried_kelp" },
+    { "item": "minecraft:pufferfish" },
+    { "item": "minecraft:wheat" }
+  ],
+  "result": { "item": "odd:puffer_sushi", "count": 3 },
+  "cookTime": 200,
+  "minStirs": 4
+}

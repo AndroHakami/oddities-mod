@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:egg" },
+    { "item": "minecraft:milk_bucket" },
+    { "item": "minecraft:wheat" }
+  ],
+  "result": { "item": "odd:ramen", "count": 2 },
+  "cookTime": 150,
+  "minStirs": 2
+}

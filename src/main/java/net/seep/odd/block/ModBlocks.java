@@ -1,6 +1,7 @@
 package net.seep.odd.block;
 
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
+import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 
 import net.minecraft.block.AbstractBlock;
@@ -18,6 +19,10 @@ import net.seep.odd.Oddities;
 import net.seep.odd.abilities.artificer.mixer.PotionMixerMegaBlock;
 import net.seep.odd.abilities.artificer.mixer.PotionMixerBlockEntity;
 
+import net.seep.odd.block.combiner.CombinerBlock;
+import net.seep.odd.block.combiner.CombinerBlockEntity;
+import net.seep.odd.block.cosmic_katana.CosmicKatanaBlock;
+import net.seep.odd.block.cosmic_katana.CosmicKatanaBlockEntity;
 import net.seep.odd.block.cultist.CentipedeSpawnBlock;
 import net.seep.odd.block.cultist.CentipedeSpawnBlockEntity;
 
@@ -60,6 +65,17 @@ public class ModBlocks {
             Registries.BLOCK, id("raw_ruby_block"),
             new Block(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK).sounds(BlockSoundGroup.AMETHYST_BLOCK))
     );
+    // in ModBlocks.register()
+    public static final Block COMBINER = Registry.register(Registries.BLOCK,
+            new Identifier(Oddities.MOD_ID, "combiner"),
+            new CombinerBlock(FabricBlockSettings.create().strength(3.5f).nonOpaque())
+    );
+
+    public static final BlockEntityType<CombinerBlockEntity> COMBINER_BE =
+            Registry.register(Registries.BLOCK_ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "combiner_be"),
+                    FabricBlockEntityTypeBuilder.create(CombinerBlockEntity::new, COMBINER).build(null)
+            );
 
     public static final Block SOUND_BLOCK = Registry.register(
             Registries.BLOCK, id("sound_block"),
@@ -142,9 +158,7 @@ public class ModBlocks {
     public static BlockEntityType<GrandAnvilBlockEntity> GRAND_ANVIL_BE;
 
     /* ---------------- Potion Mixer ---------------- */
-    public static Block POTION_MIXER;
-    public static Item  POTION_MIXER_ITEM;
-    public static BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE;
+
 
     /* ---------------- False Flower ---------------- */
     public static Block FALSE_FLOWER;
@@ -171,6 +185,10 @@ public class ModBlocks {
     public static Block DIMENSIONAL_GATE;
     public static Item  DIMENSIONAL_GATE_ITEM;
     public static BlockEntityType<DimensionalGateBlockEntity> DIMENSIONAL_GATE_BE;
+    // cosmic katana //
+    public static Block COSMIC_KATANA_BLOCK;
+    public static Item  COSMIC_KATANA_BLOCK_ITEM;
+    public static BlockEntityType<CosmicKatanaBlockEntity> COSMIC_KATANA_BLOCK_BE;
 
     public static void registerModBlocks() {
         Oddities.LOGGER.info("Registering ModBlocks for " + Oddities.MOD_ID);
@@ -178,7 +196,7 @@ public class ModBlocks {
         /* --------- REGISTER: Centipede Spawn (block + item + BE) --------- */
         CENTIPEDE_SPAWN = Registry.register(
                 Registries.BLOCK, id("centipede_spawn"),
-                new CentipedeSpawnBlock(AbstractBlock.Settings.copy(Blocks.RESPAWN_ANCHOR).strength(3.5f))
+                new CentipedeSpawnBlock(AbstractBlock.Settings.copy(Blocks.RESPAWN_ANCHOR).strength(1.0f).requiresTool())
         );
 
         CENTIPEDE_SPAWN_ITEM = Registry.register(
@@ -204,22 +222,6 @@ public class ModBlocks {
         );
 
         /* --------- REGISTER: Potion Mixer (block + item + BE) --------- */
-        POTION_MIXER = Registry.register(
-                Registries.BLOCK, id("potion_mixer"),
-                new PotionMixerMegaBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
-                        .strength(3.0f)
-                        .nonOpaque())
-        );
-
-        POTION_MIXER_ITEM = Registry.register(
-                Registries.ITEM, id("potion_mixer"),
-                new BlockItem(POTION_MIXER, new Item.Settings())
-        );
-
-        POTION_MIXER_BE = Registry.register(
-                Registries.BLOCK_ENTITY_TYPE, id("potion_mixer_be"),
-                FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build(null)
-        );
 
         /* --------- REGISTER: False Flower (block + item + BE) --------- */
         FALSE_FLOWER = Registry.register(
@@ -321,6 +323,24 @@ public class ModBlocks {
         DIMENSIONAL_GATE_BE = Registry.register(
                 Registries.BLOCK_ENTITY_TYPE, id("dimensional_gate"),
                 FabricBlockEntityTypeBuilder.create(DimensionalGateBlockEntity::new, DIMENSIONAL_GATE).build(null)
+        );
+        // katana block //
+        COSMIC_KATANA_BLOCK = Registry.register(
+                Registries.BLOCK, id("cosmic_katana_block"),
+                new CosmicKatanaBlock(AbstractBlock.Settings.copy(Blocks.OBSIDIAN)
+                        .strength(-1.0f, 3600000.0f) // unbreakable + blast resistant
+                        .dropsNothing()
+                        .nonOpaque())
+        );
+
+        COSMIC_KATANA_BLOCK_ITEM = Registry.register(
+                Registries.ITEM, id("cosmic_katana_block"),
+                new BlockItem(COSMIC_KATANA_BLOCK, new Item.Settings())
+        );
+
+        COSMIC_KATANA_BLOCK_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("cosmic_katana_block"),
+                FabricBlockEntityTypeBuilder.create(CosmicKatanaBlockEntity::new, COSMIC_KATANA_BLOCK).build(null)
         );
     }
 }

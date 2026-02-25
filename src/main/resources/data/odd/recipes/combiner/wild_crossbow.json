@@ -1,0 +1,7 @@
+{
+  "type": "odd:combiner_forging",
+  "gear_kind": "crossbow",
+  "trim": { "item": "minecraft:wild_armor_trim_smithing_template" },
+  "difficulty": 6,
+  "level": 1
+}

@@ -85,6 +85,9 @@ public final class ConquerPower implements Power {
     private static final Object2LongOpenHashMap<UUID> DEATH_COOLDOWN_UNTIL = new Object2LongOpenHashMap<>();
     private static final long DEATH_COOLDOWN_TICKS = 120L * 20L; // 120s
 
+    // POWERLESS warn throttle (like Blockade)
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+
     public static void onMiloKilled(UUID ownerUuid, ServerWorld world) {
         ACTIVE_HORSES.remove(ownerUuid);
         STORED_HORSE_NBT.remove(ownerUuid);
@@ -98,6 +101,14 @@ public final class ConquerPower implements Power {
         MinecraftServer server = player.getServer();
         if (server == null) {
             ACTIVE_HORSES.remove(player.getUuid());
+            return;
+        }
+
+        // POWERLESS: force dismiss Milo + store snapshot, then stop.
+        if (isPowerless(player)) {
+            if (dismissMiloIfPresent(player, server, false)) {
+                warnOncePerSec(player, "§cPowerless: Conquer disabled (Milo dismissed).");
+            }
             return;
         }
 
@@ -119,10 +130,72 @@ public final class ConquerPower implements Power {
         }
     }
 
+    private static boolean isPowerless(ServerPlayerEntity player) {
+        return player != null && player.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnOncePerSec(ServerPlayerEntity p, String msg) {
+        long now = p.getWorld().getTime();
+        long nextOk = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < nextOk) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal(msg), true);
+    }
+
+    /** Used by POWERLESS (and forceDisable) to shut Milo down cleanly. */
+    private static boolean dismissMiloIfPresent(ServerPlayerEntity player, MinecraftServer server, boolean playFeedback) {
+        UUID playerId = player.getUuid();
+        UUID existing = ACTIVE_HORSES.get(playerId);
+        if (existing == null) return false;
+
+        DarkHorseEntity horse = findHorse(server, existing);
+        if (horse != null) {
+            NbtCompound nbt = new NbtCompound();
+            horse.writeNbt(nbt);
+
+            nbt.remove("UUID");
+            nbt.remove("UUIDMost");
+            nbt.remove("UUIDLeast");
+            nbt.remove("Pos");
+            nbt.remove("Motion");
+            nbt.remove("Rotation");
+            nbt.remove("Dimension");
+
+            STORED_HORSE_NBT.put(playerId, nbt);
+            horse.discard();
+        }
+
+        ACTIVE_HORSES.remove(playerId);
+
+        if (playFeedback) {
+            player.getWorld().playSound(null, player.getX(), player.getY(), player.getZ(),
+                    SoundEvents.ENTITY_HORSE_AMBIENT, SoundCategory.PLAYERS, 0.8f, 0.7f);
+        }
+        return true;
+    }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+
+        // If something (POWERLESS, etc) is forcing shutdown: dismiss Milo if active.
+        if (dismissMiloIfPresent(player, server, false)) {
+            warnOncePerSec(player, "§cPowerless: Conquer disabled (Milo dismissed).");
+        }
+    }
+
     @Override
     public void activate(ServerPlayerEntity player) {
         MinecraftServer server = player.getServer();
         if (server == null) return;
+
+        // POWERLESS: force OFF (dismiss Milo) and deny usage
+        if (isPowerless(player)) {
+            dismissMiloIfPresent(player, server, false);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
 
         UUID playerId = player.getUuid();
 
@@ -209,9 +282,17 @@ public final class ConquerPower implements Power {
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
+        // POWERLESS: deny usage + also dismiss Milo if active (so you can't keep him out)
+        MinecraftServer server = player.getServer();
+        if (server != null && isPowerless(player)) {
+            dismissMiloIfPresent(player, server, false);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
+
         // Sneak+Secondary = CAPTURE (Ability 3)
         if (player.isSneaking()) {
-            if (tryCaptureCorruptedGolem(player)) return;
+            tryCaptureCorruptedGolem(player);
             return;
         }
 

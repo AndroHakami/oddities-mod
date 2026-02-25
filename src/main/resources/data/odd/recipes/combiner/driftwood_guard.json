@@ -1,0 +1,7 @@
+{
+  "type": "odd:combiner_forging",
+  "gear_kind": "shield",
+  "trim": { "item": "minecraft:coast_armor_trim_smithing_template" },
+  "difficulty": 5,
+  "level": 1
+}

@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/power/Blockade.java
 package net.seep.odd.abilities.power;
 
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -10,10 +11,12 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.seep.odd.abilities.blockade.net.BlockadeNet;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,25 +60,17 @@ public class Blockade implements Power {
     }
 
     // --- Behavior ---
-
-    // players currently in "placement mode"
     private static final Set<UUID> ACTIVE = ConcurrentHashMap.newKeySet();
     private static boolean tickRegistered = false;
-
-    // how often to attempt placement while active
-    private static final int PLACE_INTERVAL_TICKS = 1; // every tick
+    private static final int PLACE_INTERVAL_TICKS = 1;
     private static int placeTicker = 0;
 
-    // ahead placement distance while sprinting (in blocks)
-    private static final double AHEAD_DIST = 0.45; // small nudge ahead so sprinting feels smooth
-
-    // despawn delay for the temporary block (ticks)
-    private static final int DESPAWN_TICKS = 80;
+    private static final Map<UUID, Long> WARN_UNTIL = new ConcurrentHashMap<>();
 
     public Blockade() {
-        // register a single server tick handler (once)
         if (!tickRegistered) {
             tickRegistered = true;
+
             ServerTickEvents.END_SERVER_TICK.register(server -> {
                 if ((++placeTicker % PLACE_INTERVAL_TICKS) != 0) return;
 
@@ -83,10 +78,21 @@ public class Blockade implements Power {
                     ServerPlayerEntity player = server.getPlayerManager().getPlayer(id);
                     if (player == null) continue;
 
-                    // if player no longer has this power, auto-off
+                    // if player no longer has this power, auto-off (and tell client)
                     var currentId = net.seep.odd.abilities.PowerAPI.get(player);
                     if (!id().equals(currentId)) {
                         ACTIVE.remove(id);
+                        BlockadeNet.sendActive(player, false);
+                        continue;
+                    }
+
+                    // POWERLESS: force off + tell client + skip placing
+                    if (isPowerless(player)) {
+                        if (ACTIVE.remove(id)) {
+                            BlockadeNet.sendActive(player, false);
+                            warnOncePerSec(player, "§cPowerless: Blockade disabled.");
+
+                        }
                         continue;
                     }
 
@@ -96,10 +102,33 @@ public class Blockade implements Power {
         }
     }
 
-    // Primary ability toggles placement mode on/off
+    private static boolean isPowerless(ServerPlayerEntity player) {
+        return player != null && player.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnOncePerSec(ServerPlayerEntity p, String msg) {
+        long now = p.getWorld().getTime();
+        long nextOk = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < nextOk) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(net.minecraft.text.Text.literal(msg), true);
+    }
+
     @Override
     public void activate(ServerPlayerEntity player) {
         UUID id = player.getUuid();
+
+        // POWERLESS: force OFF and deny enabling
+        if (isPowerless(player)) {
+            boolean wasOn = ACTIVE.remove(id);
+            if (wasOn) {
+                BlockadeNet.sendActive(player, false);
+
+            }
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
+
         boolean nowOn;
         if (ACTIVE.contains(id)) {
             ACTIVE.remove(id);
@@ -108,30 +137,29 @@ public class Blockade implements Power {
             ACTIVE.add(id);
             nowOn = true;
         }
-        player.sendMessage(net.minecraft.text.Text.literal(
-                nowOn ? "Block Placement: ON" : "Block Placement: OFF"), true);
+
+        // tell client for satin overlay
+        BlockadeNet.sendActive(player, nowOn);
+
+
     }
 
-    /** Place under feet always; while sprinting also place one block ahead in look direction. */
-    private void tryPlacePlatform3x3(ServerPlayerEntity player) {
+    private static void tryPlacePlatform3x3(ServerPlayerEntity player) {
         ServerWorld world = (ServerWorld) player.getWorld();
 
-        // grid Y to build on: exactly one below the player's feet
         final int feetY = player.getBlockPos().getY() - 1;
         final int cx = player.getBlockPos().getX();
         final int cz = player.getBlockPos().getZ();
 
         boolean placedAny = false;
 
-        // Offsets to cover a 3x3 centered at (cx,cz)
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 BlockPos pos = new BlockPos(cx + dx, feetY, cz + dz);
                 BlockState state = world.getBlockState(pos);
 
-                // Don't overwrite our own tile; only place into allowed cells
                 if (state.isOf(ModBlocks.CRAPPY_BLOCK)) continue;
-                if (!canReplace(world, pos, state)) continue;
+                if (!canReplace(state)) continue;
 
                 world.setBlockState(pos, ModBlocks.CRAPPY_BLOCK.getDefaultState(), 3);
                 world.scheduleBlockTick(pos, ModBlocks.CRAPPY_BLOCK, 60);
@@ -139,45 +167,25 @@ public class Blockade implements Power {
             }
         }
 
-        // Single sound per tick, if at least one block was placed
         if (placedAny) {
             BlockPos soundAt = new BlockPos(cx, feetY, cz);
             world.playSound(null, soundAt, ModSounds.CRAPPY_BLOCK_PLACE, SoundCategory.PLAYERS, 0.8f, 1f);
         }
     }
 
-    /** Place a single tile if allowed; schedule despawn; play sound. */
-    private void placeOneIfAllowed(ServerWorld world, BlockPos pos) {
-        BlockState current = world.getBlockState(pos);
-        if (current.isOf(ModBlocks.CRAPPY_BLOCK)) return;
-        if (!canReplace(world, pos, current)) return;
+    private static boolean canReplace(BlockState state) {
+        if (state.isIn(net.minecraft.registry.tag.BlockTags.LEAVES)) return false;
 
-        world.setBlockState(pos, ModBlocks.CRAPPY_BLOCK.getDefaultState(), 3);
-        world.scheduleBlockTick(pos, ModBlocks.CRAPPY_BLOCK, 80);
-        world.playSound(null, pos, ModSounds.CRAPPY_BLOCK_PLACE, SoundCategory.PLAYERS, 0.8f, 1f);
-    }
-
-    private boolean canReplace(ServerWorld world, BlockPos pos, BlockState state) {
-        // hard blocks that should never be replaced
-        if (state.isIn(net.minecraft.registry.tag.BlockTags.LEAVES)) return false; // <- covers cherry leaves etc.
-        // if you also want to avoid paving liquids, uncomment:
-        // if (state.isOf(Blocks.WATER) || state.isOf(Blocks.LAVA)) return false;
-
-        // allowed replacements
         if (state.isAir()) return true;
-        if (state.isOf(Blocks.GRASS)) return true;        // short grass
-        if (state.isOf(Blocks.TALL_GRASS)) return true;   // tall grass
-        if (state.isIn(BlockTags.FLOWERS)) return true;   // flowers
-        if (state.getBlock() instanceof PlantBlock) return true; // small plants/bushes/saplings
-        if (state.isOf(Blocks.SNOW)) return true;         // thin snow layer
+        if (state.isOf(Blocks.GRASS)) return true;
+        if (state.isOf(Blocks.TALL_GRASS)) return true;
+        if (state.isIn(BlockTags.FLOWERS)) return true;
+        if (state.getBlock() instanceof PlantBlock) return true;
+        if (state.isOf(Blocks.SNOW)) return true;
 
-        // everything else: NO
         return false;
     }
 
-
-
-    // (Optional) small cooldown so toggle isn't spammed in chat
     @Override public long cooldownTicks() { return 0; }
     @Override public long secondaryCooldownTicks() { return 0; }
 }

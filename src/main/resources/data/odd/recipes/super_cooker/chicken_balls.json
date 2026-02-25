@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:chicken" },
+    { "item": "minecraft:chicken" },
+    { "item": "minecraft:chicken" }
+  ],
+  "result": { "item": "odd:chicken_balls", "count": 3 },
+  "cookTime": 400,
+  "minStirs": 4
+}

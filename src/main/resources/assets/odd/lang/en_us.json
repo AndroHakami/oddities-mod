@@ -67,6 +67,85 @@
  "effect.odd.froggy_time": "Frog Blessing",
  "biome.odd.rotten_roots": "Rotten Roots",
 
+ "item.odd.amethyst_kebab": "Amethyst Kebab",
+ "item.odd.amethyst_kebab.tooltip": "Crystal kebab, the good type of crystal!! ★★★",
+
+ "item.odd.calamari": "Calamari",
+ "item.odd.calamari.tooltip": "Seafood so good you are one with the ocean. ★★★",
+
+ "item.odd.chicken_balls": "Chicken Balls",
+ "item.odd.chicken_balls.tooltip": "Protein Protein, filling!. ★★☆",
+
+ "item.odd.creeper_kebab": "Creeper Kebab",
+ "item.odd.creeper_kebab.tooltip": "Spicy… with a delayed surprise!. ★★★",
+
+ "item.odd.deepdark_fries": "Deepdark Fries",
+ "item.odd.deepdark_fries.tooltip": "Echo-crunch fries. Makes you grow warden abilities! ★★★",
+
+ "item.odd.dragon_burrito": "Dragon Burrito",
+ "item.odd.dragon_burrito.tooltip": "Momentum wrapped in fire. ★★★",
+
+ "item.odd.egg_sandwich": "Egg Sandwich",
+ "item.odd.egg_sandwich.tooltip": "Simple comfort food. ★★☆",
+
+ "item.odd.emerald_pie": "Emerald Pie",
+ "item.odd.emerald_pie.tooltip": "A lucky slice with rich vibes. ★★☆",
+
+ "item.odd.fries": "Fries",
+ "item.odd.fries.tooltip": "Fast feet… then heavy legs. ★★☆",
+
+ "item.odd.ghast_fries": "Ghast Fries",
+ "item.odd.ghast_fries.tooltip": "The tears add a nice salt to it!. ★★☆",
+
+ "item.odd.hellish_burger": "Hellish Burger",
+ "item.odd.hellish_burger.tooltip": "From the depths of the nether, banned in the aether. ★★★",
+
+ "item.odd.magma_icecream": "Magma Icecream",
+ "item.odd.magma_icecream.tooltip": "Cold scoop, hot soul. ★★☆",
+
+ "item.odd.masoub": "Masoub",
+ "item.odd.masoub.tooltip": "Who needs bananas when you have soul?. ★★☆",
+
+ "item.odd.miner_berries": "Miner Berries",
+ "item.odd.miner_berries.tooltip": "Fills the stomach, lights the caves!. ★★★",
+
+ "item.odd.outer_icecream": "Outer Icecream",
+ "item.odd.outer_icecream.tooltip": "Who knew those aliens tasted so damn good? ★★☆",
+
+ "item.odd.puffer_sushi": "Puffer Sushi",
+ "item.odd.puffer_sushi.tooltip": "The greatest invention, eat quickly before it depletes!. ★★★",
+
+ "item.odd.radical_burger": "Radical Burger",
+ "item.odd.radical_burger.tooltip": "ITS SO DAMN COOL.. ★★☆",
+
+ "item.odd.ramen": "Ramen",
+ "item.odd.ramen.tooltip": "A Classic Comfort, Wish it was indomie though.... ★★☆",
+
+ "item.odd.shulker_icecream": "Shulker Icecream",
+ "item.odd.shulker_icecream.tooltip": "Floaty dessert. Land safely!. ★★☆",
+
+ "item.odd.squid_squash": "Squid Squash",
+ "item.odd.squid_squash.tooltip": "Eat Squid, be Squid!. ★★☆",
+
+ "item.odd.sushi": "Sushi",
+ "item.odd.sushi.tooltip": "Clean and classic. Always solid. ★★☆",
+
+ "item.odd.yanbu_icecream": "Yanbu Icecream",
+ "item.odd.yanbu_icecream.tooltip": "Why is this in the game... tastes good though!★★★",
+
+ "item.odd.crappy_burger.tooltip": "Not so Crappy! Teleports you. ★★☆",
+ "enchantment.odd.combiner_spire": "Spire Stompers",
+ "enchantment.odd.combiner_vex": "Vexing Strike",
+ "enchantment.odd.combiner_sentry": "Sentry Pulse",
+ "enchantment.odd.combiner_dune": "Dune Stride",
+ "enchantment.odd.combiner_wild": "Wild Root",
+ "enchantment.odd.combiner_ward": "Ward Bulwark",
+ "key.categories.oddities": "Combiner Enchants",
+ "key.oddities.gaze_of_the_end": "Toggle Gaze Of The End",
+ "enchantment.odd.combiner_eye": "Gaze Of The End",
+
+
+
 
  "tooltip.odd.metal_detector.tooltip": "Finds Valueables underground!",
 
@@ -89,5 +168,6 @@
  "enchantment.odd.italian_stompers": "Italian Stompers",
  "enchantment.odd.lucky_day": "Lucky Day",
 
- "container.odd.grand_anvil": "Grand Anvil"
+ "container.odd.grand_anvil": "Grand Anvil",
+ "soundCategory.odd_distant_isles": "Distant Isles Music"
 }

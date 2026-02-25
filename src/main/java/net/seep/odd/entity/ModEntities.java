@@ -146,6 +146,9 @@ public final class ModEntities {
 
     // Familiar
     public static final Identifier CAPYBARA_FAMILIAR_ID        = new Identifier(Oddities.MOD_ID, "capybara_familiar");
+    // Ice Statue
+    public static final Identifier ICE_STATUE_ID = new Identifier(Oddities.MOD_ID, "ice_statue");
+
 
 
 
@@ -154,6 +157,17 @@ public final class ModEntities {
        EntityType registration — “static final” style
        ========================================================= */
     // ADD TO ModEntities
+// Ice Statue entity type
+    public static final EntityType<IceStatueEntity> ICE_STATUE = Registry.register(
+            Registries.ENTITY_TYPE,
+            ICE_STATUE_ID,
+            FabricEntityTypeBuilder.<IceStatueEntity>create(SpawnGroup.MISC, IceStatueEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.8f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
     public static final EntityType<WizardMeteorEntity> WIZARD_METEOR =
             Registry.register(Registries.ENTITY_TYPE,
                     new Identifier(Oddities.MOD_ID, "wizard_meteor"),
@@ -818,6 +832,7 @@ public final class ModEntities {
                 net.seep.odd.abilities.rise.entity.RisenZombieEntity.createRisenZombieAttributes());
         FabricDefaultAttributeRegistry.register(BOOKLET, BookletEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(CAPYBARA_FAMILIAR, CapybaraFamiliarEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(ICE_STATUE, IceStatueEntity.createAttributes());
 
 
 

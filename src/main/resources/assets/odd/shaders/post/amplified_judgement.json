@@ -1,0 +1,15 @@
+{
+  "targets": ["amplified_judgement"],
+  "passes": [
+    {
+      "name": "odd:amplified_judgement",
+      "intarget": "minecraft:main",
+      "outtarget": "amplified_judgement"
+    },
+    {
+      "name": "blit",
+      "intarget": "amplified_judgement",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

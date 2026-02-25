@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:dragon_breath" },
+    { "item": "minecraft:chicken" },
+    { "item": "minecraft:bread" }
+  ],
+  "result": { "item": "odd:dragon_burrito", "count": 2 },
+  "cookTime": 400,
+  "minStirs": 5
+}

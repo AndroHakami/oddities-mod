@@ -1,0 +1,15 @@
+{
+  "targets": ["snowgrave_aurora"],
+  "passes": [
+    {
+      "name": "odd:snowgrave_aurora",
+      "intarget": "minecraft:main",
+      "outtarget": "snowgrave_aurora"
+    },
+    {
+      "name": "blit",
+      "intarget": "snowgrave_aurora",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

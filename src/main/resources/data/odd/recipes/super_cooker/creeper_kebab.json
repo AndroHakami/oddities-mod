@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:creeper_head" },
+    { "item": "minecraft:stick" },
+    { "item": "minecraft:gunpowder" }
+  ],
+  "result": { "item": "odd:creeper_kebab", "count": 3 },
+  "cookTime": 300,
+  "minStirs": 3
+}

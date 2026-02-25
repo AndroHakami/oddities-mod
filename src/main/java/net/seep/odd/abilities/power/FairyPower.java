@@ -1,14 +1,18 @@
-// src/main/java/net/seep/odd/abilities/power/FairyPower.java
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.objects.Object2FloatMap;
 import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerEntity;
@@ -20,12 +24,16 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.PersistentState;
 import net.minecraft.world.RaycastContext;
@@ -34,23 +42,15 @@ import net.seep.odd.Oddities;
 import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.fairy.CastLogic;
 import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
-/**
- * Fairy power:
- * - small (Pehkui 0.5), 6 hearts
- * - creative flight (double-space) that drains mana
- * - Primary: toggle Cast Form
- * - Secondary: open Manage Flowers menu
- * - Third: Beam of Magic (drains mana, recharges flowers)
- *
- * HUD is client-only: see FairyManaHudClient.
- */
 public final class FairyPower implements Power {
 
     @Override public String id() { return "fairy"; }
@@ -98,14 +98,14 @@ public final class FairyPower implements Power {
     public static final Identifier C2S_CAST_COMMIT  = new Identifier(Oddities.MOD_ID, "fairy/cast_commit");
     public static final Identifier C2S_TOGGLE_CAST  = new Identifier(Oddities.MOD_ID, "fairy/toggle_cast");
     public static final Identifier C2S_OPEN_MENU    = new Identifier(Oddities.MOD_ID, "fairy/open_menu");
-
-    // optional (lets any client control beam w/o needing ability-framework wiring)
     public static final Identifier C2S_TOGGLE_BEAM  = new Identifier(Oddities.MOD_ID, "fairy/toggle_beam");
 
     public static final Identifier S2C_CAST_STATE   = new Identifier(Oddities.MOD_ID, "fairy/cast_state");
-
-    // mana HUD sync (client file listens to this)
     public static final Identifier S2C_MANA_SYNC    = new Identifier(Oddities.MOD_ID, "fairy/mana_sync");
+    public static final Identifier S2C_BEAM_STATE   = new Identifier(Oddities.MOD_ID, "fairy/beam_state");
+
+    // ✅ CPM beam control (player-only)
+    public static final Identifier S2C_CPM_BEAM     = new Identifier(Oddities.MOD_ID, "fairy/cpm_beam");
 
     private static void sendCastState(ServerPlayerEntity player, boolean on) {
         var b = PacketByteBufs.create();
@@ -121,64 +121,88 @@ public final class FairyPower implements Power {
         ServerPlayNetworking.send(player, S2C_MANA_SYNC, b);
     }
 
+    private static void sendBeamStateTo(ServerPlayerEntity target, UUID who, boolean on) {
+        var b = PacketByteBufs.create();
+        b.writeUuid(who);
+        b.writeBoolean(on);
+        ServerPlayNetworking.send(target, S2C_BEAM_STATE, b);
+    }
+
+    private static void sendCpmBeam(ServerPlayerEntity player, boolean on) {
+        var b = PacketByteBufs.create();
+        b.writeBoolean(on);
+        ServerPlayNetworking.send(player, S2C_CPM_BEAM, b);
+    }
+
+    private static void broadcastBeamState(ServerPlayerEntity source, boolean on) {
+        UUID id = source.getUuid();
+        sendBeamStateTo(source, id, on);
+        for (ServerPlayerEntity other : PlayerLookup.tracking(source)) {
+            sendBeamStateTo(other, id, on);
+        }
+    }
+
     /* ---------------- Mana + flight tuning ---------------- */
 
     public static final float MANA_MAX = 100f;
 
-    /** Passive regen per tick (whenever you are NOT flight-draining). */
     public static float MANA_REGEN_PER_TICK = 0.030f;
-
-    /** Drain per tick while flying (creative flight). */
     public static float FLIGHT_DRAIN_PER_TICK = 0.30f;
-
-    /** How often we sync mana to the client HUD. */
     public static int MANA_SYNC_INTERVAL = 5;
 
-    /** Sparkle tuning (flight). */
     public static int SPARKLES_PER_TICK = 2;
-
-    /** Cast cost (CastLogic uses this). */
     public static float CAST_COST = 5f;
 
-    /** Beam tuning. */
     public static float BEAM_DRAIN_PER_TICK = 0.22f;
-    public static float BEAM_RECHARGE_PER_TICK = 2.0f; // mana into flower per tick while beaming
+    public static float BEAM_RECHARGE_PER_TICK = 2.0f;
     public static double BEAM_RANGE = 32.0;
-    public static int BEAM_SEGMENTS = 14;              // particles along beam each tick
-    public static float BEAM_SOFT_RADIUS = 1.35f;      // soft-targeting radius along ray
-    public static int BEAM_FLASH_EVERY_TICKS = 4;      // recharge flash cadence
+    public static float BEAM_SOFT_RADIUS = 1.35f;
 
-    /** Golden apples: burst mana on successful eat. */
     public static float GAPPLE_MANA_BURST = 22.0f;
     public static float ENCHANTED_GAPPLE_MANA_BURST = 45.0f;
 
     public static final UUID HP_MOD_ID = UUID.fromString("7a2d89d0-3c80-4caa-82d6-6e2e1f8d66c1");
 
-    /* ---------------- Power actions ---------------- */
+    /* ---------------- Beam extras ---------------- */
 
-    @Override
-    public void activate(ServerPlayerEntity player) {
-        boolean next = !CastLogic.isCastFormEnabled(player);
-        CastLogic.toggleCastForm(player, next);
-        sendCastState(player, next);
+    // flower recharge sound pacing
+    private static final Object2LongOpenHashMap<UUID> LAST_FLOWER_SOUND_T = new Object2LongOpenHashMap<>();
+    private static final int FLOWER_SOUND_EVERY_TICKS = 8;
+
+    /* ---------------- POWERLESS + enter/exit tracking ---------------- */
+
+    private static final Set<UUID> FAIRY_ACTIVE = ConcurrentHashMap.newKeySet();
+    private static final Set<UUID> POWERLESS_HANDLED = ConcurrentHashMap.newKeySet();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
     }
 
-    @Override
-    public void activateSecondary(ServerPlayerEntity player) {
-        net.seep.odd.abilities.fairy.FlowerMenu.openFor(player);
+    private static void setBeamOnAndSync(ServerPlayerEntity p, boolean on) {
+        setBeamOn(p, on);
+
+        // ✅ CPM beam animation for THIS player only
+        sendCpmBeam(p, on);
+
+        // ✅ stop any current use immediately (prevents “start eating then toggle beam” exploit)
+        if (on) p.stopUsingItem();
+
+        // render beam for everyone tracking
+        broadcastBeamState(p, on);
     }
 
-    /** Third slot (named "third"). */
-    @Override
-    public void activateThird(ServerPlayerEntity player) {
-        boolean next = !isBeamOn(player);
-        setBeamOn(player, next);
-        player.sendMessage(Text.literal(next ? "Beam: ON" : "Beam: OFF"), true);
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
+        if (POWERLESS_HANDLED.add(p.getUuid())) {
+            if (isBeamOn(p)) setBeamOnAndSync(p, false);
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
+        }
+        return true;
     }
 
-    /* ---------------- Lifecycle hooks ---------------- */
+    private static void ensureEnterFairy(ServerPlayerEntity p) {
+        if (!FAIRY_ACTIVE.add(p.getUuid())) return;
 
-    public static void onPowerGained(ServerPlayerEntity p) {
         applyHalfHearts(p);
         applyPehkuiScale(p, 0.5f);
 
@@ -188,41 +212,67 @@ public final class FairyPower implements Power {
             mana = MANA_MAX;
         }
 
-        // allow flying immediately if mana > 0
-        setAllowFlying(p, mana > 0.01f);
-
-        // HUD on
         sendManaHud(p, true, mana);
-
-        p.sendMessage(Text.literal("Fairy form awakened ✨"), true);
     }
 
-    public static void onPowerLost(ServerPlayerEntity p) {
+    private static void ensureExitFairy(ServerPlayerEntity p) {
+        if (!FAIRY_ACTIVE.remove(p.getUuid())) return;
+
         clearHalfHearts(p);
         applyPehkuiScale(p, 1.0f);
 
         CastLogic.toggleCastForm(p, false);
 
-        // stop beam
-        setBeamOn(p, false);
+        // stop beam and CPM anim
+        setBeamOnAndSync(p, false);
 
-        // remove flight
         setAllowFlying(p, false);
-
-        // hide HUD
         sendManaHud(p, false, 0f);
 
-        // cleanup small caches
         UUID id = p.getUuid();
         LAST_SENT_MANA.removeFloat(id);
         LAST_SENT_TICK.removeLong(id);
         LAST_ALLOW.removeFloat(id);
         PREV_CAST.removeFloat(id);
         LAST_FLYING.removeFloat(id);
-        LAST_BEAM_FLASH.removeLong(id);
 
         LAST_EAT_KIND.removeLong(id);
         LAST_EAT_LEFT.removeLong(id);
+
+        LAST_FLOWER_SOUND_T.removeLong(id);
+        POWERLESS_HANDLED.remove(id);
+
+        // hard-stop CPM beam just in case
+        sendCpmBeam(p, false);
+    }
+
+    /* ---------------- Power actions ---------------- */
+
+    @Override
+    public void activate(ServerPlayerEntity player) {
+        if (blockIfPowerless(player)) return;
+        if (isBeamOn(player)) return; // beam locks actions
+
+        boolean next = !CastLogic.isCastFormEnabled(player);
+        CastLogic.toggleCastForm(player, next);
+        sendCastState(player, next);
+    }
+
+    @Override
+    public void activateSecondary(ServerPlayerEntity player) {
+        if (blockIfPowerless(player)) return;
+        if (isBeamOn(player)) return; // beam locks actions
+        net.seep.odd.abilities.fairy.FlowerMenu.openFor(player);
+    }
+
+    @Override
+    public void activateThird(ServerPlayerEntity player) {
+        if (blockIfPowerless(player)) return;
+
+        boolean next = !isBeamOn(player);
+        setBeamOnAndSync(player, next);
+
+        player.sendMessage(Text.literal(next ? "Beam: ON" : "Beam: OFF"), true);
     }
 
     /* ---------------- Tick ---------------- */
@@ -231,15 +281,9 @@ public final class FairyPower implements Power {
     private static final Object2LongOpenHashMap<UUID>  LAST_SENT_TICK  = new Object2LongOpenHashMap<>();
     private static final Object2FloatOpenHashMap<UUID> LAST_ALLOW      = new Object2FloatOpenHashMap<>();
 
-    // preserve flight mode across the moment cast form toggles on
     private static final Object2FloatOpenHashMap<UUID> PREV_CAST       = new Object2FloatOpenHashMap<>();
     private static final Object2FloatOpenHashMap<UUID> LAST_FLYING     = new Object2FloatOpenHashMap<>();
 
-    // beam flash pacing
-    private static final Object2LongOpenHashMap<UUID>  LAST_BEAM_FLASH = new Object2LongOpenHashMap<>();
-
-    // eating tracking (only for golden apples)
-    // bits: [0..1]=kind (0 none, 1 gapple, 2 egapple), bit2=wasUsing
     private static final Object2LongOpenHashMap<UUID> LAST_EAT_KIND = new Object2LongOpenHashMap<>();
     private static final Object2LongOpenHashMap<UUID> LAST_EAT_LEFT = new Object2LongOpenHashMap<>();
 
@@ -248,10 +292,21 @@ public final class FairyPower implements Power {
 
         UUID id = p.getUuid();
 
-        boolean casting = CastLogic.isCastFormEnabled(p);
-        boolean prevCasting = PREV_CAST.getOrDefault(id, 0f) > 0.5f;
+        boolean powerless = isPowerless(p);
+        if (!powerless) {
+            POWERLESS_HANDLED.remove(id);
+        } else {
+            if (isBeamOn(p) && POWERLESS_HANDLED.add(id)) {
+                setBeamOnAndSync(p, false);
+            }
+            if (p.getAbilities().flying || p.getAbilities().allowFlying) {
+                p.getAbilities().flying = false;
+                p.getAbilities().allowFlying = false;
+                p.sendAbilitiesUpdate();
+            }
+        }
 
-        // Record "was flying" only while NOT casting (so it reflects real player intent)
+        boolean casting = CastLogic.isCastFormEnabled(p);
         if (!casting) {
             LAST_FLYING.put(id, p.getAbilities().flying ? 1f : 0f);
         }
@@ -259,50 +314,38 @@ public final class FairyPower implements Power {
         float mana = getMana(p);
         boolean flying = p.getAbilities().flying;
 
-        // allow flight whenever mana > 0 (YES: even while casting)
-        boolean shouldAllow = mana > 0.01f;
+        boolean shouldAllow = !powerless && !casting && mana > 0.01f;
         setAllowFlyingIfChanged(p, shouldAllow);
 
-        // If cast form just turned ON and you were flying right before, re-assert flying so you don't drop.
-        if (casting && !prevCasting) {
-            boolean wasFlying = LAST_FLYING.getOrDefault(id, 0f) > 0.5f;
-            if (wasFlying && shouldAllow && !p.getAbilities().flying) {
-                p.getAbilities().flying = true;
-                p.sendAbilitiesUpdate();
-                flying = true;
-            }
-        }
-
+        if (casting) p.fallDistance = 0f;
         PREV_CAST.put(id, casting ? 1f : 0f);
 
         boolean beamOn = isBeamOn(p);
 
-        boolean flightDraining = flying && !p.isOnGround();
+        // ✅ un-buggable: if beam is on, you cannot eat/use items
+        if (beamOn) p.stopUsingItem();
 
-        // ---- flight drain + particles ----
+        boolean flightDraining = flying && !p.isOnGround() && shouldAllow;
+
         if (flightDraining) {
             mana = Math.max(0f, mana - FLIGHT_DRAIN_PER_TICK);
             spawnFlightSparkles(sw, p);
         }
 
-        // ---- beam drain + beam behavior ----
         if (beamOn) {
-            if (mana > 0.01f) {
+            if (mana > 0.01f && !powerless) {
                 mana = tickBeam(sw, p, mana);
             } else {
-                setBeamOn(p, false);
+                setBeamOnAndSync(p, false);
                 beamOn = false;
             }
         }
 
-        // ---- passive regen (this is the key fix) ----
-        // Regen whenever you are NOT flight-draining (independent of beam).
         if (!flightDraining) {
             mana = Math.min(MANA_MAX, mana + MANA_REGEN_PER_TICK);
         }
 
-        // ---- food mana helpers ----
-        // berries top-up while eating
+        // note: even if they somehow begin using (should be blocked), we still keep berry top-up logic
         if (p.isUsingItem()) {
             ItemStack a = p.getActiveItem();
             if (a.isOf(Items.SWEET_BERRIES) || a.isOf(Items.GLOW_BERRIES)) {
@@ -310,27 +353,22 @@ public final class FairyPower implements Power {
             }
         }
 
-        // golden apple burst on successful eat
         mana = applyGoldenAppleMana(sw, p, mana);
 
-        // stop flight if mana depleted
         if (mana <= 0f) {
             mana = 0f;
+
             if (p.getAbilities().flying) p.getAbilities().flying = false;
             setAllowFlyingIfChanged(p, false);
             p.sendAbilitiesUpdate();
 
-            if (beamOn) setBeamOn(p, false);
+            if (beamOn) setBeamOnAndSync(p, false);
         }
 
         setMana(p, mana);
         maybeSyncHud(sw, p, mana);
-
-        // tiny safety: avoid fall spikes when toggling cast mid-drop
-        if (casting) p.fallDistance = 0f;
     }
 
-    /** Adds a fixed mana burst when a golden apple finishes eating. */
     private static float applyGoldenAppleMana(ServerWorld sw, ServerPlayerEntity p, float mana) {
         UUID id = p.getUuid();
 
@@ -349,14 +387,12 @@ public final class FairyPower implements Power {
 
         boolean usingNow = (kindNow != 0);
 
-        // track countdown while using
         if (usingNow) {
             LAST_EAT_KIND.put(id, (long)kindNow | 4L);
             LAST_EAT_LEFT.put(id, p.getItemUseTimeLeft());
             return mana;
         }
 
-        // just stopped using -> only pay if they were basically finished
         if (!usingNow && prevUsing && prevKind != 0) {
             long left = LAST_EAT_LEFT.getOrDefault(id, 999L);
             LAST_EAT_KIND.removeLong(id);
@@ -390,12 +426,52 @@ public final class FairyPower implements Power {
 
     /* ---------------- Registration ---------------- */
 
+    private static boolean USE_BLOCKERS_REGISTERED = false;
+
     public static void register() {
+        if (!USE_BLOCKERS_REGISTERED) {
+            USE_BLOCKERS_REGISTERED = true;
+
+            // Block using items (eating, drinking, etc.)
+            UseItemCallback.EVENT.register((player, world, hand) -> {
+                if (world.isClient) return TypedActionResult.pass(player.getStackInHand(hand));
+                if (!(player instanceof ServerPlayerEntity sp)) return TypedActionResult.pass(player.getStackInHand(hand));
+                if (!"fairy".equals(PowerAPI.get(sp))) return TypedActionResult.pass(player.getStackInHand(hand));
+                if (!isBeamOn(sp)) return TypedActionResult.pass(player.getStackInHand(hand));
+                sp.stopUsingItem();
+                return TypedActionResult.fail(player.getStackInHand(hand));
+            });
+
+            // Block using item on blocks (placing / interacting)
+            UseBlockCallback.EVENT.register((player, world, hand, hit) -> {
+                if (world.isClient) return ActionResult.PASS;
+                if (!(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
+                if (!"fairy".equals(PowerAPI.get(sp))) return ActionResult.PASS;
+                if (!isBeamOn(sp)) return ActionResult.PASS;
+                sp.stopUsingItem();
+                return ActionResult.FAIL;
+            });
+
+            // Block using item on entities (interactions)
+            UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+                if (world.isClient) return ActionResult.PASS;
+                if (!(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
+                if (!"fairy".equals(PowerAPI.get(sp))) return ActionResult.PASS;
+                if (!isBeamOn(sp)) return ActionResult.PASS;
+                sp.stopUsingItem();
+                return ActionResult.FAIL;
+            });
+        }
+
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-                var pow = Powers.get(PowerAPI.get(p));
-                if (pow instanceof FairyPower) {
+                boolean isFairy = "fairy".equals(PowerAPI.get(p));
+
+                if (isFairy) {
+                    ensureEnterFairy(p);
                     serverTick(p);
+                } else {
+                    ensureExitFairy(p);
                 }
             }
         });
@@ -403,6 +479,9 @@ public final class FairyPower implements Power {
         ServerPlayNetworking.registerGlobalReceiver(C2S_TOGGLE_CAST, (server, player, handler, buf, resp) -> {
             boolean enable = buf.readBoolean();
             server.execute(() -> {
+                if (!"fairy".equals(PowerAPI.get(player))) return;
+                if (isPowerless(player)) return;
+                if (isBeamOn(player)) return;
                 CastLogic.toggleCastForm(player, enable);
                 sendCastState(player, enable);
             });
@@ -411,17 +490,31 @@ public final class FairyPower implements Power {
         ServerPlayNetworking.registerGlobalReceiver(C2S_CAST_COMMIT, (server, player, handler, buf, resp) -> {
             byte a0 = buf.readByte(), a1 = buf.readByte(), a2 = buf.readByte();
             var spell = net.seep.odd.abilities.fairy.FairySpell.fromInputs(a0, a1, a2);
-            server.execute(() -> net.seep.odd.abilities.fairy.CastLogic.tryFireRay(player, spell));
+            server.execute(() -> {
+                if (!"fairy".equals(PowerAPI.get(player))) return;
+                if (isPowerless(player)) return;
+                if (isBeamOn(player)) return;
+                net.seep.odd.abilities.fairy.CastLogic.tryFireRay(player, spell);
+            });
         });
 
         ServerPlayNetworking.registerGlobalReceiver(C2S_OPEN_MENU, (server, player, handler, buf, resp) ->
-                server.execute(() -> net.seep.odd.abilities.fairy.FlowerMenu.openFor(player)));
+                server.execute(() -> {
+                    if (!"fairy".equals(PowerAPI.get(player))) return;
+                    if (isPowerless(player)) return;
+                    if (isBeamOn(player)) return;
+                    net.seep.odd.abilities.fairy.FlowerMenu.openFor(player);
+                }));
 
-        // optional: lets clients toggle beam directly
         ServerPlayNetworking.registerGlobalReceiver(C2S_TOGGLE_BEAM, (server, player, handler, buf, resp) -> {
             boolean enable = buf.readBoolean();
             server.execute(() -> {
-                setBeamOn(player, enable);
+                if (!"fairy".equals(PowerAPI.get(player))) return;
+                if (isPowerless(player)) return;
+
+                if (enable) player.stopUsingItem();
+                setBeamOnAndSync(player, enable);
+
                 player.sendMessage(Text.literal(enable ? "Beam: ON" : "Beam: OFF"), true);
             });
         });
@@ -535,9 +628,8 @@ public final class FairyPower implements Power {
         }
     }
 
-    /* ---------------- Particles ---------------- */
+    /* ---------------- Particles + Beam behavior ---------------- */
 
-    // flight glitter
     private static void spawnFlightSparkles(ServerWorld sw, ServerPlayerEntity p) {
         if (SPARKLES_PER_TICK <= 0) return;
 
@@ -560,19 +652,21 @@ public final class FairyPower implements Power {
         }
     }
 
-    // beam (drain + visuals + recharge)
     private static float tickBeam(ServerWorld sw, ServerPlayerEntity p, float mana) {
-        // pay cost
         if (mana <= BEAM_DRAIN_PER_TICK + 0.001f) {
-            setBeamOn(p, false);
+            setBeamOnAndSync(p, false);
             return mana;
         }
         mana = Math.max(0f, mana - BEAM_DRAIN_PER_TICK);
 
-        // ✅ spawn lower
-        Vec3d start = p.getCameraPosVec(1f).subtract(0.0, 0.45, 0.0);
-        Vec3d dir   = p.getRotationVector().normalize();
-        Vec3d end   = start.add(dir.multiply(BEAM_RANGE));
+        Vec3d dir = p.getRotationVector().normalize();
+        double h = p.getDimensions(p.getPose()).height;
+
+        Vec3d start = p.getPos()
+                .add(0.0, h * 0.58, 0.0)
+                .add(dir.multiply(h * 0.16));
+
+        Vec3d end = start.add(dir.multiply(BEAM_RANGE));
 
         HitResult hr = sw.raycast(new RaycastContext(
                 start, end, RaycastContext.ShapeType.OUTLINE, RaycastContext.FluidHandling.NONE, p));
@@ -591,52 +685,23 @@ public final class FairyPower implements Power {
             flower = findFlowerSoft(sw, start, dir, maxDist, BEAM_SOFT_RADIUS);
         }
 
-        // beam particles along the ray
-        int segs = Math.max(4, BEAM_SEGMENTS);
-        for (int i = 0; i < segs; i++) {
-            double t = (i + 0.5) / (double) segs;
-            Vec3d pt = start.add(dir.multiply(maxDist * t));
+        // ✅ landing/contact particles (always)
+        sw.spawnParticles(ParticleTypes.END_ROD, hitPos.x, hitPos.y, hitPos.z, 2, 0.06, 0.06, 0.06, 0.0);
+        sw.spawnParticles(ParticleTypes.ENCHANT, hitPos.x, hitPos.y, hitPos.z, 6, 0.10, 0.10, 0.10, 0.0);
 
-            double jx = (sw.random.nextDouble() - 0.5) * 0.10;
-            double jy = (sw.random.nextDouble() - 0.5) * 0.10;
-            double jz = (sw.random.nextDouble() - 0.5) * 0.10;
-
-            sw.spawnParticles(
-                    net.seep.odd.particles.OddParticles.FAIRY_SPARKLES,
-                    pt.x + jx, pt.y + jy, pt.z + jz,
-                    1,
-                    0.0, 0.0, 0.0,
-                    0.0
-            );
-        }
-
-        // recharge + flash on the flower
         if (flower != null) {
             flower.addMana(BEAM_RECHARGE_PER_TICK);
 
+            // extra obvious contact when it’s actually a flower
+            Vec3d c = Vec3d.ofCenter(flower.getPos()).add(0, 0.25, 0);
+            sw.spawnParticles(ParticleTypes.HAPPY_VILLAGER, c.x, c.y, c.z, 2, 0.10, 0.10, 0.10, 0.0);
+
+            // ✅ recharge sound (player-only, paced)
             long now = sw.getTime();
-            UUID id = p.getUuid();
-            long lastFlash = LAST_BEAM_FLASH.getOrDefault(id, Long.MIN_VALUE);
-
-            if (now - lastFlash >= BEAM_FLASH_EVERY_TICKS) {
-                LAST_BEAM_FLASH.put(id, now);
-
-                Vec3d c = Vec3d.ofCenter(flower.getPos()).add(0, 0.25, 0);
-
-                // quick bright flash
-                sw.spawnParticles(ParticleTypes.FLASH, c.x, c.y, c.z, 1, 0, 0, 0, 0.0);
-
-                // sparkle burst
-                sw.spawnParticles(
-                        net.seep.odd.particles.OddParticles.FAIRY_SPARKLES,
-                        c.x, c.y, c.z,
-                        10,
-                        0.18, 0.18, 0.18,
-                        0.0
-                );
-
-                // subtle streaks
-                sw.spawnParticles(ParticleTypes.END_ROD, c.x, c.y, c.z, 4, 0.12, 0.12, 0.12, 0.0);
+            long last = LAST_FLOWER_SOUND_T.getOrDefault(p.getUuid(), Long.MIN_VALUE);
+            if (now - last >= FLOWER_SOUND_EVERY_TICKS) {
+                LAST_FLOWER_SOUND_T.put(p.getUuid(), now);
+                p.playSound(SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 0.35f, 1.85f);
             }
         }
 
@@ -691,15 +756,15 @@ public final class FairyPower implements Power {
         if (inst != null) inst.removeModifier(HP_MOD_ID);
     }
 
-    private static final BiConsumer<net.minecraft.entity.Entity, Float> PEHKUI_SCALE_SET = findPehkuiSetter();
+    private static final BiConsumer<Entity, Float> PEHKUI_SCALE_SET = findPehkuiSetter();
 
-    private static BiConsumer<net.minecraft.entity.Entity, Float> findPehkuiSetter() {
+    private static BiConsumer<Entity, Float> findPehkuiSetter() {
         try {
             Class<?> scaleTypesCl = Class.forName("virtuoel.pehkui.api.ScaleTypes");
             Object BASE = scaleTypesCl.getField("BASE").get(null);
 
             Class<?> scaleTypeCl = Class.forName("virtuoel.pehkui.api.ScaleType");
-            Method getScaleData = scaleTypeCl.getMethod("getScaleData", net.minecraft.entity.Entity.class);
+            Method getScaleData = scaleTypeCl.getMethod("getScaleData", Entity.class);
 
             Class<?> scaleDataCl = Class.forName("virtuoel.pehkui.api.ScaleData");
             Method setScale = scaleDataCl.getMethod("setScale", float.class);

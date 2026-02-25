@@ -1,0 +1,9 @@
+{
+    "type": "odd:potion_mixing",
+    "essences": ["hot", "life", "death"],
+    "per": 300,
+    "kind": "DRINK",
+    "count": 1,
+    "brewId": "geo_thermal_release",
+    "color": 13061120
+}

@@ -1,0 +1,15 @@
+{
+  "targets": [ "life_aurora" ],
+  "passes": [
+    {
+      "name": "odd:life_aurora",
+      "intarget": "minecraft:main",
+      "outtarget": "life_aurora"
+    },
+    {
+      "name": "blit",
+      "intarget": "life_aurora",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

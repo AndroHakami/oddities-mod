@@ -77,6 +77,10 @@ public class ModSounds {
     public static final SoundEvent STREAM = registerSoundEvent("stream");
     public static final SoundEvent STREAM_APPLIED = registerSoundEvent("stream_applied");
 
+    // Cosmic
+    public static final SoundEvent COSMIC_PREPARE = registerSoundEvent("cosmic_prepare");
+    public static final SoundEvent COSMIC_DASH = registerSoundEvent("cosmic_dash");
+
 
 
     // Shop
@@ -89,12 +93,27 @@ public class ModSounds {
     public static final SoundEvent SHY_GUY_RAGE_WINDUP = registerSoundEvent("shy_guy_rage");
     public static final SoundEvent SHY_GUY_RAGE_RUN = registerSoundEvent("shy_guy_rage_run");
     public static final SoundEvent SHY_GUY_ATTACK = registerSoundEvent("shy_guy_attack");
+    public static final SoundEvent FLASH_RECALL = registerSoundEvent("flash_recall");
+    public static final SoundEvent DIVINE_TOUCH = registerSoundEvent("cultist_divine");
+
+
+    // Artificer
+    public static final SoundEvent REFRACTION = registerSoundEvent("refraction");
+    public static final SoundEvent HOLY_RAY = registerSoundEvent("holy_ray");
+    public static final SoundEvent CREATION = registerSoundEvent("creation");
+    public static final SoundEvent VACUUM_SUCK = registerSoundEvent("vacuum_suck");
+    public static final SoundEvent VACUUM_IDLE = registerSoundEvent("vacuum_idle");
+    public static final SoundEvent VACUUM_ESSENCE = registerSoundEvent("vacuum_essence");
 
     // Atheneum
     public static final SoundEvent ATHENEUM = registerSoundEvent("atheneum");
 
     // Wizard
     public static final SoundEvent WIZARD_CHARGE = registerSoundEvent("wizard_charge");
+
+    // Invasion
+    public static final SoundEvent ALIEN_INVASION = registerSoundEvent("alien_invasion");
+
 
 
 

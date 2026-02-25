@@ -38,6 +38,8 @@ public final class ArtificerMixerClient {
 
         // Client side (symmetry; receivers if any)
         MixerNet.registerClient();
+        net.seep.odd.abilities.artificer.mixer.brew.AtomicRefractionEffect.Client.init();
+
 
         REGISTERED_CLIENT = true;
     }

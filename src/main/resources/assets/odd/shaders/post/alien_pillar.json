@@ -1,0 +1,15 @@
+{
+  "targets": ["alien_pillar"],
+  "passes": [
+    {
+      "name": "odd:alien_pillar",
+      "intarget": "minecraft:main",
+      "outtarget": "alien_pillar"
+    },
+    {
+      "name": "blit",
+      "intarget": "alien_pillar",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:sugar" },
+    { "item": "minecraft:bread" },
+    { "item": "minecraft:emerald" }
+  ],
+  "result": { "item": "odd:emerald_pie", "count": 1 },
+  "cookTime": 500,
+  "minStirs": 5
+}

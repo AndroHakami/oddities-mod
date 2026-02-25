@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:amethyst_shard" },
+    { "item": "minecraft:wheat" },
+    { "item": "minecraft:bread" }
+  ],
+  "result": { "item": "odd:amethyst_kebab", "count": 1 },
+  "cookTime": 200,
+  "minStirs": 2
+}

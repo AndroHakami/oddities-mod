@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["gaia", "cold", "life"],
+  "per": 400,
+  "kind": "THROW",
+  "count": 2,
+  "brewId": "geo_frost",
+  "color": 11581951
+}

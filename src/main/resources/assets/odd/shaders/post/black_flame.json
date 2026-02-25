@@ -1,0 +1,15 @@
+{
+  "targets": ["black_flame"],
+  "passes": [
+    {
+      "name": "odd:black_flame",
+      "intarget": "minecraft:main",
+      "outtarget": "black_flame"
+    },
+    {
+      "name": "blit",
+      "intarget": "black_flame",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

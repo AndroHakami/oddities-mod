@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["life", "gaia", "death"],
+  "per": 600,
+  "kind": "THROW",
+  "count": 3,
+  "brewId": "transfiguration",
+  "color": 16761656
+}

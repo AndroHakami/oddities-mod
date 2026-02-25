@@ -1,68 +1,99 @@
+// src/main/java/net/seep/odd/abilities/power/ForgerPower.java
 package net.seep.odd.abilities.power;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Hand;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
- // 1.20.1: use net.minecraft.text.Text
-import net.minecraft.text.Text;
-import net.seep.odd.block.ModBlocks;
 
-public class ForgerPower implements Power {
+import net.seep.odd.abilities.forger.ForgerData;
+import net.seep.odd.block.ModBlocks;
+import net.seep.odd.block.combiner.CombinerBlock;
+import net.seep.odd.block.combiner.CombinerBlockEntity;
+import net.seep.odd.status.ModStatusEffects;
+
+public final class ForgerPower implements Power {
     @Override public String id() { return "forger"; }
     @Override public String displayName() { return "Forger"; }
-
-    @Override public long cooldownTicks() { return 40; } // place cooldown
+    @Override public boolean hasSlot(String slot) { return "primary".equals(slot); }
+    @Override public long cooldownTicks() { return 10; }
 
     @Override
-    public void activate(ServerPlayerEntity player) {
-        ServerWorld world = (ServerWorld) player.getWorld();
+    public Identifier iconTexture(String slot) {
+        return new Identifier("odd", "textures/gui/abilities/forger_combiner.png");
+    }
 
-        // Raycast ~4 blocks and place the Grand Anvil on top of the hit block (if air above)
-        var hit = player.raycast(4.5, 0f, false);
-        if (hit.getType() != HitResult.Type.BLOCK) {
-            player.sendMessage(Text.literal("Look at a block to place the Grand Anvil."), true);
+    @Override
+    public String longDescription() {
+        return "Summon a Combiner. Feed it a gear + armor trim template to forge a unique secret enchant through a timing minigame.";
+    }
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    @Override
+    public void activate(ServerPlayerEntity p) {
+        if (isPowerless(p)) {
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
             return;
         }
-        var bhr = (BlockHitResult)hit;
-        BlockPos base = bhr.getBlockPos();
-        Direction face = bhr.getSide();
-        BlockPos placePos = base.offset(face);
-        if (!world.getBlockState(placePos).isAir()) {
-            // try above instead (common case: top face)
-            placePos = base.up();
-            if (!world.getBlockState(placePos).isAir()) {
-                player.sendMessage(Text.literal("No space to place the Grand Anvil."), true);
+        if (!(p.getWorld() instanceof ServerWorld sw)) return;
+
+        ForgerData data = ForgerData.get(sw);
+
+        // toggle off if exists in this dimension
+        ForgerData.CombinerRef ref = data.get(p.getUuid());
+        if (ref != null) {
+            Identifier dim = sw.getRegistryKey().getValue();
+            if (dim.equals(ref.dimension)) {
+                BlockPos old = ref.pos;
+                if (sw.getBlockState(old).isOf(ModBlocks.COMBINER)) {
+                    if (sw.getBlockEntity(old) instanceof CombinerBlockEntity be) {
+                        be.dropAllContents(sw);
+                    }
+                    sw.setBlockState(old, net.minecraft.block.Blocks.AIR.getDefaultState(), 3);
+                    sw.playSound(null, old, SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.BLOCKS, 0.55f, 1.25f);
+                    p.sendMessage(Text.literal("Combiner dismissed."), true);
+                }
+                data.clear(p.getUuid());
                 return;
             }
+            data.clear(p.getUuid());
         }
 
-        BlockState state = ModBlocks.GRAND_ANVIL.getDefaultState();
-        world.setBlockState(placePos, state);
-        player.sendMessage(Text.literal("Grand Anvil placed."), true);
-    }
+        // place above looked block
+        HitResult hr = p.raycast(6.0, 0.0f, false);
+        if (!(hr instanceof BlockHitResult bhr) || hr.getType() != HitResult.Type.BLOCK) {
+            p.sendMessage(Text.literal("Look at a block to place the combiner."), true);
+            return;
+        }
 
-    // UI strings & icons
-    @Override public String slotTitle(String slot) {
-        return switch (slot) {
-            case "primary" -> "Place Grand Anvil";
-            default -> "";
-        };
-    }
-    @Override public Identifier iconTexture(String slot) {
-        return new Identifier("odd", "textures/gui/abilities/forger_place_anvil.png");
-    }
+        BlockPos place = bhr.getBlockPos().up();
+        if (!sw.getBlockState(place).isAir()) {
+            p.sendMessage(Text.literal("Not enough space above that block."), true);
+            return;
+        }
 
-    @Override public String longDescription() {
-        return "The Forger crafts boons into gear using the Grand Anvil—timed strikes, sparks, and grit. "
-                + "Master the quick-time forge to unlock unique upgrades like the Italian Stompers.";
-    }
-    @Override public Identifier portraitTexture() {
-        return new Identifier("odd", "textures/gui/overview/player_icon.png");
+        Direction facing = p.getHorizontalFacing().getOpposite();
+        BlockState st = ModBlocks.COMBINER.getDefaultState();
+        if (st.contains(CombinerBlock.FACING)) st = st.with(CombinerBlock.FACING, facing);
+
+        sw.setBlockState(place, st, 3);
+
+        if (sw.getBlockEntity(place) instanceof CombinerBlockEntity be) {
+            be.serverStartEmerge();
+        }
+
+        data.set(p.getUuid(), sw.getRegistryKey().getValue(), place);
+        sw.playSound(null, place, SoundEvents.BLOCK_ANVIL_PLACE, SoundCategory.BLOCKS, 0.65f, 1.2f);
+        p.sendMessage(Text.literal("Combiner summoned."), true);
     }
 }

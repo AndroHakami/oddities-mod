@@ -2,6 +2,7 @@ package net.seep.odd.abilities.power;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
@@ -27,13 +28,52 @@ import net.seep.odd.abilities.buddymorph.BuddymorphData;
 import net.seep.odd.abilities.buddymorph.BuddymorphNet;
 import net.seep.odd.abilities.buddymorph.client.BuddymorphClient;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class BuddymorphPower implements Power {
+
+    // --- POWERLESS enforcement: revert once on transition ---
+    private static boolean tickRegistered = false;
+    private static final Set<UUID> POWERLESS_HANDLED = ConcurrentHashMap.newKeySet();
+
+    public BuddymorphPower() {
+        if (!tickRegistered) {
+            tickRegistered = true;
+
+            ServerTickEvents.END_SERVER_TICK.register(server -> {
+                for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+
+                    // Only care while Buddymorph is the selected/active power
+                    String currentId = net.seep.odd.abilities.PowerAPI.get(p);
+                    if (!"buddymorph".equals(currentId)) {
+                        POWERLESS_HANDLED.remove(p.getUuid());
+                        continue;
+                    }
+
+                    boolean powerless = isPowerless(p);
+
+                    // Transition: not handled yet + now powerless => revert ONCE immediately
+                    if (powerless) {
+                        if (POWERLESS_HANDLED.add(p.getUuid())) {
+                            forceHumanForm(p);
+                            p.sendMessage(Text.literal("§cYou are powerless."), true);
+                        }
+                    } else {
+                        // Effect gone => allow future transitions to trigger again
+                        POWERLESS_HANDLED.remove(p.getUuid());
+                    }
+                }
+            });
+        }
+    }
+
     @Override public String id() { return "buddymorph"; }
     @Override public String displayName() { return "Buddyform"; }
     @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
@@ -69,6 +109,35 @@ public final class BuddymorphPower implements Power {
     }
     @Override public Identifier portraitTexture() { return new Identifier(Oddities.MOD_ID, "textures/gui/overview/buddymorph.png"); }
 
+    /* ----- POWERLESS helpers (same style as Blockade) ----- */
+
+    private static boolean isPowerless(ServerPlayerEntity player) {
+        return player != null && player.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void runCommandAsServerPlayer(ServerPlayerEntity p, String command) {
+        MinecraftServer s = p.getServer();
+        if (s == null) return;
+
+        // ✅ runs with server perms (OP not required), but @s still targets the player
+        ServerCommandSource src = s.getCommandSource()
+                .withEntity(p)
+                .withSilent();
+
+        s.getCommandManager().executeWithPrefix(src, command);
+    }
+
+    private static void forceHumanForm(ServerPlayerEntity p) {
+        runCommandAsServerPlayer(p, "identity unequip @s");
+    }
+
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
+        forceHumanForm(p);
+        p.sendMessage(Text.literal("§cYou are powerless."), true);
+        return true;
+    }
+
     /* ----- Primary: befriend ----- */
     private static final int MELODY_RANGE = 5;
     private static final int MELODY_TICKS = 60;
@@ -82,6 +151,8 @@ public final class BuddymorphPower implements Power {
 
     @Override
     public void activate(ServerPlayerEntity p) {
+        if (blockIfPowerless(p)) return;
+
         ServerWorld sw = (ServerWorld) p.getWorld();
 
         sw.playSound(null, p.getX(), p.getY(), p.getZ(), ModSounds.MELODY, SoundCategory.PLAYERS, 1.0f, 1.0f);
@@ -120,7 +191,6 @@ public final class BuddymorphPower implements Power {
             aura(sw, p, 0.8, 0.35);
         }
 
-        // Push full list + charges
         LinkedHashMap<Identifier,Integer> map = data.getListWithCharges(p.getUuid());
         BuddymorphNet.s2cUpdateMenu(p, map);
     }
@@ -136,6 +206,7 @@ public final class BuddymorphPower implements Power {
         }
         return res;
     }
+
     private static boolean isNonHostile(LivingEntity e) {
         if (e instanceof PlayerEntity) return false;
         if (e instanceof HostileEntity) return false;
@@ -148,18 +219,20 @@ public final class BuddymorphPower implements Power {
             sw.spawnParticles(ParticleTypes.HEART, at.x + Math.cos(a)*rr, at.y + 0.6, at.z + Math.sin(a)*rr, 1, 0, 0, 0, 0);
         }
     }
+
     private static void aura(ServerWorld sw, ServerPlayerEntity p, double rr, double y) {
         Vec3d c = p.getPos();
         for (int i = 0; i < 24; i++) {
             double t = i/24.0 * Math.PI*2.0;
             sw.spawnParticles(ParticleTypes.NOTE, c.x + Math.cos(t)*rr, c.y + y, c.z + Math.sin(t)*rr, 1, 0, 0, 0, 0);
         }
-        return;
     }
 
     /* ----- Secondary: open picker ----- */
     @Override
     public void activateSecondary(ServerPlayerEntity p) {
+        if (blockIfPowerless(p)) return;
+
         ServerWorld sw = (ServerWorld) p.getWorld();
         LinkedHashMap<Identifier,Integer> map = BuddymorphData.get(sw).getListWithCharges(p.getUuid());
         BuddymorphNet.s2cOpenMenu(p, map);
@@ -167,11 +240,10 @@ public final class BuddymorphPower implements Power {
 
     /* ----- Morph via Identity commands (spends a charge) ----- */
     public static void serverMorphTo(ServerPlayerEntity p, Optional<Identifier> typeId) {
-        MinecraftServer s = p.getServer(); if (s == null) return;
-        ServerCommandSource src = p.getCommandSource().withSilent();
+        if (blockIfPowerless(p)) return;
 
         if (typeId.isEmpty()) {
-            s.getCommandManager().executeWithPrefix(src, "identity unequip @s");
+            runCommandAsServerPlayer(p, "identity unequip @s");
             return;
         }
 
@@ -190,9 +262,7 @@ public final class BuddymorphPower implements Power {
             return;
         }
 
-        s.getCommandManager().executeWithPrefix(src, "identity equip @s " + id);
-
-        // Update menu (may vanish if last charge was spent)
+        runCommandAsServerPlayer(p, "identity equip @s " + id);
         BuddymorphNet.s2cUpdateMenu(p, data.getListWithCharges(p.getUuid()));
     }
 

@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:ink_sac" },
+    { "item": "minecraft:cod" },
+    { "item": "minecraft:bowl" }
+  ],
+  "result": { "item": "odd:calamari", "count": 1 },
+  "cookTime": 400,
+  "minStirs": 4
+}

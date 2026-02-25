@@ -1,3 +1,4 @@
+// FILE: src/main/java/net/seep/odd/mixin/climber/ServerPlayerEntityClimberPassiveMixin.java
 package net.seep.odd.mixin.climber;
 
 import net.minecraft.block.BlockState;
@@ -21,13 +22,19 @@ public abstract class ServerPlayerEntityClimberPassiveMixin {
 
         if (!ClimberPower.hasClimber(sp)) return;
 
+        // ✅ always run cleanup + detach-on-powerless
+        ClimberPower.serverTick(sp);
+
+        // ✅ POWERLESS: cannot wall climb
+        if (ClimberPower.isPowerless(sp)) return;
+
         // Don’t fight rope physics
         if (ClimberPower.isPrimaryEngaged(sp)) return;
 
         // Don’t interfere with other movement modes
         if (sp.isFallFlying() || sp.isSwimming() || sp.hasVehicle()) return;
 
-        // Need to be in contact with a wall (we detect it ourselves)
+        // Need to be in contact with a wall
         if (!isTouchingWall(sp)) return;
 
         byte in = ClimberPower.getInputFlags(sp);
@@ -41,27 +48,22 @@ public abstract class ServerPlayerEntityClimberPassiveMixin {
         boolean left    = (in & ClimberPower.IN_LEFT) != 0;
         boolean right   = (in & ClimberPower.IN_RIGHT) != 0;
 
-        // Control feel: forward/back also climbs
         boolean up   = jump || forward;
         boolean down = sneak || back;
 
-        // ==== tuning knobs ====
-        final double CLIMB_UP   = 0.30; // fast
+        final double CLIMB_UP   = 0.30;
         final double CLIMB_DOWN = 0.24;
-        final double DAMP_MOVE  = 0.92; // "accurate" while moving
-        final double DAMP_IDLE  = 0.70; // sticky when not moving
-        // ======================
+        final double DAMP_MOVE  = 0.92;
+        final double DAMP_IDLE  = 0.70;
 
         Vec3d v = sp.getVelocity();
 
-        // vertical control
         double y;
         if (up && !down) {
             y = Math.max(v.y, CLIMB_UP);
         } else if (down && !up) {
             y = Math.min(v.y, -CLIMB_DOWN);
         } else {
-            // stick to the wall: cancel falling/sliding
             y = (v.y < 0.0) ? 0.0 : v.y * 0.35;
         }
 
@@ -72,7 +74,6 @@ public abstract class ServerPlayerEntityClimberPassiveMixin {
         sp.fallDistance = 0.0f;
     }
 
-    /** Robust "touching wall" test that works with partial blocks/collision shapes. */
     private static boolean isTouchingWall(ServerPlayerEntity sp) {
         World w = sp.getWorld();
         Box bb = sp.getBoundingBox();
@@ -80,18 +81,15 @@ public abstract class ServerPlayerEntityClimberPassiveMixin {
         double cx = (bb.minX + bb.maxX) * 0.5;
         double cz = (bb.minZ + bb.maxZ) * 0.5;
 
-        // sample 3 heights (feet/mid/head)
         double y0 = bb.minY + 0.10;
         double y1 = bb.minY + sp.getHeight() * 0.55;
         double y2 = bb.maxY - 0.10;
 
         double eps = 0.02;
 
-        // east/west faces
         if (solidAt(w, bb.minX - eps, y0, cz) || solidAt(w, bb.minX - eps, y1, cz) || solidAt(w, bb.minX - eps, y2, cz)) return true;
         if (solidAt(w, bb.maxX + eps, y0, cz) || solidAt(w, bb.maxX + eps, y1, cz) || solidAt(w, bb.maxX + eps, y2, cz)) return true;
 
-        // north/south faces
         if (solidAt(w, cx, y0, bb.minZ - eps) || solidAt(w, cx, y1, bb.minZ - eps) || solidAt(w, cx, y2, bb.minZ - eps)) return true;
         if (solidAt(w, cx, y0, bb.maxZ + eps) || solidAt(w, cx, y1, bb.maxZ + eps) || solidAt(w, cx, y2, bb.maxZ + eps)) return true;
 

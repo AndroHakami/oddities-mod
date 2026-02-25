@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "gaia", "light"],
+  "per": 300,
+  "kind": "DRINK",
+  "count": 3,
+  "brewId": "radiant_bramble",
+  "color": 5526070
+}

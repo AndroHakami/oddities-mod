@@ -1,16 +1,12 @@
+// FILE: src/main/java/net/seep/odd/abilities/lunar/item/LunarDrillItem.java
 package net.seep.odd.abilities.lunar.item;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.loader.api.FabricLoader;
+
 import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.sound.MovingSoundInstance;
-import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
@@ -21,20 +17,30 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.util.*;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.TypedActionResult;
+import net.minecraft.util.UseAction;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.*;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
-import net.seep.odd.abilities.lunar.client.LunarDrillPreview;
+
 import net.seep.odd.sound.ModSounds;
+
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
 import software.bernie.geckolib.animatable.client.RenderProvider;
 import software.bernie.geckolib.constant.DataTickets;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.core.animation.*;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 import software.bernie.geckolib.util.GeckoLibUtil;
@@ -289,9 +295,9 @@ public class LunarDrillItem extends Item implements GeoItem {
         if (!world.isClient) coolHeat(world, stack);
 
         if (user.isSneaking()) {
-            if (world.isClient) {
-                MinecraftClient.getInstance().setScreen(
-                        new net.seep.odd.abilities.lunar.client.screen.LunarPatternScreen(hand));
+            // IMPORTANT: no client-class references here; delegate to client-only impl.
+            if (world.isClient && FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+                Client.openPatternScreen(hand);
             }
             return TypedActionResult.success(stack, world.isClient);
         }
@@ -325,46 +331,18 @@ public class LunarDrillItem extends Item implements GeoItem {
 
     @Override
     public void usageTick(World world, net.minecraft.entity.LivingEntity user, ItemStack stack, int remainingUseTicks) {
-        if (!world.isClient || !(user instanceof PlayerEntity p)) return;
-
-        // If hard locked client-side, don't do any preview/charge fx
-        long hardEnd = stack.getOrCreateNbt().getLong(NBT_HARDLOCK_END);
-        if (hardEnd > 0 && world.getTime() < hardEnd) {
-            LunarDrillPreview.setChargeProgress(0f);
-            LunarDrillPreview.setTargets(Collections.emptyList());
-            return;
+        // Client-only preview/sfx/hud update lives in Client class (no client refs here).
+        if (world.isClient && FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+            Client.usageTickClient(world, user, stack, remainingUseTicks);
         }
-
-        // Keep charge loop alive + update progress every tick (client-only)
-        startOrUpdateChargeLoop((ClientPlayerEntity) p, stack, remainingUseTicks);
-
-        BlockHitResult bhr = rayToBlock(world, p, PREVIEW_REACH);
-        if (bhr == null || bhr.getType() != HitResult.Type.BLOCK) {
-            LunarDrillPreview.setTargets(Collections.emptyList());
-            return;
-        }
-
-        Direction face = bhr.getSide();
-        BlockPos origin = bhr.getBlockPos();
-        Direction horiz = p.getHorizontalFacing();
-
-        var nbt = stack.getOrCreateNbt();
-        long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
-        int depth = clampDepth(nbt.getInt(NBT_DEPTH));
-
-        boolean[][] grid = bitsToGrid(mask);
-        List<BlockPos> targets = layoutPatternWithDepth(origin, face, horiz, grid, depth);
-
-        LunarDrillPreview.setTargets(targets);
     }
 
     @Override
     public void onStoppedUsing(ItemStack stack, World world, net.minecraft.entity.LivingEntity user, int remainingUseTicks) {
         if (world.isClient) {
-            stopChargeLoop();
-            LunarDrillPreview.setChargeProgress(0f);
-            LunarDrillPreview.clear();
-            chargeReadyLatched = false;
+            if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+                Client.onStoppedUsingClient();
+            }
             return;
         }
 
@@ -494,258 +472,12 @@ public class LunarDrillItem extends Item implements GeoItem {
     }
 
     /* ===================================================================================== */
-    /* ============================  CLIENT ANIM + SOUND + HUD  ============================ */
+    /* ============================  CLIENT STATE (primitives only)  ======================= */
     /* ===================================================================================== */
 
-    @Environment(EnvType.CLIENT) private static boolean hooksInit = false;
-    @Environment(EnvType.CLIENT) private static boolean hudInit   = false;
-
-    // client-only state (NO NBT WRITES -> prevents wobble)
-    @Environment(EnvType.CLIENT) private static int chargeMainTicks = 0, chargeOffTicks = 0;
-    @Environment(EnvType.CLIENT) private static int drillMainTicks  = 0, drillOffTicks  = 0;
-
-    // continuous loop SFX
-    @Environment(EnvType.CLIENT) private static LoopForPlayer chargeLoop = null;
-    @Environment(EnvType.CLIENT) private static LoopForPlayer drillLoop  = null;
-    @Environment(EnvType.CLIENT) private static boolean chargeReadyLatched = false;
-
-    // HUD smoothing (client-only)
-    @Environment(EnvType.CLIENT) private static float hudHeatLatch = -1f;
-    @Environment(EnvType.CLIENT) private static long  hudLatchT = -1L;
-
-    /** call once from client init */
-    @Environment(EnvType.CLIENT)
-    public static void initClientHooks() {
-        if (hooksInit) return;
-        hooksInit = true;
-
-        if (!hudInit) {
-            hudInit = true;
-            HudRenderCallback.EVENT.register(LunarDrillItem::renderOverheatHud);
-        }
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player == null || client.world == null) {
-                stopChargeLoop();
-                stopDrillLoop();
-                LunarDrillPreview.setChargeProgress(0f);
-                LunarDrillPreview.setTargets(Collections.emptyList());
-                chargeReadyLatched = false;
-                chargeMainTicks = chargeOffTicks = drillMainTicks = drillOffTicks = 0;
-                return;
-            }
-
-            // decay flags
-            if (chargeMainTicks > 0) chargeMainTicks--;
-            if (chargeOffTicks  > 0) chargeOffTicks--;
-            if (drillMainTicks  > 0) drillMainTicks--;
-            if (drillOffTicks   > 0) drillOffTicks--;
-
-            ClientPlayerEntity p = client.player;
-
-            ItemStack main = p.getMainHandStack();
-            ItemStack off  = p.getOffHandStack();
-
-            boolean mainIsDrill = main.getItem() instanceof LunarDrillItem;
-            boolean offIsDrill  = off.getItem()  instanceof LunarDrillItem;
-
-            boolean using = p.isUsingItem() && (p.getActiveItem().getItem() instanceof LunarDrillItem);
-            if (using) {
-                if (p.getActiveHand() == Hand.MAIN_HAND) chargeMainTicks = 2;
-                else chargeOffTicks = 2;
-            } else {
-                stopChargeLoop();
-                LunarDrillPreview.setChargeProgress(0f);
-                chargeReadyLatched = false;
-            }
-
-            boolean attackHeld = client.options.attackKey.isPressed();
-            if (attackHeld && mainIsDrill) drillMainTicks = 2;
-            if (attackHeld && offIsDrill)  drillOffTicks  = 2;
-
-            if (attackHeld && (mainIsDrill || offIsDrill)) {
-                p.handSwinging = false;
-                p.handSwingTicks = 0;
-            }
-
-            // drill loop sound (stop if hard locked)
-            ItemStack held = mainIsDrill ? main : (offIsDrill ? off : ItemStack.EMPTY);
-            boolean hard = !held.isEmpty() && (client.world.getTime() < held.getOrCreateNbt().getLong(NBT_HARDLOCK_END));
-
-            if (attackHeld && (mainIsDrill || offIsDrill) && !hard) {
-                ItemStack s = mainIsDrill ? main : off;
-                float ramp = s.getOrCreateNbt().getFloat(NBT_RAMP);
-                float pitch = 1.0f + MathHelper.clamp(ramp * 0.06f, 0f, 0.8f);
-                startOrUpdateDrillLoop(p, pitch);
-            } else {
-                stopDrillLoop();
-            }
-        });
-    }
-
-    @Environment(EnvType.CLIENT)
-    private static void renderOverheatHud(DrawContext ctx, float tickDelta) {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null || mc.player == null || mc.world == null) return;
-
-        ItemStack main = mc.player.getMainHandStack();
-        ItemStack off  = mc.player.getOffHandStack();
-
-        ItemStack stack = main.getItem() instanceof LunarDrillItem ? main : (off.getItem() instanceof LunarDrillItem ? off : ItemStack.EMPTY);
-        if (stack.isEmpty()) return;
-
-        var nbt = stack.getOrCreateNbt();
-
-        long now = mc.world.getTime();
-        long hardEnd = nbt.getLong(NBT_HARDLOCK_END);
-        boolean hard = hardEnd > now;
-
-        float rawHeat = nbt.getFloat(NBT_HEAT);
-
-        // latch + locally cool for smooth HUD without NBT writes
-        if (hudHeatLatch < 0f || rawHeat != hudHeatLatch || hudLatchT < 0) {
-            hudHeatLatch = rawHeat;
-            hudLatchT = now;
-        }
-
-        float displayHeat = rawHeat;
-        if (!hard && hudLatchT >= 0) {
-            long dt = Math.max(0, now - hudLatchT);
-            displayHeat = Math.max(0f, hudHeatLatch - COOL_PER_TICK * dt);
-        } else if (hard) {
-            displayHeat = MAX_HEAT;
-        }
-
-        float pct = MathHelper.clamp(displayHeat / MAX_HEAT, 0f, 1f);
-
-        int sh = mc.getWindow().getScaledHeight();
-        int x = 10;
-        int y = sh - 62;
-
-        int w = 110;
-        int h = 12;
-
-        ctx.fill(x, y, x + w, y + h, 0x90000000);
-        ctx.fill(x, y, x + w, y + 1, 0xFF000000);
-        ctx.fill(x, y + h - 1, x + w, y + h, 0xFF000000);
-        ctx.fill(x, y, x + 1, y + h, 0xFF000000);
-        ctx.fill(x + w - 1, y, x + w, y + h, 0xFF000000);
-
-        int col;
-        if (hard) col = 0xFFFF2A2A;
-        else if (pct < 0.50f) col = 0xFF4DE3FF;
-        else if (pct < 0.80f) col = 0xFFFFD34D;
-        else col = 0xFFFF6A1A;
-
-        int innerW = w - 2;
-        int fillW = (int) Math.floor(innerW * pct);
-        ctx.fill(x + 1, y + 1, x + 1 + fillW, y + h - 1, col);
-
-        String label = "OVERHEAT";
-
-        String right;
-        if (hard) {
-            int secs = (int) Math.ceil(Math.max(0, hardEnd - now) / 20.0);
-            right = secs + "s";
-        } else {
-            right = (int) (pct * 100) + "%";
-        }
-
-        ctx.drawTextWithShadow(mc.textRenderer, label, x, y - 10, 0xFFFFFF);
-        int rw = mc.textRenderer.getWidth(right);
-        ctx.drawTextWithShadow(mc.textRenderer, right, x + w - rw, y - 10, hard ? 0xFF5555 : 0xA0FFFFFF);
-    }
-
-    /* ---------- charge loop control ---------- */
-    @Environment(EnvType.CLIENT)
-    private static void startOrUpdateChargeLoop(ClientPlayerEntity p, ItemStack stack, int remainingUseTicks) {
-        final MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null) return;
-
-        var nbt = stack.getOrCreateNbt();
-        long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
-        int depth = clampDepth(nbt.getInt(NBT_DEPTH));
-
-        int targetedBlocks = Math.max(1, Long.bitCount(mask) * depth);
-        int need  = (int) Math.ceil(CHARGE_BASE_T + CHARGE_PER_BLOCK_T * targetedBlocks);
-        int used  = MAX_USE_T - remainingUseTicks;
-        float pct = MathHelper.clamp(used / (float) need, 0f, 1f);
-
-        LunarDrillPreview.setChargeProgress(pct);
-
-        float pitch = 0.9f + pct * 0.5f;
-        float vol   = 0.35f + pct * 0.25f;
-
-        if (chargeLoop == null || chargeLoop.isDone()) {
-            chargeLoop = new LoopForPlayer(ModSounds.DRILL_CHARGE, p);
-            mc.getSoundManager().play(chargeLoop);
-        }
-
-        chargeLoop.setVolume(vol);
-        chargeLoop.setPitch(pitch);
-
-        if (!chargeReadyLatched && pct >= 1.0f) {
-            chargeReadyLatched = true;
-            p.playSound(ModSounds.DRILL_READY, 0.9f, 1.0f);
-        }
-    }
-
-    @Environment(EnvType.CLIENT)
-    private static void stopChargeLoop() {
-        if (chargeLoop != null) { chargeLoop.finish(); chargeLoop = null; }
-    }
-
-    /* ---------- drill loop control ---------- */
-    @Environment(EnvType.CLIENT)
-    private static void startOrUpdateDrillLoop(ClientPlayerEntity p, float pitch) {
-        final MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc == null) return;
-
-        if (drillLoop == null || drillLoop.isDone()) {
-            drillLoop = new LoopForPlayer(ModSounds.DRILL, p);
-            mc.getSoundManager().play(drillLoop);
-        }
-        drillLoop.setVolume(0.65f);
-        drillLoop.setPitch(pitch);
-    }
-
-    @Environment(EnvType.CLIENT)
-    private static void stopDrillLoop() {
-        if (drillLoop != null) { drillLoop.finish(); drillLoop = null; }
-    }
-
-    /* ---------- simple moving loop sound ---------- */
-    @Environment(EnvType.CLIENT)
-    private static final class LoopForPlayer extends MovingSoundInstance {
-        private final ClientPlayerEntity player;
-        private boolean stopped = false;
-
-        LoopForPlayer(SoundEvent event, ClientPlayerEntity player) {
-            super(event, SoundCategory.PLAYERS, SoundInstance.createRandom());
-            this.player = player;
-            this.repeat = true;
-            this.repeatDelay = 0;
-            this.volume = 0.6f;
-            this.pitch  = 1.0f;
-            updatePos();
-        }
-
-        @Override public void tick() {
-            if (player == null || player.isRemoved() || player.isDead()) { stopped = true; return; }
-            updatePos();
-        }
-
-        private void updatePos() {
-            this.x = player.getX();
-            this.y = player.getY() + 0.5;
-            this.z = player.getZ();
-        }
-
-        void setVolume(float v) { this.volume = v; }
-        void setPitch(float p)  { this.pitch  = p; }
-        void finish()           { this.stopped = true; }
-        @Override public boolean isDone() { return this.stopped || super.isDone(); }
-    }
+    // These are primitives only (safe on server). Client class updates them.
+    private static int chargeMainTicks = 0, chargeOffTicks = 0;
+    private static int drillMainTicks  = 0, drillOffTicks  = 0;
 
     /* ===================================================================================== */
     /* ===============================  GECKOLIB SETUP  ==================================== */
@@ -791,13 +523,335 @@ public class LunarDrillItem extends Item implements GeoItem {
 
     @Override
     public void createRenderer(Consumer<Object> consumer) {
+        // No direct reference to client renderer class (reflective create) -> server-safe.
         consumer.accept(new RenderProvider() {
             private GeoItemRenderer<?> renderer;
-            @Override public GeoItemRenderer<?> getCustomRenderer() {
-                if (renderer == null)
-                    renderer = new net.seep.odd.abilities.lunar.item.client.LunarDrillRenderer();
+
+            @Override
+            public GeoItemRenderer<?> getCustomRenderer() {
+                if (renderer == null) {
+                    renderer = Client.createRendererReflective();
+                }
                 return renderer;
             }
         });
+    }
+
+    /* ===================================================================================== */
+    /* ===============================  CLIENT ENTRY POINT  ================================= */
+    /* ===================================================================================== */
+
+    /** call once from your ClientModInitializer */
+    public static void initClientHooks() {
+        if (FabricLoader.getInstance().getEnvironmentType() != EnvType.CLIENT) return;
+        Client.initClientHooks();
+    }
+
+    /* ===================================================================================== */
+    /* ===============================  CLIENT IMPLEMENTATION  ============================== */
+    /* ===================================================================================== */
+
+    @Environment(EnvType.CLIENT)
+    private static final class Client {
+        private Client() {}
+
+        private static boolean hooksInit = false;
+        private static boolean hudInit   = false;
+
+        // continuous loop SFX
+        private static LoopForPlayer chargeLoop = null;
+        private static LoopForPlayer drillLoop  = null;
+        private static boolean chargeReadyLatched = false;
+
+        // HUD smoothing (client-only)
+        private static float hudHeatLatch = -1f;
+        private static long  hudLatchT = -1L;
+
+        static void openPatternScreen(Hand hand) {
+            final net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null) return;
+            mc.setScreen(new net.seep.odd.abilities.lunar.client.screen.LunarPatternScreen(hand));
+        }
+
+        static void initClientHooks() {
+            if (hooksInit) return;
+            hooksInit = true;
+
+            if (!hudInit) {
+                hudInit = true;
+                net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback.EVENT
+                        .register(Client::renderOverheatHud);
+            }
+
+            net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
+                if (client.player == null || client.world == null) {
+                    stopChargeLoop();
+                    stopDrillLoop();
+                    net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
+                    net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(Collections.emptyList());
+                    chargeReadyLatched = false;
+                    chargeMainTicks = chargeOffTicks = drillMainTicks = drillOffTicks = 0;
+                    return;
+                }
+
+                // decay flags
+                if (chargeMainTicks > 0) chargeMainTicks--;
+                if (chargeOffTicks  > 0) chargeOffTicks--;
+                if (drillMainTicks  > 0) drillMainTicks--;
+                if (drillOffTicks   > 0) drillOffTicks--;
+
+                net.minecraft.client.network.ClientPlayerEntity p = client.player;
+
+                ItemStack main = p.getMainHandStack();
+                ItemStack off  = p.getOffHandStack();
+
+                boolean mainIsDrill = main.getItem() instanceof LunarDrillItem;
+                boolean offIsDrill  = off.getItem()  instanceof LunarDrillItem;
+
+                boolean using = p.isUsingItem() && (p.getActiveItem().getItem() instanceof LunarDrillItem);
+                if (using) {
+                    if (p.getActiveHand() == Hand.MAIN_HAND) chargeMainTicks = 2;
+                    else chargeOffTicks = 2;
+                } else {
+                    stopChargeLoop();
+                    net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
+                    chargeReadyLatched = false;
+                }
+
+                boolean attackHeld = client.options.attackKey.isPressed();
+                if (attackHeld && mainIsDrill) drillMainTicks = 2;
+                if (attackHeld && offIsDrill)  drillOffTicks  = 2;
+
+                if (attackHeld && (mainIsDrill || offIsDrill)) {
+                    p.handSwinging = false;
+                    p.handSwingTicks = 0;
+                }
+
+                // drill loop sound (stop if hard locked)
+                ItemStack held = mainIsDrill ? main : (offIsDrill ? off : ItemStack.EMPTY);
+                boolean hard = !held.isEmpty() && (client.world.getTime() < held.getOrCreateNbt().getLong(NBT_HARDLOCK_END));
+
+                if (attackHeld && (mainIsDrill || offIsDrill) && !hard) {
+                    ItemStack s = mainIsDrill ? main : off;
+                    float ramp = s.getOrCreateNbt().getFloat(NBT_RAMP);
+                    float pitch = 1.0f + MathHelper.clamp(ramp * 0.06f, 0f, 0.8f);
+                    startOrUpdateDrillLoop(p, pitch);
+                } else {
+                    stopDrillLoop();
+                }
+            });
+        }
+
+        static void usageTickClient(World world, net.minecraft.entity.LivingEntity user, ItemStack stack, int remainingUseTicks) {
+            if (!(user instanceof PlayerEntity p)) return;
+
+            // If hard locked client-side, don't do any preview/charge fx
+            long hardEnd = stack.getOrCreateNbt().getLong(NBT_HARDLOCK_END);
+            if (hardEnd > 0 && world.getTime() < hardEnd) {
+                net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
+                net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(Collections.emptyList());
+                return;
+            }
+
+            // Keep charge loop alive + update progress every tick (client-only)
+            startOrUpdateChargeLoop((net.minecraft.client.network.ClientPlayerEntity) p, stack, remainingUseTicks);
+
+            BlockHitResult bhr = rayToBlock(world, p, PREVIEW_REACH);
+            if (bhr == null || bhr.getType() != HitResult.Type.BLOCK) {
+                net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(Collections.emptyList());
+                return;
+            }
+
+            Direction face = bhr.getSide();
+            BlockPos origin = bhr.getBlockPos();
+            Direction horiz = p.getHorizontalFacing();
+
+            var nbt = stack.getOrCreateNbt();
+            long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
+            int depth = clampDepth(nbt.getInt(NBT_DEPTH));
+
+            boolean[][] grid = bitsToGrid(mask);
+            List<BlockPos> targets = layoutPatternWithDepth(origin, face, horiz, grid, depth);
+
+            net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(targets);
+        }
+
+        static void onStoppedUsingClient() {
+            stopChargeLoop();
+            net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
+            net.seep.odd.abilities.lunar.client.LunarDrillPreview.clear();
+            chargeReadyLatched = false;
+        }
+
+        private static void renderOverheatHud(net.minecraft.client.gui.DrawContext ctx, float tickDelta) {
+            net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null || mc.player == null || mc.world == null) return;
+
+            ItemStack main = mc.player.getMainHandStack();
+            ItemStack off  = mc.player.getOffHandStack();
+
+            ItemStack stack = main.getItem() instanceof LunarDrillItem ? main : (off.getItem() instanceof LunarDrillItem ? off : ItemStack.EMPTY);
+            if (stack.isEmpty()) return;
+
+            var nbt = stack.getOrCreateNbt();
+
+            long now = mc.world.getTime();
+            long hardEnd = nbt.getLong(NBT_HARDLOCK_END);
+            boolean hard = hardEnd > now;
+
+            float rawHeat = nbt.getFloat(NBT_HEAT);
+
+            // latch + locally cool for smooth HUD without NBT writes
+            if (hudHeatLatch < 0f || rawHeat != hudHeatLatch || hudLatchT < 0) {
+                hudHeatLatch = rawHeat;
+                hudLatchT = now;
+            }
+
+            float displayHeat = rawHeat;
+            if (!hard && hudLatchT >= 0) {
+                long dt = Math.max(0, now - hudLatchT);
+                displayHeat = Math.max(0f, hudHeatLatch - COOL_PER_TICK * dt);
+            } else if (hard) {
+                displayHeat = MAX_HEAT;
+            }
+
+            float pct = MathHelper.clamp(displayHeat / MAX_HEAT, 0f, 1f);
+
+            int sh = mc.getWindow().getScaledHeight();
+            int x = 10;
+            int y = sh - 62;
+
+            int w = 110;
+            int h = 12;
+
+            ctx.fill(x, y, x + w, y + h, 0x90000000);
+            ctx.fill(x, y, x + w, y + 1, 0xFF000000);
+            ctx.fill(x, y + h - 1, x + w, y + h, 0xFF000000);
+            ctx.fill(x, y, x + 1, y + h, 0xFF000000);
+            ctx.fill(x + w - 1, y, x + w, y + h, 0xFF000000);
+
+            int col;
+            if (hard) col = 0xFFFF2A2A;
+            else if (pct < 0.50f) col = 0xFF4DE3FF;
+            else if (pct < 0.80f) col = 0xFFFFD34D;
+            else col = 0xFFFF6A1A;
+
+            int innerW = w - 2;
+            int fillW = (int) Math.floor(innerW * pct);
+            ctx.fill(x + 1, y + 1, x + 1 + fillW, y + h - 1, col);
+
+            String label = "OVERHEAT";
+
+            String right;
+            if (hard) {
+                int secs = (int) Math.ceil(Math.max(0, hardEnd - now) / 20.0);
+                right = secs + "s";
+            } else {
+                right = (int) (pct * 100) + "%";
+            }
+
+            ctx.drawTextWithShadow(mc.textRenderer, label, x, y - 10, 0xFFFFFF);
+            int rw = mc.textRenderer.getWidth(right);
+            ctx.drawTextWithShadow(mc.textRenderer, right, x + w - rw, y - 10, hard ? 0xFF5555 : 0xA0FFFFFF);
+        }
+
+        /* ---------- charge loop control ---------- */
+        private static void startOrUpdateChargeLoop(net.minecraft.client.network.ClientPlayerEntity p, ItemStack stack, int remainingUseTicks) {
+            final net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null) return;
+
+            var nbt = stack.getOrCreateNbt();
+            long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
+            int depth = clampDepth(nbt.getInt(NBT_DEPTH));
+
+            int targetedBlocks = Math.max(1, Long.bitCount(mask) * depth);
+            int need  = (int) Math.ceil(CHARGE_BASE_T + CHARGE_PER_BLOCK_T * targetedBlocks);
+            int used  = MAX_USE_T - remainingUseTicks;
+            float pct = MathHelper.clamp(used / (float) need, 0f, 1f);
+
+            net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(pct);
+
+            float pitch = 0.9f + pct * 0.5f;
+            float vol   = 0.35f + pct * 0.25f;
+
+            if (chargeLoop == null || chargeLoop.isDone()) {
+                chargeLoop = new LoopForPlayer(ModSounds.DRILL_CHARGE, p);
+                mc.getSoundManager().play(chargeLoop);
+            }
+
+            chargeLoop.setVolume(vol);
+            chargeLoop.setPitch(pitch);
+
+            if (!chargeReadyLatched && pct >= 1.0f) {
+                chargeReadyLatched = true;
+                p.playSound(ModSounds.DRILL_READY, 0.9f, 1.0f);
+            }
+        }
+
+        private static void stopChargeLoop() {
+            if (chargeLoop != null) { chargeLoop.finish(); chargeLoop = null; }
+        }
+
+        /* ---------- drill loop control ---------- */
+        private static void startOrUpdateDrillLoop(net.minecraft.client.network.ClientPlayerEntity p, float pitch) {
+            final net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null) return;
+
+            if (drillLoop == null || drillLoop.isDone()) {
+                drillLoop = new LoopForPlayer(ModSounds.DRILL, p);
+                mc.getSoundManager().play(drillLoop);
+            }
+            drillLoop.setVolume(0.65f);
+            drillLoop.setPitch(pitch);
+        }
+
+        private static void stopDrillLoop() {
+            if (drillLoop != null) { drillLoop.finish(); drillLoop = null; }
+        }
+
+        /* ---------- renderer creation (reflective to avoid server linkage) ---------- */
+        @SuppressWarnings("unchecked")
+        static GeoItemRenderer<?> createRendererReflective() {
+            try {
+                Class<?> c = Class.forName("net.seep.odd.abilities.lunar.item.client.LunarDrillRenderer");
+                Object o = c.getDeclaredConstructor().newInstance();
+                return (GeoItemRenderer<?>) o;
+            } catch (Throwable t) {
+                // If renderer fails to load, fall back to null (client will simply not render custom)
+                return null;
+            }
+        }
+
+        /* ---------- simple moving loop sound ---------- */
+        private static final class LoopForPlayer extends net.minecraft.client.sound.MovingSoundInstance {
+            private final net.minecraft.client.network.ClientPlayerEntity player;
+            private boolean stopped = false;
+
+            LoopForPlayer(SoundEvent event, net.minecraft.client.network.ClientPlayerEntity player) {
+                super(event, SoundCategory.PLAYERS, net.minecraft.client.sound.SoundInstance.createRandom());
+                this.player = player;
+                this.repeat = true;
+                this.repeatDelay = 0;
+                this.volume = 0.6f;
+                this.pitch  = 1.0f;
+                updatePos();
+            }
+
+            @Override public void tick() {
+                if (player == null || player.isRemoved() || player.isDead()) { stopped = true; return; }
+                updatePos();
+            }
+
+            private void updatePos() {
+                this.x = player.getX();
+                this.y = player.getY() + 0.5;
+                this.z = player.getZ();
+            }
+
+            void setVolume(float v) { this.volume = v; }
+            void setPitch(float p)  { this.pitch  = p; }
+            void finish()           { this.stopped = true; }
+            @Override public boolean isDone() { return this.stopped || super.isDone(); }
+        }
     }
 }

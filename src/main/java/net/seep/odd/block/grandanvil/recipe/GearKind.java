@@ -2,10 +2,13 @@ package net.seep.odd.block.grandanvil.recipe;
 
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.*;
+
 public enum GearKind {
     HELMET, CHESTPLATE, LEGGINGS, BOOTS,
     SWORD, AXE, PICKAXE, SHOVEL,
-    SHIELD;
+    SHIELD,
+    BOW, CROSSBOW,
+    TRIDENT;
 
     public boolean matches(ItemStack stack) {
         Item it = stack.getItem();
@@ -19,11 +22,14 @@ public enum GearKind {
             };
         }
         return switch (this) {
-            case SWORD   -> it instanceof SwordItem;
-            case AXE     -> it instanceof AxeItem;
-            case PICKAXE -> it instanceof PickaxeItem;
-            case SHOVEL  -> it instanceof ShovelItem;
-            case SHIELD  -> it == Items.SHIELD;
+            case SWORD    -> it instanceof SwordItem;
+            case AXE      -> it instanceof AxeItem;
+            case PICKAXE  -> it instanceof PickaxeItem;
+            case SHOVEL   -> it instanceof ShovelItem;
+            case SHIELD   -> it == Items.SHIELD || it instanceof ShieldItem;
+            case BOW      -> it instanceof BowItem;
+            case CROSSBOW -> it instanceof CrossbowItem;
+            case TRIDENT  -> it instanceof TridentItem || it == Items.TRIDENT;
             default -> false;
         };
     }

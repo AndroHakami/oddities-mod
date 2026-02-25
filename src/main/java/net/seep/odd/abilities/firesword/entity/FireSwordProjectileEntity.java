@@ -95,7 +95,7 @@ public class FireSwordProjectileEntity extends ThrownItemEntity {
                 dmg,
                 NO_BLOCK_DAMAGE_BEHAVIOR,
                 getX(), getY(), getZ(),
-                2.6f,
+                1.6f,
                 true, // create fire
                 World.ExplosionSourceType.MOB
         );

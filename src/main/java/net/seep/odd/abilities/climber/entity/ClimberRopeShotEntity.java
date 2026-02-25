@@ -24,6 +24,7 @@ import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.power.ClimberPower;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -54,58 +55,33 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
     @Override
     protected void initDataTracker() {
         this.dataTracker.startTracking(OWNER_UUID, Optional.empty());
-        this.dataTracker.startTracking(MODE, (byte)0); // 0 = ANCHOR, 1 = PULL
+        this.dataTracker.startTracking(MODE, (byte)0);
         this.dataTracker.startTracking(RETURNING, false);
         this.dataTracker.startTracking(DROPPING, false);
     }
 
-    public void setOwnerUuid(UUID id) {
-        this.dataTracker.set(OWNER_UUID, Optional.ofNullable(id));
-    }
+    public void setOwnerUuid(UUID id) { this.dataTracker.set(OWNER_UUID, Optional.ofNullable(id)); }
+    public UUID getOwnerUuid() { return this.dataTracker.get(OWNER_UUID).orElse(null); }
 
-    public UUID getOwnerUuid() {
-        return this.dataTracker.get(OWNER_UUID).orElse(null);
-    }
+    public void setMode(Mode m) { this.dataTracker.set(MODE, (byte)(m == Mode.PULL ? 1 : 0)); }
+    public Mode getMode() { return this.dataTracker.get(MODE) == 1 ? Mode.PULL : Mode.ANCHOR; }
 
-    public void setMode(Mode m) {
-        this.dataTracker.set(MODE, (byte)(m == Mode.PULL ? 1 : 0));
-    }
-
-    public Mode getMode() {
-        return this.dataTracker.get(MODE) == 1 ? Mode.PULL : Mode.ANCHOR;
-    }
-
-    public boolean isReturning() {
-        return this.dataTracker.get(RETURNING);
-    }
-
-    public boolean isDropping() {
-        return this.dataTracker.get(DROPPING);
-    }
+    public boolean isReturning() { return this.dataTracker.get(RETURNING); }
+    public boolean isDropping() { return this.dataTracker.get(DROPPING); }
 
     public void setStartPos(Vec3d p) {
-        this.startX = p.x;
-        this.startY = p.y;
-        this.startZ = p.z;
+        this.startX = p.x; this.startY = p.y; this.startZ = p.z;
         this.startSet = true;
-    }
-
-    public Vec3d getStartPos() {
-        return new Vec3d(startX, startY, startZ);
     }
 
     /** Called when player taps again. */
     public void startReturn() {
         if (this.getWorld().isClient) return;
-
         this.dataTracker.set(DROPPING, false);
         this.dataTracker.set(RETURNING, true);
-
-        // soften current velocity so it doesn't "snap"
         this.setVelocity(this.getVelocity().multiply(0.2));
     }
 
-    /** Called when max range reached: hook stops going out and falls down. */
     private void startDrop() {
         if (this.getWorld().isClient) return;
 
@@ -113,8 +89,6 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
         this.dataTracker.set(DROPPING, true);
 
         Vec3d v = this.getVelocity();
-
-        // kill most horizontal speed so it visibly "drops"
         Vec3d nv = new Vec3d(v.x * 0.18, Math.min(v.y, 0.08), v.z * 0.18);
         this.setVelocity(nv);
     }
@@ -123,14 +97,24 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
     public void tick() {
         super.tick();
 
-        if (!startSet) {
-            setStartPos(this.getPos());
-        }
+        if (!startSet) setStartPos(this.getPos());
 
-        // Lifetime fallback
-        if (this.age > 200) {
-            this.discard();
-            return;
+        if (this.age > 200) { this.discard(); return; }
+
+        // ✅ Server-side owner validity + POWERLESS kill-switch
+        if (!this.getWorld().isClient) {
+            UUID ownerId = getOwnerUuid();
+            if (ownerId == null) { this.discard(); return; }
+
+            if (!(this.getWorld() instanceof ServerWorld sw)) { this.discard(); return; }
+
+            ServerPlayerEntity owner = sw.getServer().getPlayerManager().getPlayer(ownerId);
+            if (owner == null || !owner.isAlive()) { this.discard(); return; }
+
+            if (owner.hasStatusEffect(ModStatusEffects.POWERLESS) || !ClimberPower.hasClimber(owner)) {
+                this.discard();
+                return;
+            }
         }
 
         if (isReturning()) {
@@ -138,31 +122,22 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
             return;
         }
 
-        // Apply gravity arc while flying/dropping
         Vec3d v0 = this.getVelocity();
         this.setVelocity(v0.x, v0.y - 0.035, v0.z);
 
-        // If flying normally (not dropping yet), enforce 30m range in XZ plane
         if (!this.getWorld().isClient && !isDropping()) {
             Vec3d p = this.getPos();
             double dx = p.x - startX;
             double dz = p.z - startZ;
             double planar = Math.sqrt(dx * dx + dz * dz);
-
-            if (planar >= 30.0) {
-                // At max range -> DROP instead of retract/disappear
-                startDrop();
-                // continue ticking this frame (it will fall & collide)
-            }
+            if (planar >= 30.0) startDrop();
         }
 
-        // While dropping, damp horizontal motion a bit every tick so it settles naturally
         if (isDropping() && !this.getWorld().isClient) {
             Vec3d v = this.getVelocity();
             this.setVelocity(v.x * 0.92, v.y, v.z * 0.92);
         }
 
-        // Move + collision via raycast between current and next pos
         Vec3d start = this.getPos();
         Vec3d end = start.add(this.getVelocity());
 
@@ -173,7 +148,6 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
                 this
         ));
 
-        // Entity hit test
         EntityHitResult ehr = net.minecraft.entity.projectile.ProjectileUtil.getEntityCollision(
                 this.getWorld(),
                 this,
@@ -185,19 +159,11 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
                         && !(e instanceof ClimberPullTetherEntity)
         );
 
-        if (ehr != null) {
-            onEntityHit(ehr);
-            return;
-        }
-
-        if (hit.getType() != HitResult.Type.MISS) {
-            onCollision(hit);
-            return;
-        }
+        if (ehr != null) { onEntityHit(ehr); return; }
+        if (hit.getType() != HitResult.Type.MISS) { onCollision(hit); return; }
 
         this.setPosition(end);
 
-        // small visual
         if (this.getWorld() instanceof ServerWorld sw && (this.age % 2) == 0) {
             sw.spawnParticles(ParticleTypes.CRIT,
                     this.getX(), this.getY(), this.getZ(),
@@ -207,17 +173,16 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
 
     private void tickReturn() {
         if (this.getWorld().isClient) return;
-
-        UUID ownerId = getOwnerUuid();
-        if (ownerId == null) {
-            this.discard();
-            return;
-        }
-
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
 
+        UUID ownerId = getOwnerUuid();
+        if (ownerId == null) { this.discard(); return; }
+
         ServerPlayerEntity owner = sw.getServer().getPlayerManager().getPlayer(ownerId);
-        if (owner == null || !owner.isAlive()) {
+        if (owner == null || !owner.isAlive()) { this.discard(); return; }
+
+        // ✅ POWERLESS: drop it
+        if (owner.hasStatusEffect(ModStatusEffects.POWERLESS) || !ClimberPower.hasClimber(owner)) {
             this.discard();
             return;
         }
@@ -227,15 +192,11 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
         Vec3d to = target.subtract(here);
         double d = to.length();
 
-        if (d < 1.2) {
-            this.discard();
-            return;
-        }
+        if (d < 1.2) { this.discard(); return; }
 
         Vec3d dir = to.multiply(1.0 / d);
         Vec3d vel = dir.multiply(2.35);
 
-        // no gravity while returning
         this.setVelocity(vel);
         this.setPosition(here.add(vel));
     }
@@ -244,21 +205,25 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
         if (this.getWorld().isClient) return;
 
         if (getMode() == Mode.ANCHOR && hit instanceof BlockHitResult bhr) {
-            Entity owner = this.getOwner();
-            if (!(owner instanceof ServerPlayerEntity sp)) {
+            if (!(this.getWorld() instanceof ServerWorld sw)) { this.discard(); return; }
+
+            UUID ownerId = getOwnerUuid();
+            ServerPlayerEntity sp = ownerId == null ? null : sw.getServer().getPlayerManager().getPlayer(ownerId);
+            if (sp == null || !sp.isAlive()) { this.discard(); return; }
+
+            // ✅ POWERLESS: do not anchor
+            if (sp.hasStatusEffect(ModStatusEffects.POWERLESS) || !ClimberPower.hasClimber(sp)) {
                 this.discard();
                 return;
             }
 
             BlockPos bp = bhr.getBlockPos();
             if (this.getWorld().getBlockState(bp).isAir()) {
-                // if we somehow hit "air", just drop/return
                 if (!isDropping()) startReturn();
                 else this.discard();
                 return;
             }
 
-            // Spawn anchor slightly OUT of the block face so rope is never hidden inside a full block
             Vec3d pushOut = Vec3d.of(bhr.getSide().getVector()).multiply(0.06);
             Vec3d p = bhr.getPos().add(pushOut);
 
@@ -267,7 +232,6 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
             anchor.setAttachedBlockPos(bp);
             anchor.refreshPositionAndAngles(p.x, p.y, p.z, 0.0f, 0.0f);
 
-            // Initial rope length = current distance (clamped to 30)
             double len = ClimberPower.ropeOrigin(sp).distanceTo(anchor.getPos());
             anchor.setRopeLength((float) Math.max(2.0, Math.min(30.0, len)));
 
@@ -282,32 +246,30 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
         if (this.getWorld().isClient) return;
 
         if (getMode() != Mode.PULL) {
-            // primary hook doesn't latch to entities
-            // If it was dropping, just keep dropping; otherwise return.
             if (!isDropping()) startReturn();
             return;
         }
 
-        Entity owner = this.getOwner();
-        if (!(owner instanceof ServerPlayerEntity sp)) {
+        if (!(this.getWorld() instanceof ServerWorld sw)) { this.discard(); return; }
+
+        UUID ownerId = getOwnerUuid();
+        ServerPlayerEntity sp = ownerId == null ? null : sw.getServer().getPlayerManager().getPlayer(ownerId);
+        if (sp == null || !sp.isAlive()) { this.discard(); return; }
+
+        // ✅ POWERLESS: deny pull-shot
+        if (sp.hasStatusEffect(ModStatusEffects.POWERLESS) || !ClimberPower.hasClimber(sp)) {
             this.discard();
             return;
         }
 
         Entity target = ehr.getEntity();
-        if (!(target instanceof LivingEntity le) || !le.isAlive()) {
-            this.discard();
-            return;
-        }
+        if (!(target instanceof LivingEntity le) || !le.isAlive()) { this.discard(); return; }
 
         double maxHp = le.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH) != null
                 ? le.getAttributeValue(EntityAttributes.GENERIC_MAX_HEALTH)
                 : le.getMaxHealth();
 
-        if (maxHp > 50.0) {
-            this.discard();
-            return;
-        }
+        if (maxHp > 50.0) { this.discard(); return; }
 
         le.addStatusEffect(new StatusEffectInstance(StatusEffects.NAUSEA, 2 * 20, 0, true, false, false));
         le.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 1 * 20, 2, true, false, false));
@@ -353,7 +315,6 @@ public class ClimberRopeShotEntity extends ProjectileEntity {
         }
     }
 
-    /** Find a shot by UUID across worlds. */
     public static ClimberRopeShotEntity findShot(MinecraftServer server, UUID id) {
         for (ServerWorld w : server.getWorlds()) {
             Entity e = w.getEntity(id);

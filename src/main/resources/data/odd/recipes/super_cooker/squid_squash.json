@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:ink_sac" },
+    { "item": "minecraft:glow_ink_sac" },
+    { "item": "minecraft:bowl" }
+  ],
+  "result": { "item": "odd:squid_squash", "count": 1 },
+  "cookTime": 400,
+  "minStirs": 4
+}

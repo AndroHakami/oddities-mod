@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:echo_shard" },
+    { "item": "minecraft:potato" },
+    { "item": "minecraft:bowl" }
+  ],
+  "result": { "item": "odd:deepdark_fries", "count": 2 },
+  "cookTime": 600,
+  "minStirs": 2
+}

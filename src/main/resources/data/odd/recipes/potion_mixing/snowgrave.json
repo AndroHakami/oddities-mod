@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["death", "cold", "light"],
+  "per": 500,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "snowgrave",
+  "color": 7242208
+}

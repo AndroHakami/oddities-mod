@@ -59,6 +59,35 @@ public final class BrewEffects {
             world.playSound(null, user.getBlockPos(), SoundEvents.ITEM_TOTEM_USE, SoundCategory.PLAYERS, 0.6f, 1.4f);
         });
 
+        registerDrink("radiant_bramble", (world, user, stack) -> {
+            if (user instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
+                net.seep.odd.abilities.artificer.mixer.brew.RadiantBrambleEffect.start(
+                        sp,
+                        net.seep.odd.abilities.artificer.mixer.brew.RadiantBrambleEffect.DEFAULT_DURATION_TICKS
+                );
+            }
+        });
+
+        registerDrink("geo_thermal_release", (world, user, stack) -> {
+            if (!world.isClient && user instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
+                net.seep.odd.abilities.artificer.mixer.brew.GeoThermalReleaseEffect.start(
+                        sp,
+                        net.seep.odd.abilities.artificer.mixer.brew.GeoThermalReleaseEffect.DEFAULT_DURATION_TICKS
+                );
+            }
+        });
+
+        // Atomic Refraction — 3s invis + phase (server authoritative) + Satin overlay + one-shot sound (client)
+        // IMPORTANT: Start() MUST run server-side, otherwise phasing will never work.
+        registerDrink("atomic_refraction", (world, user, stack) -> {
+            user.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, 20 * 3, 0, false, false, true));
+
+            // ✅ server-only start (this is the critical fix)
+            if (!world.isClient && user instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
+                net.seep.odd.abilities.artificer.mixer.brew.AtomicRefractionEffect.start(sp, 20 * 3);
+            }
+        });
+
         // ---- THROWABLES ----
         registerThrow("shockwave", (world, pos, thrower, stack) -> {
             double radius = 4.0;
@@ -69,6 +98,80 @@ public final class BrewEffects {
             });
             world.playSound(null, pos, SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.BLOCKS, 0.7f, 1.0f);
         });
+
+        registerThrow("geologic_pulse",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.GeologicPulseEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("life_aurora",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.LifeAuroraEffect.apply(world, pos, thrower, stack)
+        );
+
+        // ✅ NEW: Black Flame (Throwable)
+        registerThrow("black_flame",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.BlackFlameEffect.apply(world, pos, thrower, stack)
+        );
+
+        // Tectonic Obsidian — effect logic lives in its own file
+        registerThrow("tectonic_obsidian",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.TectonicObsidianEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("restart", (world, pos, thrower, stack) ->
+                net.seep.odd.abilities.artificer.mixer.brew.RestartEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("cloud_of_entropy",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.CloudOfEntropyEffect.apply(world, pos, thrower, stack)
+        );
+        registerThrow("dismantle",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.DismantleEffect.apply(world, pos, thrower, stack)
+        );
+        // ---- DRINKABLES ----
+        registerDrink("frosty_steps", (world, user, stack) -> {
+            if (!world.isClient && user instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
+                net.seep.odd.abilities.artificer.mixer.brew.FrostyStepsEffect.start(sp, 20 * 25);
+            }
+        });
+
+        registerDrink("auto_cold", (world, user, stack) -> {
+            if (!world.isClient && user instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
+                net.seep.odd.abilities.artificer.mixer.brew.AutoColdEffect.start(sp, 20 * 45);
+            }
+        });
+
+        registerDrink("ice_statue", (world, user, stack) -> {
+            if (!world.isClient && user instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
+                net.seep.odd.abilities.artificer.mixer.brew.IceStatueEffect.start(sp);
+            }
+        });
+
+// ---- THROWABLES ----
+        registerThrow("geo_frost",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.GeoFrostEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("snowgrave",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.SnowgraveEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("creation",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.CreationEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("brittle",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.BrittleEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("transfiguration",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.TransfigurationEffect.apply(world, pos, thrower, stack)
+        );
+
+        registerThrow("amplified_judgement",
+                (world, pos, thrower, stack) -> net.seep.odd.abilities.artificer.mixer.brew.AmplifiedJudgementEffect.apply(world, pos, thrower, stack)
+        );
+
+
 
         registerThrow("cleanse_fire", (world, pos, thrower, stack) -> {
             int r = 3;

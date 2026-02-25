@@ -2,6 +2,7 @@ package net.seep.odd.abilities.power;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
@@ -34,16 +35,54 @@ import net.seep.odd.abilities.druid.DruidData;
 import net.seep.odd.abilities.druid.DruidForm;
 import net.seep.odd.abilities.druid.DruidNet;
 import net.seep.odd.abilities.druid.client.DruidClient;
+import net.seep.odd.status.ModStatusEffects;
 
 import org.joml.Vector3f;
 
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class DruidPower implements Power {
     public static final long FORM_DEATH_COOLDOWN_TICKS = 20L * 20L;
 
     private static final UUID NO_ARMOR_UUID = UUID.fromString("7a7fca47-5e48-4d1a-a22b-6f2d1b3a2a01");
     private static final UUID NO_TOUGH_UUID = UUID.fromString("1b1c3f4c-2f61-4b17-8d1d-3c12d5d63a02");
+
+    // --- POWERLESS enforcement: revert once on transition ---
+    private static boolean tickRegistered = false;
+    private static final Set<UUID> POWERLESS_HANDLED = ConcurrentHashMap.newKeySet();
+
+    public DruidPower() {
+        if (!tickRegistered) {
+            tickRegistered = true;
+
+            ServerTickEvents.END_SERVER_TICK.register(server -> {
+                for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
+
+                    // Only care while Druid is the selected/active power
+                    String currentId = net.seep.odd.abilities.PowerAPI.get(p);
+                    if (!"druid".equals(currentId)) {
+                        POWERLESS_HANDLED.remove(p.getUuid());
+                        continue;
+                    }
+
+                    boolean powerless = isPowerless(p);
+
+                    if (powerless) {
+                        // ✅ do it ONCE per POWERLESS application
+                        if (POWERLESS_HANDLED.add(p.getUuid())) {
+                            forceHumanForm(p);
+                            p.sendMessage(Text.literal("§cYou are powerless."), true);
+                        }
+                    } else {
+                        // Effect gone => allow future transitions to trigger again
+                        POWERLESS_HANDLED.remove(p.getUuid());
+                    }
+                }
+            });
+        }
+    }
 
     @Override public String id() { return "druid"; }
     @Override public String displayName() { return "Druid"; }
@@ -82,9 +121,64 @@ public final class DruidPower implements Power {
         return new Identifier(Oddities.MOD_ID, "textures/gui/overview/druid.png");
     }
 
+    /* ----- POWERLESS + command helpers (server-side perms, no OP needed) ----- */
+
+    private static boolean isPowerless(ServerPlayerEntity player) {
+        return player != null && player.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    /** Runs a command with SERVER permission level, but with @s targeting the player. */
+    private static void runCommandAsServerPlayer(ServerPlayerEntity p, String command) {
+        MinecraftServer s = p.getServer();
+        if (s == null) return;
+
+        ServerCommandSource src = s.getCommandSource()
+                .withEntity(p)
+                .withSilent();
+
+        s.getCommandManager().executeWithPrefix(src, command);
+    }
+
+    private static void forceHumanForm(ServerPlayerEntity p) {
+        ServerWorld sw = p.getServerWorld();
+        DruidData data = DruidData.get(sw);
+
+        // If already human (data-wise), we still ensure identity is unequipped once via serverRevertToHuman
+        if (data.getCurrentForm(p.getUuid()) != DruidForm.HUMAN) {
+            data.setCurrentForm(p.getUuid(), DruidForm.HUMAN);
+        }
+
+        // No FX here (keeps it clean / non-spammy)
+        serverRevertToHuman(p, false);
+        DruidNet.s2cForm(p, DruidForm.HUMAN);
+    }
+
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
+
+        // ✅ don’t re-run revert every press while POWERLESS is still active
+        if (POWERLESS_HANDLED.add(p.getUuid())) {
+            forceHumanForm(p);
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
+        }
+        return true;
+    }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        // ✅ don’t spam if already human
+        ServerWorld sw = player.getServerWorld();
+        DruidData data = DruidData.get(sw);
+        if (data.getCurrentForm(player.getUuid()) != DruidForm.HUMAN) {
+            forceHumanForm(player);
+        }
+    }
+
     /* ---------------- Primary: open wheel ---------------- */
     @Override
     public void activate(ServerPlayerEntity p) {
+        if (blockIfPowerless(p)) return;
+
         ServerWorld sw = p.getServerWorld();
         DruidData data = DruidData.get(sw);
 
@@ -103,9 +197,11 @@ public final class DruidPower implements Power {
                 SoundEvents.UI_BUTTON_CLICK.value(), SoundCategory.PLAYERS, 0.6f, 1.2f);
     }
 
-    /* ---------------- Secondary: Blossoming Touch (FIXED) ---------------- */
+    /* ---------------- Secondary: Blossoming Touch ---------------- */
     @Override
     public void activateSecondary(ServerPlayerEntity p) {
+        if (blockIfPowerless(p)) return;
+
         ServerWorld sw = p.getServerWorld();
 
         HitResult hr = p.raycast(5.0, 0.0f, true);
@@ -117,12 +213,10 @@ public final class DruidPower implements Power {
 
         boolean did = false;
 
-        // Wall -> vines
         if (side.getAxis().isHorizontal()) {
             did |= growVinesDown(sw, hitPos, side, 5);
         }
 
-        // Special terrain rules
         if (sw.getRegistryKey() == World.NETHER) {
             did |= netherBloom(sw, hitPos, side);
         } else if (hitState.isOf(Blocks.MYCELIUM)) {
@@ -131,12 +225,10 @@ public final class DruidPower implements Power {
             did |= spawnCactus(sw, hitPos.up(), 6);
         }
 
-        // Underwater boost
         if (!did && sw.getFluidState(hitPos).isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
             did |= underwaterBloom(sw, hitPos);
         }
 
-        // Default: stronger-than-bonemeal area (3x3, double pass)
         if (!did) {
             did |= bonemealArea(sw, hitPos);
         }
@@ -154,10 +246,9 @@ public final class DruidPower implements Power {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     BlockPos p = center.add(dx, 0, dz);
-                    // fresh stack each call so it never “runs out”
                     ItemStack meal = new ItemStack(Items.BONE_MEAL, 1);
                     if (BoneMealItem.useOnFertilizable(meal, sw, p)) did = true;
-                    // Also try the block above (helps tall grass/flowers pop more)
+
                     ItemStack meal2 = new ItemStack(Items.BONE_MEAL, 1);
                     if (BoneMealItem.useOnFertilizable(meal2, sw, p.up())) did = true;
                 }
@@ -190,7 +281,6 @@ public final class DruidPower implements Power {
 
     private static boolean underwaterBloom(ServerWorld sw, BlockPos hitPos) {
         boolean did = false;
-        // Try placing seagrass around in nearby water blocks
         for (int i = 0; i < 10; i++) {
             int dx = sw.random.nextInt(5) - 2;
             int dz = sw.random.nextInt(5) - 2;
@@ -214,7 +304,6 @@ public final class DruidPower implements Power {
     private static boolean netherBloom(ServerWorld sw, BlockPos hitPos, Direction side) {
         boolean did = false;
 
-        // Spawn fungi/mushrooms mainly above the hit block (or adjacent if clicked side)
         BlockPos base = (side == Direction.UP) ? hitPos : hitPos.offset(side).down();
         BlockPos start = base.up();
 
@@ -225,7 +314,6 @@ public final class DruidPower implements Power {
 
             if (!sw.getBlockState(p).isAir()) continue;
 
-            // prefer nether fungi if on nylium
             BlockState below = sw.getBlockState(p.down());
             BlockState place;
             if (below.isOf(Blocks.CRIMSON_NYLIUM)) {
@@ -288,6 +376,15 @@ public final class DruidPower implements Power {
     /* ---------------- Server-side form switching ---------------- */
 
     public static void serverSetForm(ServerPlayerEntity p, DruidForm chosen) {
+        if (isPowerless(p)) {
+            // ✅ also only revert once per powerless phase
+            if (POWERLESS_HANDLED.add(p.getUuid())) {
+                forceHumanForm(p);
+                p.sendMessage(Text.literal("§cYou are powerless."), true);
+            }
+            return;
+        }
+
         ServerWorld sw = p.getServerWorld();
         DruidData data = DruidData.get(sw);
 
@@ -308,13 +405,9 @@ public final class DruidPower implements Power {
             return;
         }
 
-        // store hp snapshot for revert-on-lethal logic
         data.setStoredHumanHealth(p.getUuid(), p.getHealth());
 
-        MinecraftServer s = p.getServer(); if (s == null) return;
-        ServerCommandSource src = p.getCommandSource().withSilent();
-
-        s.getCommandManager().executeWithPrefix(src, "identity equip @s " + chosen.identityEntityId());
+        runCommandAsServerPlayer(p, "identity equip @s " + chosen.identityEntityId());
 
         applyNoArmor(p);
         chosen.applyBuffs(p);
@@ -325,10 +418,7 @@ public final class DruidPower implements Power {
     }
 
     public static void serverRevertToHuman(ServerPlayerEntity p, boolean fx) {
-        MinecraftServer s = p.getServer(); if (s == null) return;
-        ServerCommandSource src = p.getCommandSource().withSilent();
-
-        s.getCommandManager().executeWithPrefix(src, "identity unequip @s");
+        runCommandAsServerPlayer(p, "identity unequip @s");
 
         removeNoArmor(p);
         DruidForm.clearBuffs(p);

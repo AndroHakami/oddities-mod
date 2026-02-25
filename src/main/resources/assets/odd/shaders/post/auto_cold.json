@@ -1,0 +1,15 @@
+{
+  "targets": ["auto_cold"],
+  "passes": [
+    {
+      "name": "odd:auto_cold",
+      "intarget": "minecraft:main",
+      "outtarget": "auto_cold"
+    },
+    {
+      "name": "blit",
+      "intarget": "auto_cold",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

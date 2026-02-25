@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:bread" },
+    { "item": "minecraft:nether_wart" },
+    { "item": "minecraft:beef" }
+  ],
+  "result": { "item": "odd:hellish_burger", "count": 1 },
+  "cookTime": 300,
+  "minStirs": 3
+}

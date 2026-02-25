@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:egg" },
+    { "item": "minecraft:milk_bucket" },
+    { "item": "minecraft:bread" }
+  ],
+  "result": { "item": "odd:egg_sandwich", "count": 1 },
+  "cookTime": 100,
+  "minStirs": 5
+}

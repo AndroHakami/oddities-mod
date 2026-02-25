@@ -1,22 +1,28 @@
+// FILE: src/main/java/net/seep/odd/abilities/power/ClimberPower.java
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.objects.Object2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.entity.Entity;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.World;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.climber.entity.ClimberRopeAnchorEntity;
 import net.seep.odd.abilities.climber.entity.ClimberRopeShotEntity;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class ClimberPower implements Power {
 
@@ -38,6 +44,9 @@ public final class ClimberPower implements Power {
 
     // per-player active PRIMARY hook shot UUID (flying/retracting)
     private static final Object2ObjectOpenHashMap<UUID, UUID> ACTIVE_PRIMARY_SHOT = new Object2ObjectOpenHashMap<>();
+
+    // Detect respawn: ServerPlayerEntity instance changes => entity id changes.
+    private static final ConcurrentHashMap<UUID, Integer> LAST_ENTITY_ID = new ConcurrentHashMap<>();
 
     @Override public String id() { return "climber"; }
 
@@ -77,10 +86,14 @@ public final class ClimberPower implements Power {
     }
 
     /** Power check (server-side) */
-    public static boolean hasClimber(net.minecraft.entity.player.PlayerEntity player) {
+    public static boolean hasClimber(PlayerEntity player) {
         if (!(player instanceof ServerPlayerEntity sp)) return false;
         String current = net.seep.odd.abilities.PowerAPI.get(sp);
         return "climber".equals(current);
+    }
+
+    public static boolean isPowerless(ServerPlayerEntity player) {
+        return player != null && player.hasStatusEffect(ModStatusEffects.POWERLESS);
     }
 
     /** Call once in common init. */
@@ -95,15 +108,56 @@ public final class ClimberPower implements Power {
             INPUT.removeByte(id);
             ACTIVE_ANCHOR.remove(id);
             ACTIVE_PRIMARY_SHOT.remove(id);
+            LAST_ENTITY_ID.remove(id);
         });
     }
 
-    /** Your guaranteed server tick can call this. */
+    /** Force-detach rope/hook and clear state (used for POWERLESS + respawn). */
+    public static void forceDetach(ServerPlayerEntity player) {
+        if (player == null) return;
+
+        UUID owner = player.getUuid();
+        MinecraftServer server = player.getServer();
+
+        UUID anchorId = ACTIVE_ANCHOR.get(owner);
+        if (anchorId != null && server != null) {
+            ClimberRopeAnchorEntity anchor = ClimberRopeAnchorEntity.findAnchor(server, anchorId);
+            if (anchor != null) anchor.discard();
+        }
+
+        UUID shotId = ACTIVE_PRIMARY_SHOT.get(owner);
+        if (shotId != null && server != null) {
+            ClimberRopeShotEntity shot = ClimberRopeShotEntity.findShot(server, shotId);
+            if (shot != null) shot.discard();
+        }
+
+        ACTIVE_ANCHOR.remove(owner);
+        ACTIVE_PRIMARY_SHOT.remove(owner);
+        INPUT.removeByte(owner);
+    }
+
+    /** Your guaranteed server tick can call this (we’ll also call it from the mixin tick). */
     public static void serverTick(ServerPlayerEntity player) {
         if (!hasClimber(player)) return;
 
-        // (passive climb stays in your codebase if you have it elsewhere)
-        // If you’re still using the older passive method in this class, keep it as-is.
+        // --- Respawn fix ---
+        // After death, Minecraft creates a NEW ServerPlayerEntity with same UUID.
+        // If we keep old rope state by UUID, passive climbing gets stuck disabled forever.
+        int nowEntityId = player.getId();
+        Integer last = LAST_ENTITY_ID.get(player.getUuid());
+        if (last == null) {
+            LAST_ENTITY_ID.put(player.getUuid(), nowEntityId);
+        } else if (last != nowEntityId) {
+            // respawn detected
+            LAST_ENTITY_ID.put(player.getUuid(), nowEntityId);
+            forceDetach(player);
+        }
+
+        // --- POWERLESS: detach immediately + disable everything climber-related ---
+        if (isPowerless(player)) {
+            forceDetach(player);
+            return;
+        }
 
         // Cleanup stale anchor pointer
         UUID anchorId = ACTIVE_ANCHOR.get(player.getUuid());
@@ -135,6 +189,12 @@ public final class ClimberPower implements Power {
     @Override
     public void activate(ServerPlayerEntity player) {
         if (player.getWorld().isClient) return;
+
+        // POWERLESS: detach + deny
+        if (isPowerless(player)) {
+            forceDetach(player);
+            return;
+        }
 
         UUID owner = player.getUuid();
         MinecraftServer server = player.getServer();
@@ -186,8 +246,13 @@ public final class ClimberPower implements Power {
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
-        // unchanged: your secondary can stay as you already have it
         if (player.getWorld().isClient) return;
+
+        // POWERLESS: detach + deny
+        if (isPowerless(player)) {
+            forceDetach(player);
+            return;
+        }
 
         ClimberRopeShotEntity shot = new ClimberRopeShotEntity(ModEntities.CLIMBER_ROPE_SHOT, player.getWorld());
         shot.setOwner(player);
@@ -229,25 +294,54 @@ public final class ClimberPower implements Power {
     public static byte getInputFlags(ServerPlayerEntity player) {
         return INPUT.getOrDefault(player.getUuid(), (byte)0);
     }
+
     public static boolean isPrimaryEngaged(ServerPlayerEntity player) {
         UUID id = player.getUuid();
         return ACTIVE_ANCHOR.containsKey(id) || ACTIVE_PRIMARY_SHOT.containsKey(id);
     }
+
     public static boolean hasClimberAnySide(PlayerEntity player) {
-        if (player instanceof net.minecraft.server.network.ServerPlayerEntity sp) {
-            return hasClimber(sp); // your existing server-authoritative check
+        if (player instanceof ServerPlayerEntity sp) {
+            return hasClimber(sp);
         }
-        // client: use the server-synced flag
         return net.seep.odd.abilities.climber.net.ClimberClimbNetworking.canClimbAnySide(player.getUuid());
     }
 
-    // inside ClimberPower
+    /** Robust "touching wall" test (also used for mining-speed bypass on server). */
+    public static boolean isTouchingWall(ServerPlayerEntity sp) {
+        World w = sp.getWorld();
+        Box bb = sp.getBoundingBox();
 
+        double cx = (bb.minX + bb.maxX) * 0.5;
+        double cz = (bb.minZ + bb.maxZ) * 0.5;
 
+        // sample 3 heights (feet/mid/head)
+        double y0 = bb.minY + 0.10;
+        double y1 = bb.minY + sp.getHeight() * 0.55;
+        double y2 = bb.maxY - 0.10;
 
+        double eps = 0.02;
+
+        // east/west faces
+        if (solidAt(w, bb.minX - eps, y0, cz) || solidAt(w, bb.minX - eps, y1, cz) || solidAt(w, bb.minX - eps, y2, cz)) return true;
+        if (solidAt(w, bb.maxX + eps, y0, cz) || solidAt(w, bb.maxX + eps, y1, cz) || solidAt(w, bb.maxX + eps, y2, cz)) return true;
+
+        // north/south faces
+        if (solidAt(w, cx, y0, bb.minZ - eps) || solidAt(w, cx, y1, bb.minZ - eps) || solidAt(w, cx, y2, bb.minZ - eps)) return true;
+        if (solidAt(w, cx, y0, bb.maxZ + eps) || solidAt(w, cx, y1, bb.maxZ + eps) || solidAt(w, cx, y2, bb.maxZ + eps)) return true;
+
+        return false;
+    }
+
+    private static boolean solidAt(World w, double x, double y, double z) {
+        BlockPos bp = BlockPos.ofFloored(x, y, z);
+        BlockState st = w.getBlockState(bp);
+        if (st.isAir()) return false;
+        return !st.getCollisionShape(w, bp).isEmpty();
+    }
 
     /** Waist/pants attach point. */
-    public static Vec3d ropeOrigin(net.minecraft.entity.player.PlayerEntity p) {
+    public static Vec3d ropeOrigin(PlayerEntity p) {
         return p.getPos().add(0.0, p.getHeight() * 0.45, 0.0);
     }
 }

@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/firesword/item/FireSwordItem.java
 package net.seep.odd.abilities.firesword.item;
 
 import net.fabricmc.api.EnvType;
@@ -18,12 +19,15 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.*;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
+
+import net.seep.odd.status.ModStatusEffects;
 
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
@@ -65,6 +69,7 @@ public class FireSwordItem extends SwordItem implements GeoItem {
     // NBT keys
     private static final String NBT_USE_HAND = "odd_fs_useHand";
     private static final String NBT_READY = "odd_fs_ready";
+    private static final String NBT_LAST_DECAY = "odd_fs_lastDecay";
 
     // ===== Gecko anims =====
     private static final RawAnimation IDLE   = RawAnimation.begin().thenLoop("idle");
@@ -82,6 +87,11 @@ public class FireSwordItem extends SwordItem implements GeoItem {
 
     @Override
     public boolean postHit(ItemStack stack, LivingEntity target, LivingEntity attacker) {
+        // if somehow powerless while still holding it, just don't apply extras
+        if (attacker instanceof PlayerEntity p && p.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            return true;
+        }
+
         target.setOnFireFor(4);
 
         Hand hand = (attacker instanceof PlayerEntity p) ? p.getActiveHand() : Hand.MAIN_HAND;
@@ -93,12 +103,74 @@ public class FireSwordItem extends SwordItem implements GeoItem {
     }
 
     /* ============================================================
+     * POWERLESS + decay (summoned swords)
+     * - summoned swords lose 1 durability per second
+     * - if POWERLESS, summoned sword instantly fizzles out (deleted)
+     * ============================================================ */
+
+    @Override
+    public void inventoryTick(ItemStack stack, World world, Entity entity, int slot, boolean selected) {
+        super.inventoryTick(stack, world, entity, slot, selected);
+
+        if (world.isClient) return;
+        if (!(entity instanceof PlayerEntity player)) return;
+
+        // only summoned swords decay / fizzle
+        var nbt = stack.getNbt();
+        if (nbt == null || !nbt.getBoolean(SUMMONED_NBT)) return;
+
+        // POWERLESS: sword cannot be kept/used
+        if (player.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            world.playSound(
+                    null,
+                    player.getX(), player.getY(), player.getZ(),
+                    SoundEvents.BLOCK_FIRE_EXTINGUISH,
+                    SoundCategory.PLAYERS,
+                    0.7f,
+                    1.0f
+            );
+            stack.decrement(1); // remove the sword
+            return;
+        }
+
+        // 1 durability per second (20 ticks)
+        long now = world.getTime();
+        long last = nbt.getLong(NBT_LAST_DECAY);
+
+        if (last == 0L) {
+            nbt.putLong(NBT_LAST_DECAY, now);
+            return;
+        }
+
+        if (now - last >= 20L) {
+            nbt.putLong(NBT_LAST_DECAY, now);
+
+            Hand breakHand = null;
+            if (selected) breakHand = Hand.MAIN_HAND;
+            else if (player.getOffHandStack() == stack) breakHand = Hand.OFF_HAND;
+
+            if (breakHand != null) {
+                Hand finalHand = breakHand;
+                stack.damage(5, player, p -> p.sendToolBreakStatus(finalHand));
+            } else {
+                stack.damage(5, player, p -> {});
+            }
+        }
+    }
+
+    /* ============================================================
      * Right-click: vanilla "using item" charge (reliable)
      * ============================================================ */
 
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
+
+        // POWERLESS: no using
+        if (user.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            if (!world.isClient) user.sendMessage(Text.literal("§cYou are powerless."), true);
+            return TypedActionResult.fail(stack);
+        }
 
         // Mark which hand started the charge (for correct durability break status)
         stack.getOrCreateNbt().putInt(NBT_USE_HAND, hand.ordinal());
@@ -134,6 +206,13 @@ public class FireSwordItem extends SwordItem implements GeoItem {
     public void usageTick(World world, LivingEntity user, ItemStack stack, int remainingUseTicks) {
         super.usageTick(world, user, stack, remainingUseTicks);
 
+        // POWERLESS applied mid-charge => cancel immediately
+        if (user instanceof PlayerEntity p && p.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            p.stopUsingItem();
+            stack.getOrCreateNbt().putBoolean(NBT_READY, false);
+            return;
+        }
+
         int usedTicks = getMaxUseTime(stack) - remainingUseTicks;
 
         // Once we cross the 0.2s threshold, play a "ready" cue ONCE.
@@ -165,7 +244,15 @@ public class FireSwordItem extends SwordItem implements GeoItem {
 
     @Override
     public void onStoppedUsing(ItemStack stack, World world, LivingEntity user, int remainingUseTicks) {
-        super.onStoppedUsing(stack, world, user, remainingUseTicks);
+        super.onStoppedUsing(stack, world, user, remainingUseTicks); // ✅ correct
+
+
+
+        // POWERLESS: no slam
+        if (user instanceof PlayerEntity p && p.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            stack.getOrCreateNbt().putBoolean(NBT_READY, false);
+            return;
+        }
 
         int usedTicks = getMaxUseTime(stack) - remainingUseTicks;
 
@@ -204,10 +291,10 @@ public class FireSwordItem extends SwordItem implements GeoItem {
 
         // durability cost 3
         if (user instanceof ServerPlayerEntity sp) {
-            stack.damage(3, sp, e -> e.sendToolBreakStatus(hand));
+            stack.damage(10, sp, e -> e.sendToolBreakStatus(hand));
             doSlam(sw, sp);
         } else {
-            stack.damage(3, user, e -> {});
+            stack.damage(10, user, e -> {});
             doSlam(sw, user);
         }
 
@@ -264,7 +351,6 @@ public class FireSwordItem extends SwordItem implements GeoItem {
             double y = hp.y + 0.05;
             double z = hp.z;
 
-            // --- Nicer "erupt" (fire-only): base burst + rising column + side flickers ---
             // Base burst (wide)
             sw.spawnParticles(ParticleTypes.FLAME, x, y + 0.05, z, 70, 0.55, 0.10, 0.55, 0.05);
 
@@ -305,7 +391,7 @@ public class FireSwordItem extends SwordItem implements GeoItem {
     }
 
     /* ============================================================
-     * GeckoLib “Gamble-style” animation logic (client timers)
+     * GeckoLib animation logic (client timers)
      * ============================================================ */
 
     @Environment(EnvType.CLIENT) private static int slamMainTicks = 0;
@@ -325,9 +411,6 @@ public class FireSwordItem extends SwordItem implements GeoItem {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    /**
-     * Stable renderer supplier pattern (client has it; server gets harmless supplier).
-     */
     private final Supplier<Object> renderProvider =
             FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT
                     ? GeoItem.makeRenderer(this)

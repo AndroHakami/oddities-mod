@@ -1,0 +1,7 @@
+{
+  "type": "odd:combiner_forging",
+  "gear_kind": "sword",
+  "trim": { "item": "minecraft:silence_armor_trim_smithing_template" },
+  "difficulty": 7,
+  "level": 1
+}

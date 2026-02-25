@@ -42,11 +42,16 @@ public final class EssenceStorage {
     }
 
     // ---- capacity ----
+    /**
+     * IMPORTANT: this is now a PER-ESSENCE cap (each essence can store up to cap).
+     * Default = 1000 per essence.
+     */
     public static int getCapacity(ItemStack stack) {
         NbtCompound r = root(stack);
-        if (!r.contains(NBT_CAP)) r.putInt(NBT_CAP, 1000); // your previous default
+        if (!r.contains(NBT_CAP)) r.putInt(NBT_CAP, 1000);
         return r.getInt(NBT_CAP);
     }
+
     public static void setCapacity(ItemStack stack, int cap) {
         root(stack).putInt(NBT_CAP, Math.max(0, cap));
     }
@@ -65,12 +70,18 @@ public final class EssenceStorage {
         return v;
     }
 
+    /** Add to a SINGLE essence, clamped by per-essence capacity. */
     public static int add(ItemStack stack, EssenceType t, int add) {
         if (add <= 0) return 0;
-        int capLeft = Math.max(0, getCapacity(stack) - total(stack));
-        int put = Math.min(capLeft, add);
+
+        // ✅ cap is PER essence now
+        int cap = getCapacity(stack);
+        int cur = get(stack, t);
+
+        int put = Math.min(add, Math.max(0, cap - cur));
         if (put <= 0) return 0;
-        set(stack, t, get(stack, t) + put);
+
+        set(stack, t, cur + put);
         return put;
     }
 
@@ -84,16 +95,21 @@ public final class EssenceStorage {
         return take;
     }
 
+    /** Total across all essences (useful for UI), NOT used for capacity anymore. */
     public static int total(ItemStack stack) {
         int sum = 0;
         for (EssenceType e : EssenceType.values()) sum += get(stack, e);
         return sum;
     }
 
+    public static boolean isFull(ItemStack stack, EssenceType t) {
+        return get(stack, t) >= getCapacity(stack);
+    }
+
     /** Write the anim name and bump a sequence so the client can one-shot it. */
     public static void setSelectedAnim(ItemStack stack, EssenceType t) {
         NbtCompound r = root(stack);
-        r.putString(NBT_ANIM_NAME, "select_" + t.key);      // e.g. "select_gaia"
-        r.putInt(NBT_ANIM_SEQ, r.getInt(NBT_ANIM_SEQ) + 1); // bump seq
+        r.putString(NBT_ANIM_NAME, "select_" + t.key);
+        r.putInt(NBT_ANIM_SEQ, r.getInt(NBT_ANIM_SEQ) + 1);
     }
 }

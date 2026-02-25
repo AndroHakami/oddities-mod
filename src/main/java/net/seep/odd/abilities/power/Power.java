@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/power/Power.java
 package net.seep.odd.abilities.power;
 
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -8,6 +9,9 @@ public interface Power {
 
     /* ===== lifecycle ===== */
     default void onAssigned(ServerPlayerEntity player) {}
+
+    /** Called when something (e.g. POWERLESS) must forcibly shut the power down. */
+    default void forceDisable(ServerPlayerEntity player) {}
 
     /* ===== primary ===== */
     default void activate(ServerPlayerEntity player) {}

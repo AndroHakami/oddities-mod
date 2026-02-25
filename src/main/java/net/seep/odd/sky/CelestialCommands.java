@@ -13,31 +13,38 @@ public final class CelestialCommands {
         dispatcher.register(
                 CommandManager.literal("oddcelestial")
                         .requires(src -> src.hasPermissionLevel(2)) // OPs only; remove if you want everyone
-                        .then(CommandManager.literal("alien").executes(ctx -> {
-                            var sw = ctx.getSource().getWorld();
+                        .then(CommandManager.literal("invasion")
+                                .then(CommandManager.literal("start")
+                                        .executes(ctx -> {
+                                            int waves = 6; // default
+                                            net.seep.odd.event.alien.AlienInvasionInit.manager()
+                                                    .start(ctx.getSource().getServer(), waves);
 
-                            // lime/alien vibe
-                            float hue = 260f, sat = 1.35f, val = 1.00f, nightLift = 0.3f;
-                            boolean hideClouds = true;
-                            int duration = 20 * 60;          // 60 seconds
-                            float sunScale = 3.8f, moonScale = 7.2f;
+                                            ctx.getSource().sendFeedback(
+                                                    () -> net.minecraft.text.Text.literal("Alien invasion started (" + waves + " waves)."), true);
+                                            return 1;
+                                        })
+                                        .then(CommandManager.argument("waves", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 50))
+                                                .executes(ctx -> {
+                                                    int waves = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "waves");
+                                                    net.seep.odd.event.alien.AlienInvasionInit.manager()
+                                                            .start(ctx.getSource().getServer(), waves);
 
-                            Identifier sun  = new Identifier("odd", "textures/environment/alien_sun.png");
-                            Identifier moon = new Identifier("odd", "textures/environment/alien_moon.png");
-
-                            CelestialEventS2C.sendAlien(sw, sun, moon, hue, sat, val, nightLift,
-                                    sunScale, moonScale, hideClouds, duration);
-
-                            ctx.getSource().sendFeedback(
-                                    () -> net.minecraft.text.Text.literal("Alien sky activated."), true);
-                            return 1;
-                        }))
-                        .then(CommandManager.literal("clear").executes(ctx -> {
-                            CelestialEventS2C.sendClear(ctx.getSource().getWorld());
-                            ctx.getSource().sendFeedback(
-                                    () -> net.minecraft.text.Text.literal("Celestial events cleared."), true);
-                            return 1;
-                        }))
+                                                    ctx.getSource().sendFeedback(
+                                                            () -> net.minecraft.text.Text.literal("Alien invasion started (" + waves + " waves)."), true);
+                                                    return 1;
+                                                })
+                                        )
+                                )
+                                .then(CommandManager.literal("stop")
+                                        .executes(ctx -> {
+                                            net.seep.odd.event.alien.AlienInvasionInit.manager().stop(ctx.getSource().getServer());
+                                            ctx.getSource().sendFeedback(
+                                                    () -> net.minecraft.text.Text.literal("Alien invasion stopped."), true);
+                                            return 1;
+                                        })
+                                )
+                        )
         );
     }
 }

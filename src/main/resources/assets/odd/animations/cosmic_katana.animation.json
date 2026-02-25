@@ -1,0 +1,25 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"idle": {
+			"loop": true
+		},
+		"block": {
+			"loop": true,
+			"animation_length": 0.72,
+			"bones": {
+				"cosmic_katana": {
+					"rotation": {
+						"0.0": {
+							"vector": [74.51325, -24.20306, -75.2883]
+						},
+						"0.72": {
+							"vector": [74.51325, -24.20306, -75.2883]
+						}
+					}
+				}
+			}
+		}
+	},
+	"geckolib_format_version": 2
+}

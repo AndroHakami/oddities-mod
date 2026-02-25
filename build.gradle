@@ -1,5 +1,3 @@
-
-
 plugins {
 	id 'fabric-loom' version "${loom_version}"
 	id 'maven-publish'
@@ -48,7 +46,6 @@ repositories {
 	maven { url = "https://maven.tterrag.com" }
 	maven { url = "https://maven.terraformersmc.com/releases" }
 
-
 	maven { url = "https://modmaven.dev/com/jozufozu/flywheel/flywheel-fabric-1.20.1/0.6.11-4/" }
 	maven { url = "https://maven.jamieswhiteshirt.com/libs-release" }                  // Reach Entity Attributes
 	maven { url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven" }
@@ -57,14 +54,13 @@ repositories {
 		url = 'https://maven.ladysnake.org/releases'
 	}
 
-
 	maven {                                                                           // Fabric ASM / Porting Lib
 		url = "https://jitpack.io/"
 		content { includeGroupAndSubgroups("com.github") }
 	}
 
-	maven { url = "https://maven.shedaniel.me" }  // Cloth Config, REI
-	maven { url = "https://maven.blamejared.com" } // JEI
+	maven { url = "https://maven.shedaniel.me" }  // Cloth Config
+	maven { url = "https://maven.blamejared.com" } // (left in case you add JEI later)
 
 	maven { url = "https://modmaven.dev" } // general ModMaven root
 }
@@ -88,6 +84,11 @@ dependencies {
 
 	// Architectury (required by some deps)
 	modImplementation "maven.modrinth:architectury-api:9.1.12+fabric"
+
+	// Scholar (books / formatting)
+	modImplementation "maven.modrinth:scholar:EwLrlAck"
+	// Scholar dependency (required)
+	modImplementation "maven.modrinth:forge-config-api-port:CtENDTlF"
 
 	// VoiceAttack + Cloth Config
 	modImplementation "maven.modrinth:voiceattackapi:${voiceattackapi_version}"
@@ -120,33 +121,11 @@ dependencies {
 	implementation(include("io.github.llamalad7:mixinextras-fabric:0.5.0"))
 	annotationProcessor("io.github.llamalad7:mixinextras-fabric:0.5.0")
 
-	// Veil (Fabric loader side)
-	// pin an actual published version for 1.20.1 (update as you like)
 	//Fabric SkyBoxes (Nuit)
 	modRuntimeOnly "maven.modrinth:nuit:mc1.20.1-0.7.3"
 
 	// Gravity Switch
 	modImplementation("com.github.qouteall:GravityChanger:v1.1.2-mc1.20.1")
-
-
-
-
-
-
-
-	// Recipe viewers (choose one at runtime via gradle.properties)
-	switch (recipe_viewer.toLowerCase(Locale.ROOT)) {
-		case "jei":
-			modLocalRuntime "mezz.jei:jei-$minecraft_version-fabric:$jei_version"; break
-		case "rei":
-			modLocalRuntime "me.shedaniel:RoughlyEnoughItems-fabric:$rei_version"; break
-		case "emi":
-			modLocalRuntime "dev.emi:emi-fabric:$emi_version"; break
-		case "disabled":
-			break
-		default:
-			println "Unknown recipe viewer specified: $recipe_viewer. Must be JEI, REI, EMI, or disabled."
-	}
 }
 
 /* ---------- Resource expansion ---------- */
@@ -170,13 +149,9 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.compilerArgs += [
 			'-Xlint:all',   // includes 'unchecked'
 			'-Xlint:-path'
-			// mutes noisy classpath warnings
 			// add '-Werror' if you want warnings to fail the build
 	]
 }
-
-/* ---------- Safety check: prevent client API in common sources ---------- */
-
 
 /* ---------- Jar / publishing ---------- */
 jar {

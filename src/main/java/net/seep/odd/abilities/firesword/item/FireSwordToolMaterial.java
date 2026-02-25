@@ -6,7 +6,8 @@ import net.minecraft.recipe.Ingredient;
 public enum FireSwordToolMaterial implements ToolMaterial {
     INSTANCE;
 
-    @Override public int getDurability() { return 6; } // super low
+    @Override public int getDurability() { return 60; }
+    // super low
     @Override public float getMiningSpeedMultiplier() { return 1.0f; }
     @Override public float getAttackDamage() { return 5.0f; } // base
 

@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "cold", "death"],
+  "per": 200,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "cloud_of_entropy",
+  "color": 7566195
+}

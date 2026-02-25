@@ -1,4 +1,3 @@
-// src/main/java/net/seep/odd/mixin/fairy/ServerPlayerEntityFairyFlightMixin.java
 package net.seep.odd.mixin.fairy;
 
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -6,6 +5,7 @@ import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.fairy.CastLogic;
 import net.seep.odd.abilities.power.FairyPower;
 import net.seep.odd.abilities.power.Powers;
+import net.seep.odd.status.ModStatusEffects;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,6 +21,24 @@ public abstract class ServerPlayerEntityFairyFlightMixin {
         // ✅ ONLY apply to Fairy power
         var pow = Powers.get(PowerAPI.get(p));
         if (!(pow instanceof FairyPower)) return;
+
+        // ✅ POWERLESS: no flight, period (also force-stop current flight)
+        boolean powerless = p.hasStatusEffect(ModStatusEffects.POWERLESS);
+        if (powerless) {
+            boolean changed = false;
+
+            if (p.getAbilities().allowFlying) {
+                p.getAbilities().allowFlying = false;
+                changed = true;
+            }
+            if (p.getAbilities().flying) {
+                p.getAbilities().flying = false;
+                changed = true;
+            }
+
+            if (changed) p.sendAbilitiesUpdate();
+            return;
+        }
 
         // ✅ If in cast form: NEVER allow flight (prevents weird vertical controls)
         boolean casting = CastLogic.isCastFormEnabled(p);

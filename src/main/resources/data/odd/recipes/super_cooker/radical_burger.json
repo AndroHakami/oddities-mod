@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:bread" },
+    { "item": "minecraft:chicken" },
+    { "item": "minecraft:beef" }
+  ],
+  "result": { "item": "odd:radical_burger", "count": 1 },
+  "cookTime": 400,
+  "minStirs": 4
+}

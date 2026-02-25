@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "cold", "gaia"],
+  "per": 500,
+  "kind": "THROW",
+  "count": 2,
+  "brewId": "tectonic_obsidian",
+  "color": 4198484
+}

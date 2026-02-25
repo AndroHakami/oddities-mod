@@ -2,6 +2,7 @@
 package net.seep.odd.block.falseflower.spell;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -12,9 +13,6 @@ import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.IntStream;
-
-import net.minecraft.util.math.random.Random;
 
 public final class SwitcheranoEffect implements FalseFlowerSpellEffect {
     private static final long PERIOD = 100L; // 5 seconds
@@ -33,15 +31,26 @@ public final class SwitcheranoEffect implements FalseFlowerSpellEffect {
         }
         if (inside.size() < 2) return;
 
+        // snapshot positions
         List<Vec3d> locs = new ArrayList<>(inside.size());
-        for (ServerPlayerEntity sp : inside) locs.add(sp.getPos());
-        net.minecraft.util.Util.shuffle((IntStream) locs, w.random);
+        for (ServerPlayerEntity sp : inside) {
+            locs.add(sp.getPos());
+        }
 
+        // ✅ Yarn-safe shuffle (Fisher–Yates) using Minecraft Random
+        for (int i = locs.size() - 1; i > 0; i--) {
+            int j = w.random.nextInt(i + 1);
+            Collections.swap(locs, i, j);
+        }
+
+        // teleport each player to a shuffled position
         for (int i = 0; i < inside.size(); i++) {
             ServerPlayerEntity sp = inside.get(i);
             Vec3d t = locs.get(i);
+
             sp.teleport(w, t.x, t.y, t.z, sp.getYaw(), sp.getPitch());
-            w.spawnParticles(net.minecraft.particle.ParticleTypes.PORTAL,
+
+            w.spawnParticles(ParticleTypes.PORTAL,
                     sp.getX(), sp.getY() + 0.8, sp.getZ(),
                     10, 0.4, 0.4, 0.4, 0.02);
         }

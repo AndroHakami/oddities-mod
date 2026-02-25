@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "cold", "light"],
+  "per": 300,
+  "kind": "DRINK",
+  "count": 2,
+  "brewId": "atomic_refraction",
+  "color": 16175103
+}

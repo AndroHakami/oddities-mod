@@ -1,0 +1,7 @@
+{
+  "type": "odd:combiner_forging",
+  "gear_kind": "chestplate",
+  "trim": { "item": "minecraft:rib_armor_trim_smithing_template" },
+  "difficulty": 5,
+  "level": 1
+}

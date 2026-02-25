@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/block/supercooker/SuperCookerBlock.java
 package net.seep.odd.block.supercooker;
 
 import net.minecraft.block.*;
@@ -81,7 +82,7 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
                                             ScreenHandlerType.GENERIC_9X1,
                                             syncId,
                                             (PlayerInventory) playerInv,
-                                            be.fuelUiInventory(),
+                                            be.fuelUiInventory(player), // ✅ persistent fuel
                                             1
                                     ),
                             Text.literal("Super Cooker - Fuel")
@@ -105,7 +106,6 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
                     return ActionResult.SUCCESS;
                 }
                 case COOKTOP -> {
-                    // finished dish pickup
                     if (be.isFinished()) {
                         if (be.tryGiveResult(player)) {
                             world.playSound(null, pos, SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.BLOCKS, 0.9f, 1.1f);
@@ -113,7 +113,6 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
                         return ActionResult.SUCCESS;
                     }
 
-                    // ✅ shift-right-click recollect ingredients (only when not cooking)
                     if (player.isSneaking()) {
                         if (be.tryTakeOneIngredient(player)) {
                             world.playSound(null, pos, SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.BLOCKS, 0.8f, 1.2f);
@@ -125,7 +124,6 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
 
                     var held = player.getStackInHand(hand);
 
-                    // add ingredient
                     if (!held.isEmpty() && Chef.isIngredient(held)) {
                         if (be.tryInsertIngredient(player, hand)) {
                             world.playSound(null, pos, SoundEvents.BLOCK_WOOL_PLACE, SoundCategory.BLOCKS, 0.8f, 1.2f);
@@ -135,7 +133,6 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
                         return ActionResult.SUCCESS;
                     }
 
-                    // stir
                     be.serverStir(player);
                     world.playSound(null, pos, SoundEvents.BLOCK_BREWING_STAND_BREW, SoundCategory.BLOCKS, 0.7f, 1.3f);
                     return ActionResult.SUCCESS;
@@ -146,12 +143,12 @@ public class SuperCookerBlock extends BlockWithEntity implements BlockEntityProv
         return ActionResult.SUCCESS;
     }
 
-
     @Override
     public void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {
         if (state.getBlock() != newState.getBlock()) {
             BlockEntity be = world.getBlockEntity(pos);
             if (be instanceof SuperCookerBlockEntity cooker) {
+                // ✅ fuel is NOT dropped anymore (it’s persistent like the fridge)
                 ItemScatterer.spawn(world, pos, cooker.asDropInventory());
             }
             super.onStateReplaced(state, world, pos, newState, moved);

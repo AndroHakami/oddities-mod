@@ -24,6 +24,12 @@ import net.seep.odd.abilities.PowerCommands;
 import net.seep.odd.abilities.artificer.condenser.CondenserNet; // (only used inside registry)
 import net.seep.odd.abilities.artificer.fluid.ArtificerFluids;
 import net.seep.odd.abilities.artificer.mixer.MixerNet;
+import net.seep.odd.abilities.artificer.mixer.brew.AtomicRefractionEffect;
+import net.seep.odd.abilities.artificer.mixer.brew.AutoColdEffect;
+import net.seep.odd.abilities.artificer.mixer.brew.BlackFlameEffect;
+import net.seep.odd.abilities.artificer.mixer.brew.BlackFlameNet;
+import net.seep.odd.abilities.artificer.mixer.brew.client.BlackFlameFx;
+import net.seep.odd.abilities.artificer.vialmatrix.VialMatrixInit;
 import net.seep.odd.abilities.astral.AstralInventory;
 import net.seep.odd.abilities.buddymorph.BuddymorphCommands;
 import net.seep.odd.abilities.buddymorph.BuddymorphData;
@@ -70,6 +76,9 @@ import net.seep.odd.abilities.voids.VoidSystem;
 
 import net.seep.odd.abilities.wizard.client.WizardClientInit;
 import net.seep.odd.block.ModBlocks;
+import net.seep.odd.block.combiner.enchant.*;
+import net.seep.odd.block.combiner.net.CombinerNet;
+import net.seep.odd.block.combiner.recipe.ModCombinerRecipes;
 import net.seep.odd.block.falseflower.FalseFlowerTracker;
 import net.seep.odd.block.gate.DimensionalGateBlockEntity;
 import net.seep.odd.block.gate.GateCommands;
@@ -166,6 +175,7 @@ public final class Oddities implements ModInitializer {
 		FabricDefaultAttributeRegistry.register(ModEntities.DARK_HORSE, DarkHorseEntity.createDarkHorseAttributes());
 		FabricDefaultAttributeRegistry.register(ModEntities.SEAL, SealEntity.createSealAttributes());
 		ModSpawns.register();
+		net.seep.odd.abilities.PowerlessEnforcer.init();
 
 
 
@@ -228,6 +238,25 @@ public final class Oddities implements ModInitializer {
 		ModEnchantments.registerTicker();
 
 
+		ModCombinerRecipes.register();
+		CombinerNet.registerServer();
+		CombinerEnchantments.init();
+		// after CombinerEnchantments.init();
+
+		TrimEnchantMap.init();
+
+		net.seep.odd.block.combiner.enchant.VexSwordEffect.init();
+		net.seep.odd.block.combiner.enchant.SpireStompersHandler.register();
+		SentryPulseHandler.init();
+		DriftwoodGuardHandler.init();
+		WildRootShotHandler.init();
+		DuneStrideHandler.init();
+		WardBulwarkHandler.init();
+		GazeOfTheEndNet.registerServer();
+		WhirlpoolHarpoonHandler.init();
+
+
+
 		// ---- Networking / tickers (server) ----
 		AbilityKeyPacket.registerServerReceiver();
 
@@ -280,6 +309,17 @@ public final class Oddities implements ModInitializer {
 		ArtificerMixerRegistry.registerCommon();
 		MixerNet.registerServer();
 		net.seep.odd.util.CrystalTrapCleaner.init();
+		net.seep.odd.abilities.artificer.mixer.brew.AtomicRefractionEffect.bootstrapCommon();
+		net.seep.odd.abilities.artificer.mixer.brew.RadiantBrambleEffect.bootstrapCommon();
+		VialMatrixInit.init();
+	
+
+
+
+
+
+
+
 
 
 		// Spectral Phase
@@ -343,7 +383,7 @@ public final class Oddities implements ModInitializer {
 		// Zero Gravity
 
 		net.seep.odd.abilities.zerosuit.ZeroSuitNet.initCommon();
-		AnnihilationFx.init();
+
 
 
 
@@ -435,6 +475,9 @@ public final class Oddities implements ModInitializer {
 
 		// Wizard
 		WizardPower.register();
+
+		// EVENT (ALIEN INVASION)
+		net.seep.odd.event.alien.AlienInvasionInit.init();
 
 
 

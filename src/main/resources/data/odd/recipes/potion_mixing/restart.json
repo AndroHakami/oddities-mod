@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["hot", "cold", "life"],
+  "per": 400,
+  "kind": "THROW",
+  "count": 2,
+  "brewId": "restart",
+  "color": 16720246
+}

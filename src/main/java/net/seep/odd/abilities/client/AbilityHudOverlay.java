@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/client/AbilityHudOverlay.java
 package net.seep.odd.abilities.client;
 
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
@@ -13,6 +14,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.seep.odd.abilities.power.Powers;
 import net.seep.odd.abilities.power.ChargedPower;
+import net.seep.odd.status.ModStatusEffects;
 
 import org.joml.Matrix4f;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -39,6 +41,10 @@ public final class AbilityHudOverlay {
     /** Ring texture (same as before) but now drawn around the icon on the same line. */
     private static final Identifier CHARGE_RING_TEX = new Identifier("odd", "textures/gui/charge_ring.png");
     private static final int RING_SRC = 32; // source size of your ring image
+
+    /** NEW: overlay cross texture when POWERLESS is active. Must be ICON_SRC×ICON_SRC (66×66). */
+    private static final Identifier POWERLESS_OVERLAY_TEX =
+            new Identifier("odd", "textures/gui/abilities/powerless_overlay.png");
 
     /** Accent color (same supplier you had). */
     private static IntSupplier ACCENT = () -> 0xFFEBC034;
@@ -91,6 +97,8 @@ public final class AbilityHudOverlay {
         var p = Powers.get(powerId);
         if (p == null) return;
 
+        boolean powerless = mc.player != null && mc.player.hasStatusEffect(ModStatusEffects.POWERLESS);
+
         Identifier icon = p.iconTexture(slot);
 
         int totalCd = switch (slot) {
@@ -134,6 +142,35 @@ public final class AbilityHudOverlay {
             int tw = mc.textRenderer.getWidth(txt);
             ctx.drawTextWithShadow(mc.textRenderer, txt, x + (size - tw) / 2, y + (size / 2) - 4, ACCENT.getAsInt());
         }
+
+        // NEW: POWERLESS overlay (drawn last so it sits on top of cooldown/held/etc)
+        if (powerless) {
+            drawPowerlessOverlay(ctx, x, y, size);
+        }
+    }
+
+    private static void drawPowerlessOverlay(DrawContext ctx, int x, int y, int size) {
+        // subtle dim so it feels "disabled" even if the cross is thin
+        ctx.fill(x, y, x + size, y + size, 0x66000000);
+
+        // cross texture on top (make PNG semi-transparent if you want softer)
+        var m = ctx.getMatrices();
+        m.push();
+        m.translate(x, y, 0);
+
+        float s = (float) size / (float) ICON_SRC;
+        m.scale(s, s, 1f);
+
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+
+        ctx.drawTexture(POWERLESS_OVERLAY_TEX, 0, 0, 0, 0, ICON_SRC, ICON_SRC, ICON_SRC, ICON_SRC);
+
+        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
+        RenderSystem.disableBlend();
+
+        m.pop();
     }
 
     /** Small circle + NEW square snake *around the ring* for charge lanes. */

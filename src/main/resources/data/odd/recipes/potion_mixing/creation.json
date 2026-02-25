@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["life", "gaia", "light"],
+  "per": 400,
+  "kind": "THROW",
+  "count": 1,
+  "brewId": "creation",
+  "color": 13172608
+}

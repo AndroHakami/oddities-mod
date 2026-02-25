@@ -1,0 +1,9 @@
+{
+  "type": "odd:potion_mixing",
+  "essences": ["life", "cold", "light"],
+  "per": 300,
+  "kind": "DRINK",
+  "count": 3,
+  "brewId": "auto_cold",
+  "color": 6053119
+}

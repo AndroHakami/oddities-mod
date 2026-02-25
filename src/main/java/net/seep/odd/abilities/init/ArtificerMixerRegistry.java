@@ -5,7 +5,6 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
-import net.fabricmc.fabric.api.transfer.v1.fluid.FluidStorage;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntityType;
@@ -19,6 +18,7 @@ import net.minecraft.screen.ScreenHandlerType;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.seep.odd.abilities.artificer.mixer.*;
+import net.seep.odd.abilities.artificer.mixer.brew.BrewEffects;
 
 @SuppressWarnings("unused")
 public final class ArtificerMixerRegistry {
@@ -27,8 +27,10 @@ public final class ArtificerMixerRegistry {
     public static Block POTION_MIXER;
     public static BlockEntityType<PotionMixerBlockEntity> POTION_MIXER_BE;
     public static ScreenHandlerType<PotionMixerScreenHandler> POTION_MIXER_SH;
+
     public static RecipeType<PotionMixingRecipe> POTION_MIXING_TYPE;
     public static RecipeSerializer<PotionMixingRecipe> POTION_MIXING_SERIALIZER;
+
     public static Item BREW_DRINKABLE;
     public static Item BREW_THROWABLE;
 
@@ -37,7 +39,9 @@ public final class ArtificerMixerRegistry {
     public static void registerCommon() {
         if (REGISTERED_COMMON) return;
 
-        final Identifier mixId     = id("potion_mixer");
+        final Identifier mixId = id("potion_mixer");
+        final Identifier beId  = id("potion_mixer_be");
+        final Identifier shId  = id("potion_mixer");        // fine to share id with block
         final Identifier mixTypeId = id("potion_mixing");
 
         // Block
@@ -52,32 +56,31 @@ public final class ArtificerMixerRegistry {
             Registry.register(Registries.ITEM, mixId, new BlockItem(POTION_MIXER, new Item.Settings()));
         }
 
-        // Block Entity
-        POTION_MIXER_BE = Registries.BLOCK_ENTITY_TYPE.containsId(mixId)
-                ? (BlockEntityType<PotionMixerBlockEntity>) Registries.BLOCK_ENTITY_TYPE.get(mixId)
-                : Registry.register(Registries.BLOCK_ENTITY_TYPE, mixId,
+        // Block Entity (FIXED ID!)
+        POTION_MIXER_BE = Registries.BLOCK_ENTITY_TYPE.containsId(beId)
+                ? (BlockEntityType<PotionMixerBlockEntity>) Registries.BLOCK_ENTITY_TYPE.get(beId)
+                : Registry.register(Registries.BLOCK_ENTITY_TYPE, beId,
                 FabricBlockEntityTypeBuilder.create(PotionMixerBlockEntity::new, POTION_MIXER).build());
 
-        // Fluid exposure for pipes
-        FluidStorage.SIDED.registerForBlockEntity((be, dir) -> be.externalCombinedStorage(), POTION_MIXER_BE);
+        // Fluid exposure for Create pipes (controller + forwarding from parts)
+        MixerFluidStorage.register();
 
         // Brew defaults
-        net.seep.odd.abilities.artificer.mixer.brew.BrewEffects.registerDefaults();
 
-        // ScreenHandler — inline factory so we don't need a static TYPE/factory() on the handler
-        POTION_MIXER_SH = Registries.SCREEN_HANDLER.containsId(mixId)
-                ? (ScreenHandlerType<PotionMixerScreenHandler>) Registries.SCREEN_HANDLER.get(mixId)
-                : Registry.register(Registries.SCREEN_HANDLER, mixId,
+        BrewEffects.registerDefaults();
+
+
+        // ScreenHandler (FIXED: never touch be.getPos() when be may be null)
+        POTION_MIXER_SH = Registries.SCREEN_HANDLER.containsId(shId)
+                ? (ScreenHandlerType<PotionMixerScreenHandler>) Registries.SCREEN_HANDLER.get(shId)
+                : Registry.register(Registries.SCREEN_HANDLER, shId,
                 new ExtendedScreenHandlerType<>((syncId, inv, buf) -> {
                     BlockPos pos = buf.readBlockPos();
-                    PotionMixerBlockEntity be = null;
-                    if (inv.player != null && inv.player.getWorld() != null) {
-                        var w = inv.player.getWorld();
-                        var e = w.getBlockEntity(pos);
-                        if (e instanceof PotionMixerBlockEntity pbe) be = pbe;
-                    }
-                    return new PotionMixerScreenHandler(syncId, inv, be.getPos());
+                    return new PotionMixerScreenHandler(syncId, inv, pos);
                 }));
+
+        // IMPORTANT: assign TYPE so ScreenHandler super(TYPE, id) never gets null
+        PotionMixerScreenHandler.TYPE = POTION_MIXER_SH;
 
         // Recipe Type + Serializer
         POTION_MIXING_TYPE = Registries.RECIPE_TYPE.containsId(mixTypeId)
@@ -104,7 +107,7 @@ public final class ArtificerMixerRegistry {
                 : Registry.register(Registries.ITEM, throwId,
                 new ArtificerBrewItem(new Item.Settings().maxCount(16), ArtificerBrewItem.Kind.THROW));
 
-        // Networking (server/common)
+        // Networking
         MixerNet.registerServer();
 
         REGISTERED_COMMON = true;
@@ -112,7 +115,6 @@ public final class ArtificerMixerRegistry {
 
     private static Identifier id(String p) { return new Identifier("odd", p); }
 
-    /* ----------- client-only bits live here (never loaded on server) ----------- */
     @Environment(EnvType.CLIENT)
     public static final class Client {
         private static boolean REGISTERED_CLIENT = false;
@@ -120,7 +122,6 @@ public final class ArtificerMixerRegistry {
         public static void register() {
             if (REGISTERED_CLIENT) return;
 
-            // Be explicit with generics so type inference can't fail
             net.minecraft.client.gui.screen.ingame.HandledScreens.register(
                     POTION_MIXER_SH,
                     new net.minecraft.client.gui.screen.ingame.HandledScreens.Provider<
@@ -135,18 +136,22 @@ public final class ArtificerMixerRegistry {
                         }
                     }
             );
+            net.seep.odd.abilities.artificer.item.client.VacuumSoundController.init();
 
-            // Item tint (overlay layer index 1)
             if (BREW_DRINKABLE != null && BREW_THROWABLE != null) {
                 net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry.ITEM.register((stack, tintIndex) -> {
-                    if (tintIndex == 1 && stack.hasNbt()) return stack.getNbt().getInt("odd_brew_color");
-                    return 0xFFFFFFFF;
+                    // ✅ tint only the liquid overlay (layer0)
+                    if (tintIndex != 0) return -1; // -1 = no tint
+
+                    if (stack.hasNbt() && stack.getNbt().contains("odd_brew_color")) {
+                        int c = stack.getNbt().getInt("odd_brew_color");
+                        return c & 0x00FFFFFF; // ✅ make sure it's RGB (ignore alpha if you stored ARGB)
+                    }
+                    return 0xFFFFFF; // default white
                 }, BREW_DRINKABLE, BREW_THROWABLE);
             }
 
-            // Client side of mixer net
             MixerNet.registerClient();
-
             REGISTERED_CLIENT = true;
         }
     }

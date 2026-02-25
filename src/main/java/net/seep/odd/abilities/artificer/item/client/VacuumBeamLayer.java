@@ -1,34 +1,29 @@
+// FILE: src/main/java/net/seep/odd/abilities/artificer/item/client/VacuumBeamLayer.java
 package net.seep.odd.abilities.artificer.item.client;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.render.*;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.Identifier;
+import net.minecraft.particle.ParticleTypes;
+import net.minecraft.util.math.Vec3d;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayer;
 
-import net.minecraft.util.math.RotationAxis;
-
 public final class VacuumBeamLayer extends GeoRenderLayer<ArtificerVacuumItem> {
-    private static final Identifier TEX =
-            new Identifier(net.seep.odd.Oddities.MOD_ID, "textures/effects/vacuum_beam.png");
 
-    // ======= positioning (tune these to taste) =======
-    private static final float NOZZLE_X = 0.00f;  // left/right
-    private static final float NOZZLE_Y = 0.45f;  // ↑ raise the beam a bit higher
-    private static final float NOZZLE_Z = -0.05f; // forward from the item root
+    // beam length
+    private static final double LENGTH = 6.0;
 
-    // Point the beam North (-Z). If it still looks off, try -90f or 180f.
-    private static final float YAW_DEG   = 270f;   // rotate around Y so “west” → “north”
-    private static final float PITCH_DEG = 0f;    // tilt if your nozzle angles up/down
+    // ✅ much thinner tornado
+    private static final double RAD_NEAR = 0.015;
+    private static final double RAD_FAR  = 0.55;
 
-    private static final float LENGTH    = 6f;
-    private static final float SIZE_NEAR = 0.03f;
-    private static final float SIZE_FAR  = 1.77f;
+    // spawn budget (smaller = cleaner, less “thick”)
+    private static final int COUNT_PER_TICK = 9;
 
-    private static final float UV_SPEED  = 1.6f;
+    private static long lastSpawnTick = Long.MIN_VALUE;
 
     public VacuumBeamLayer(GeoItemRenderer<ArtificerVacuumItem> r) { super(r); }
 
@@ -45,38 +40,74 @@ public final class VacuumBeamLayer extends GeoRenderLayer<ArtificerVacuumItem> {
 
         if (!shouldRenderBeam()) return;
 
-        matrices.push();
+        var mc = MinecraftClient.getInstance();
+        if (mc == null || mc.player == null || mc.world == null) return;
 
-        // 1) move to nozzle
-        matrices.translate(NOZZLE_X, NOZZLE_Y, NOZZLE_Z);
-        // 2) rotate so local -Z aims North
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(YAW_DEG));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(PITCH_DEG));
+        long now = mc.world.getTime();
+        if (now == lastSpawnTick) return; // once per tick
+        lastSpawnTick = now;
 
-        // draw along local -Z
-        float z0 = -0.02f;
-        float z1 = z0 - LENGTH;
-        float s0 = SIZE_NEAR, s1 = SIZE_FAR;
+        Vec3d dir = mc.player.getRotationVec(1f).normalize();
+        Vec3d nozzle = nozzlePos(mc.player.getEyePos(), dir);
 
-        MatrixStack.Entry e = matrices.peek();
+        // ✅ inherit player motion so particles “stick” while moving
+        Vec3d playerVel = mc.player.getVelocity();
 
-        // translucent for soft edges; switch to getEntityCutoutNoCull(TEX) for hard cutouts
-        VertexConsumer vc = buffers.getBuffer(RenderLayer.getEntityTranslucent(TEX));
+        // stable perpendicular basis
+        Vec3d up = new Vec3d(0, 1, 0);
+        Vec3d right = dir.crossProduct(up);
+        if (right.lengthSquared() < 1e-6) right = new Vec3d(1, 0, 0);
+        right = right.normalize();
+        Vec3d up2 = right.crossProduct(dir).normalize();
 
-        float t = (MinecraftClient.getInstance().world == null ? 0f
-                : (MinecraftClient.getInstance().world.getTime() + partialTick) * UV_SPEED);
-        float vOff = (t % 1f);
+        double time = (now + partialTick) * 0.85;
 
-        // top
-        quad(vc, e, -s0,  s0, z0,  s0,  s0, z0,  s1,  s1, z1, -s1,  s1, z1, vOff, light);
-        // bottom
-        quad(vc, e, -s0, -s0, z0, -s1, -s1, z1,  s1, -s1, z1,  s0, -s0, z0, vOff, light);
-        // left
-        quad(vc, e, -s0,  s0, z0, -s1,  s1, z1, -s1, -s1, z1, -s0, -s0, z0, vOff, light);
-        // right
-        quad(vc, e,  s0,  s0, z0,  s0, -s0, z0,  s1, -s1, z1,  s1,  s1, z1, vOff, light);
+        for (int i = 0; i < COUNT_PER_TICK; i++) {
+            // distance along beam (bias more towards the far end so you “see” the tornado)
+            double d = Math.pow(mc.world.random.nextDouble(), 0.70) * LENGTH;
+            double t01 = d / LENGTH;
 
-        matrices.pop();
+            // ✅ tighter near nozzle
+            double rad = lerp(RAD_NEAR, RAD_FAR, t01);
+            rad *= (0.85 + mc.world.random.nextDouble() * 0.30);
+
+            // swirl angle (higher = more “tornado”)
+            double ang = time * 4.0 + d * 10.0 + mc.world.random.nextDouble() * 0.8;
+
+            Vec3d swirlOff = right.multiply(Math.cos(ang) * rad)
+                    .add(up2.multiply(Math.sin(ang) * rad));
+
+            Vec3d pos = nozzle.add(dir.multiply(d)).add(swirlOff);
+
+            // pull toward nozzle + slight inward pull + inherit player velocity
+            Vec3d toNozzle = nozzle.subtract(pos).normalize();
+            Vec3d inward = swirlOff.lengthSquared() > 1e-6 ? swirlOff.normalize().multiply(-0.09) : Vec3d.ZERO;
+
+            Vec3d vel = toNozzle.multiply(0.38 + 0.14 * mc.world.random.nextDouble())
+                    .add(inward)
+                    .add(playerVel); // ✅ key: moves with you
+
+            // ✅ tiny “ash” wisps (small particle)
+            mc.world.addParticle(
+                    ParticleTypes.WHITE_ASH,
+                    pos.x, pos.y, pos.z,
+                    vel.x, vel.y, vel.z
+            );
+
+            // occasional spark flecks
+            if (mc.world.random.nextFloat() < 0.18f) {
+                mc.world.addParticle(
+                        ParticleTypes.ELECTRIC_SPARK,
+                        pos.x, pos.y, pos.z,
+                        vel.x * 0.25, vel.y * 0.25, vel.z * 0.25
+                );
+            }
+        }
+    }
+
+    private static Vec3d nozzlePos(Vec3d eyePos, Vec3d dir) {
+        // tweak if needed to better match your model nozzle
+        return eyePos.add(dir.multiply(0.75)).add(0.0, -0.14, 0.0);
     }
 
     private static boolean shouldRenderBeam() {
@@ -86,21 +117,7 @@ public final class VacuumBeamLayer extends GeoRenderLayer<ArtificerVacuumItem> {
                 && mc.player.getActiveItem().getItem() instanceof ArtificerVacuumItem;
     }
 
-    private static void quad(VertexConsumer vc, MatrixStack.Entry e,
-                             float x1, float y1, float z1,
-                             float x2, float y2, float z2,
-                             float x3, float y3, float z3,
-                             float x4, float y4, float z4,
-                             float vOff, int light) {
-        float u0 = 0f, u1 = 1f, v0 = vOff, v1 = vOff + 1f;
-        float nx = 0, ny = 0, nz = -1;
-        vc.vertex(e.getPositionMatrix(), x1, y1, z1).color(255,255,255,160).texture(u0, v0)
-                .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(e.getNormalMatrix(), nx, ny, nz).next();
-        vc.vertex(e.getPositionMatrix(), x2, y2, z2).color(255,255,255,160).texture(u0, v1)
-                .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(e.getNormalMatrix(), nx, ny, nz).next();
-        vc.vertex(e.getPositionMatrix(), x3, y3, z3).color(255,255,255,160).texture(u1, v1)
-                .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(e.getNormalMatrix(), nx, ny, nz).next();
-        vc.vertex(e.getPositionMatrix(), x4, y4, z4).color(255,255,255,160).texture(u1, v0)
-                .overlay(OverlayTexture.DEFAULT_UV).light(light).normal(e.getNormalMatrix(), nx, ny, nz).next();
+    private static double lerp(double a, double b, double t) {
+        return a + (b - a) * t;
     }
 }

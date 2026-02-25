@@ -1,0 +1,7 @@
+{
+  "type": "odd:combiner_forging",
+  "gear_kind": "shield",
+  "trim": { "item": "minecraft:sentry_armor_trim_smithing_template" },
+  "difficulty": 4,
+  "level": 1
+}

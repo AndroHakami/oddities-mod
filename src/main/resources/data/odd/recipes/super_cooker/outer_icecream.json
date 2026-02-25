@@ -1,0 +1,11 @@
+{
+  "type": "odd:super_cooker",
+  "ingredients": [
+    { "item": "minecraft:milk_bucket" },
+    { "item": "odd:alien_pearl" },
+    { "item": "minecraft:sugar" }
+  ],
+  "result": { "item": "odd:outer_icecream", "count": 3 },
+  "cookTime": 100,
+  "minStirs": 4
+}

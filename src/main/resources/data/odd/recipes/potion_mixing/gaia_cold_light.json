@@ -3,7 +3,7 @@
   "essences": ["gaia", "cold", "light"],
   "per": 300,
   "kind": "THROW",
-  "count": 1,
+  "count": 2,
   "brewId": "crystaline_trap",
-  "color": 10496272
+  "color": 13075967
 }
