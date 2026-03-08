@@ -1,0 +1,15 @@
+{
+  "targets": [ "zj" ],
+  "passes": [
+    {
+      "name": "odd:zero_jetpack",
+      "intarget": "minecraft:main",
+      "outtarget": "zj"
+    },
+    {
+      "name": "blit",
+      "intarget": "zj",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -1,4 +1,3 @@
-// FILE: src/main/java/net/seep/odd/abilities/wizard/entity/WizardWaterProjectileEntity.java
 package net.seep.odd.abilities.wizard.entity;
 
 import net.minecraft.entity.Entity;
@@ -14,14 +13,16 @@ import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.EntitySpawnS2CPacket;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.world.World;
 
 public class WizardWaterProjectileEntity extends ThrownItemEntity {
 
-    public static int SPEED_DURATION_TICKS = 20 * 30; // 30s
-    public static int SPEED_LEVEL = 1;               // Speed 2 -> amplifier 1
+    public static int SPEED_DURATION_TICKS = 20 * 30;
+    public static int SPEED_LEVEL = 1;
 
     public WizardWaterProjectileEntity(EntityType<? extends WizardWaterProjectileEntity> type, World world) {
         super(type, world);
@@ -51,12 +52,22 @@ public class WizardWaterProjectileEntity extends ThrownItemEntity {
         Entity hit = ehr.getEntity();
         if (hit instanceof LivingEntity living) {
             living.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, SPEED_DURATION_TICKS, SPEED_LEVEL, false, true, true));
+            living.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 1, 2, false, false, false));
         }
     }
 
     @Override
     protected void onCollision(HitResult hitResult) {
         super.onCollision(hitResult);
+
+        if (this.getWorld() instanceof ServerWorld sw) {
+            // ✅ impact sound when it lands
+            sw.playSound(null, this.getX(), this.getY(), this.getZ(),
+                    SoundEvents.ENTITY_SPLASH_POTION_BREAK, SoundCategory.PLAYERS, 0.85f, 1.25f);
+            sw.spawnParticles(ParticleTypes.SPLASH, this.getX(), this.getY(), this.getZ(),
+                    14, 0.18, 0.10, 0.18, 0.02);
+        }
+
         if (!this.getWorld().isClient) this.discard();
     }
 

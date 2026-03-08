@@ -1,16 +1,17 @@
 // src/main/java/net/seep/odd/item/ModItems.java
 package net.seep.odd.item;
 
+import com.terraformersmc.terraform.boat.api.item.TerraformBoatItemHelper;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroupEntries;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemGroups;
+import net.minecraft.item.*;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 
+import net.minecraft.util.Rarity;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.artificer.item.ArtificerVacuumItem;
 import net.seep.odd.abilities.conquer.item.WinterScytheItem;
@@ -22,14 +23,22 @@ import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
 import net.seep.odd.abilities.lunar.item.LunarDrillItem;
 import net.seep.odd.abilities.sniper.item.SniperItem;
 import net.seep.odd.abilities.tamer.item.TameBallItem;
+import net.seep.odd.block.ModBlocks;
+import net.seep.odd.entity.ModBoats;
+import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.booklet.item.BookletSpawnEggItem;
+import net.seep.odd.entity.eggasaur.item.EggasaurSpawnEggItem;
 import net.seep.odd.entity.seal.item.SealSpawnEggItem;
+import net.seep.odd.entity.whiskers.item.WhiskersSpawnEggItem;
+import net.seep.odd.expeditions.rottenroots.boggy.BoggyBoatItem;
+import net.seep.odd.expeditions.rottenroots.item.SporeBowItem;
 import net.seep.odd.item.custom.CosmicKatanaItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
 import net.seep.odd.item.custom.TooltipItem;
 import net.seep.odd.item.ghost.GhostHandItem;
 import net.seep.odd.item.necromancer.NecromancerStaffItem;
 import net.seep.odd.item.wizard.WalkingStickItem;
+import net.seep.odd.sound.ModSounds;
 
 public class ModItems {
     public static final Item RUBY = registerItem("ruby", new Item(new FabricItemSettings()));
@@ -76,10 +85,65 @@ public class ModItems {
             new Identifier(Oddities.MOD_ID, "booklet_spawn_egg"),
             new BookletSpawnEggItem(new FabricItemSettings().maxCount(1))
     );
+    public static final Item SHADOW_KUNAI = Registry.register(
+            Registries.ITEM,
+            new Identifier(Oddities.MOD_ID, "shadow_kunai"),
+            new Item(new FabricItemSettings().maxCount(1))
+    );
     public static final Item WALKING_STICK = registerItem("walking_stick", new WalkingStickItem(new FabricItemSettings().maxCount(1)));
     public static final Item WIZARD_FIRE_PROJECTILE_ITEM = registerItem("wizard_fire_projectile", new Item(new FabricItemSettings()));
     public static final Item WIZARD_WATER_PROJECTILE_ITEM = registerItem("wizard_water_projectile", new Item(new FabricItemSettings()));
     public static final Item WIZARD_EARTH_PROJECTILE_ITEM = registerItem("wizard_earth_projectile", new Item(new FabricItemSettings()));
+    public static final Item SPORE_BOW = registerItem("spore_bow",
+            new SporeBowItem(new FabricItemSettings().maxCount(1).maxDamage(384)));
+    public static final Item BOGGY_BOAT = TerraformBoatItemHelper.registerBoatItem(
+            ModBoats.BOGGY_BOAT_ID,
+            ModBoats.BOGGY_BOAT_KEY,
+            false
+    );
+
+    public static final Item BOGGY_CHEST_BOAT = TerraformBoatItemHelper.registerBoatItem(
+            ModBoats.BOGGY_CHEST_BOAT_ID,
+            ModBoats.BOGGY_BOAT_KEY,
+            true
+    );
+    public static final Item BOGGY_SIGN = registerItem("boggy_sign",
+            new SignItem(new FabricItemSettings().maxCount(16),
+                    ModBlocks.BOGGY_SIGN, ModBlocks.BOGGY_WALL_SIGN));
+
+    public static final Item BOGGY_HANGING_SIGN = registerItem("boggy_hanging_sign",
+            new HangingSignItem(ModBlocks.BOGGY_HANGING_SIGN,
+                    ModBlocks.BOGGY_WALL_HANGING_SIGN,
+                    new FabricItemSettings().maxCount(16)));
+    public static final Item SWEET_SAP = Registry.register(
+            Registries.ITEM,
+            new Identifier(Oddities.MOD_ID, "sweet_sap"),
+            new Item(new FabricItemSettings().food(
+                    new FoodComponent.Builder()
+                            .hunger(3)
+                            .saturationModifier(0.6f)
+                            .snack()
+                            .build()
+            ))
+    );
+    public static final Item WHISKERS_SPAWN_EGG = registerItem("whiskers_spawn_egg",
+            new WhiskersSpawnEggItem(new FabricItemSettings().maxCount(1))
+    );
+    public static final Item EGGASAUR_SPAWN_EGG = Registry.register(
+            Registries.ITEM,
+            new Identifier(Oddities.MOD_ID, "eggasaur_spawn_egg"),
+            new EggasaurSpawnEggItem(new Item.Settings().maxCount(1))
+    );
+    public static final Item GLITTER_MUSIC_DISC = Registry.register(
+            Registries.ITEM,
+            new Identifier(Oddities.MOD_ID, "glitter_music_disc"),
+            new GlitterMusicDiscItem(
+                    14,
+                    ModSounds.GLITTER_MUSIC_DISC,
+                    new Item.Settings().maxCount(1).rarity(Rarity.RARE),
+                    191
+            )
+    );
 
     /* =========================
        ✅ CHEF FOODS (from your PNGs)

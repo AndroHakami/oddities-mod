@@ -1,0 +1,7 @@
+{
+  "targets": [ "lunar_drill_preview" ],
+  "passes": [
+    { "name": "odd:lunar_drill_preview", "intarget": "minecraft:main", "outtarget": "lunar_drill_preview" },
+    { "name": "blit", "intarget": "lunar_drill_preview", "outtarget": "minecraft:main" }
+  ]
+}

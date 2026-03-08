@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": { "side": "odd:block/boggy_log", "end": "odd:block/boggy_log_top" }
+}

@@ -251,7 +251,7 @@ public final class BuddymorphPower implements Power {
         BuddymorphData data = BuddymorphData.get(p.getServerWorld());
 
         if (!data.hasBuddy(p.getUuid(), id)) {
-            p.sendMessage(Text.literal("That buddy isn’t befriended yet."), true);
+
             return;
         }
 

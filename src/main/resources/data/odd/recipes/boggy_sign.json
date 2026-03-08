@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["###","###"," S "],
+  "key": {
+    "#": { "item": "odd:boggy_planks" },
+    "S": { "item": "minecraft:stick" }
+  },
+  "result": { "item": "odd:boggy_sign", "count": 3 }
+}

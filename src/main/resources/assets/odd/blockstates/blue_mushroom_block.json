@@ -1,0 +1,12 @@
+{
+  "multipart": [
+    { "apply": { "model": "odd:block/blue_mushroom_block_inside" } },
+
+    { "when": { "north": "true" }, "apply": { "model": "odd:block/blue_mushroom_block_cap_north" } },
+    { "when": { "south": "true" }, "apply": { "model": "odd:block/blue_mushroom_block_cap_south" } },
+    { "when": { "east":  "true" }, "apply": { "model": "odd:block/blue_mushroom_block_cap_east"  } },
+    { "when": { "west":  "true" }, "apply": { "model": "odd:block/blue_mushroom_block_cap_west"  } },
+    { "when": { "up":    "true" }, "apply": { "model": "odd:block/blue_mushroom_block_cap_up"    } },
+    { "when": { "down":  "true" }, "apply": { "model": "odd:block/blue_mushroom_block_cap_down"  } }
+  ]
+}

@@ -352,7 +352,7 @@ public final class AcceleratePower implements Power {
 
         float e = getEnergy(player);
         if (e <= 2.0f) {
-            player.sendMessage(Text.literal("Too exhausted to Accelerate."), true);
+
             sendHud(player, false, e, ENERGY_MAX);
             return;
         }
@@ -415,7 +415,7 @@ public final class AcceleratePower implements Power {
 
         RecallSnapshot snap = R(player).getSevenSecondsAgoOrOldest();
         if (snap == null) {
-            player.sendMessage(Text.literal("Recall not ready yet."), true);
+
             return;
         }
 
@@ -424,12 +424,12 @@ public final class AcceleratePower implements Power {
 
         ServerWorld targetWorld = server.getWorld(snap.dim);
         if (targetWorld == null) {
-            player.sendMessage(Text.literal("Recall failed (world missing)."), true);
+
             return;
         }
 
         if (player.getWorld().getRegistryKey() != snap.dim) {
-            player.sendMessage(Text.literal("Recall blocked (different dimension)."), true);
+
             return;
         }
 

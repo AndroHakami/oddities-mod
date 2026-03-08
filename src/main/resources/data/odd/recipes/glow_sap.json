@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "##",
+    "##"
+  ],
+  "key": {
+    "#": { "item": "odd:sweet_sap" }
+  },
+  "result": { "item": "odd:glow_sap", "count": 1 }
+}

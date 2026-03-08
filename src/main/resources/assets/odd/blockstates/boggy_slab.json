@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "type=bottom": { "model": "odd:block/boggy_slab" },
+    "type=double": { "model": "odd:block/boggy_planks" },
+    "type=top": { "model": "odd:block/boggy_slab_top" }
+  }
+}

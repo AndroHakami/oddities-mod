@@ -1,4 +1,3 @@
-// src/main/java/net/seep/odd/abilities/power/SplashPower.java
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
@@ -45,7 +44,7 @@ public final class SplashPower implements Power, HoldReleasePower {
     @Override public long cooldownTicks() { return 0; }
 
     // Secondary is HOLD; cooldown applied on release by PowerAPI.holdRelease.
-    @Override public long secondaryCooldownTicks() { return 10; } // 4s
+    @Override public long secondaryCooldownTicks() { return 10; } // (note: 10 ticks = 0.5s)
 
     // Third: mode switch press (small anti-spam)
     @Override public long thirdCooldownTicks() { return 6; }
@@ -78,7 +77,7 @@ public final class SplashPower implements Power, HoldReleasePower {
         return "Splash: Support power. Toggle Primary for a bubble aura that buffs nearby creatures based on mode. "
                 + "Hold Secondary for a water hose beam that applies Froggy Time + healing. "
                 + "Both share one resource meter (hose drains more). "
-                + "Casting suspends you in the air. HUD is always visible while Splash is equipped.";
+                + "Casting suspends you in the air. HUD is visible while Splash is equipped.";
     }
 
     /** Call once from common init: SplashPower.init(); */
@@ -89,7 +88,7 @@ public final class SplashPower implements Power, HoldReleasePower {
         if (INITED) return;
         INITED = true;
 
-        // Drive the power every server tick (so it works even if you forgot to wire it elsewhere)
+        // Drive the power every server tick
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
             for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
                 serverTick(p);
@@ -123,8 +122,11 @@ public final class SplashPower implements Power, HoldReleasePower {
        Networking (S2C)
        ========================= */
 
-    public static final Identifier S2C_SPLASH_STATE = new Identifier("odd", "splash_state");
-    public static final Identifier S2C_SPLASH_BEAM  = new Identifier("odd", "splash_beam");
+    /** Owner-only (resource + flags) */
+    public static final Identifier S2C_SPLASH_STATE  = new Identifier("odd", "splash_state");
+
+    /** Everyone (for world visuals: aura hue + smooth hose render) */
+    public static final Identifier S2C_SPLASH_VISUAL = new Identifier("odd", "splash_visual");
 
     /* =========================
        Mode
@@ -159,25 +161,28 @@ public final class SplashPower implements Power, HoldReleasePower {
 
     // shared meter drains
     private static final int PRIMARY_DRAIN_PER_TICK = 7;   // ~14%/sec
-    private static final int HOSE_DRAIN_PER_TICK    = 16;  // drains faster (as requested)
-    private static final int RESOURCE_REGEN_PER_TICK = 6;  // slightly snappier regen
+    private static final int HOSE_DRAIN_PER_TICK    = 16;  // drains faster
+    private static final int RESOURCE_REGEN_PER_TICK = 6;  // regen
 
     private static final int AURA_REFRESH_EVERY_TICKS = 10;
     private static final int AURA_EFFECT_DURATION_HELD = 40;   // 2s
     private static final int AURA_EFFECT_DURATION_LINGER = 20; // 1s
 
-    // visuals (less frequent ring spawn)
+    // visuals
     private static final int AURA_RING_PARTICLE_EVERY_TICKS = 10;
+
     private static final int CAST_SLOWNESS_AMP = 2;          // Slowness III (0=I,1=II,2=III)
     private static final int CAST_SLOWNESS_DURATION = 6;     // short refresh, hidden
 
-    private static final double CAST_HORIZ_DAMP = 0.55;      // slower strafing drift
-    private static final double CAST_UP_DAMP    = 0.70;      // slower rising
-    private static final double CAST_DOWN_DAMP  = 0.45;      // slower falling
-    private static final double CAST_MAX_FALL_SPEED = -0.12; // cap terminal fall while casting
+    private static final double CAST_HORIZ_DAMP = 0.55;
+    private static final double CAST_UP_DAMP    = 0.70;
+    private static final double CAST_DOWN_DAMP  = 0.45;
+    private static final double CAST_MAX_FALL_SPEED = -0.12;
     private static final double CAST_INPUT_DAMP = 0.80;
 
-    private static final int HOSE_RANGE = 18;
+    /** Used by client render too (smooth beam like Fairy) */
+    public static final int HOSE_RANGE = 18;
+
     private static final int HOSE_EFFECT_DURATION = 60; // refresh while hit
     private static final int HOSE_HEAL_EVERY_TICKS = 10;
     private static final float HOSE_HEAL_AMOUNT = 1.0f; // 0.5 hearts
@@ -207,13 +212,12 @@ public final class SplashPower implements Power, HoldReleasePower {
         int auraRefreshTimer = 0;
         int auraParticleTimer = 0;
 
-        // beam
+        // beam (server-side only for hit logic)
         Vec3d beamStart = Vec3d.ZERO;
         Vec3d beamEnd = Vec3d.ZERO;
-        int beamSendTimer = 0;
         boolean beamWasActive = false;
 
-        // healing throttle (tick-based)
+        // healing throttle
         int hoseHealTimer = 0;
 
         // prevent “hold through empty meter and instantly resume”
@@ -225,9 +229,15 @@ public final class SplashPower implements Power, HoldReleasePower {
         // passive
         int passiveTimer = 0;
 
-        // HUD sync pacing
+        // owner HUD/state pacing
         int syncTimer = 0;
         boolean firstSync = true;
+
+        // broadcast visuals pacing + change detection
+        int visualTimer = 0;
+        boolean lastVisAura = false;
+        boolean lastVisHose = false;
+        int lastVisModeOrd = -1;
     }
 
     private static final Map<UUID, State> STATE = new Object2ObjectOpenHashMap<>();
@@ -244,24 +254,67 @@ public final class SplashPower implements Power, HoldReleasePower {
     }
 
     /* =========================
+       Powerless override hook
+       ========================= */
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        State s = STATE.get(player.getUuid());
+        if (s == null) return;
+
+        s.auraOn = false;
+        s.hoseStalled = true;
+        s.hoseHealTimer = 0;
+        s.streamAppliedTimer = 0;
+
+        clearSuspensionIfNeeded(player);
+        applyGravityDamp(player, PASSIVE_FALL_FACTOR);
+
+        if (player.getWorld() instanceof ServerWorld sw) {
+            // stop world visuals immediately for everyone
+            broadcastVisual(sw, player, s, false, false, true);
+        }
+
+        // owner loops/UI stop immediately
+        syncState(player, s, true);
+    }
+
+    /* =========================
        Third ability: Mode switch
        ========================= */
 
     @Override
     public void activateThird(ServerPlayerEntity player) {
+        if (!hasSplash(player)) return;
+        if (player.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            player.sendMessage(Text.literal("Splash: disabled (POWERLESS)."), true);
+            return;
+        }
+
         State s = getState(player);
         s.mode = s.mode.next();
         player.sendMessage(Text.literal("Mode: ").append(s.mode.display), true);
+
         syncState(player, s, true);
+        if (player.getWorld() instanceof ServerWorld sw) {
+            boolean auraActive = s.auraOn && s.resource > 0;
+            boolean hoseActive = PowerAPI.isHeld(player, "secondary") && !s.hoseStalled && s.resource > 0;
+            broadcastVisual(sw, player, s, auraActive, hoseActive, true);
+        }
     }
 
     /* =========================
-       Primary ability: TOGGLE (simple + reliable)
+       Primary ability: TOGGLE
        ========================= */
 
     @Override
     public void activate(ServerPlayerEntity player) {
         if (!hasSplash(player)) return;
+        if (player.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            player.sendMessage(Text.literal("Splash: disabled (POWERLESS)."), true);
+            return;
+        }
+
         State s = getState(player);
 
         s.auraOn = !s.auraOn;
@@ -272,8 +325,14 @@ public final class SplashPower implements Power, HoldReleasePower {
             }
         }
 
-        player.sendMessage(Text.literal("Bubbles: ").append(Text.literal(s.auraOn ? "ON" : "OFF")), true);
+
+
         syncState(player, s, true);
+        if (player.getWorld() instanceof ServerWorld sw) {
+            boolean auraActive = s.auraOn && s.resource > 0;
+            boolean hoseActive = PowerAPI.isHeld(player, "secondary") && !s.hoseStalled && s.resource > 0;
+            broadcastVisual(sw, player, s, auraActive, hoseActive, true);
+        }
     }
 
     /* =========================
@@ -282,7 +341,7 @@ public final class SplashPower implements Power, HoldReleasePower {
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
-        player.sendMessage(Text.literal("Hold Secondary to use Water Hose."), true);
+
     }
 
     /* =========================
@@ -292,14 +351,24 @@ public final class SplashPower implements Power, HoldReleasePower {
     @Override
     public void onHoldStart(ServerPlayerEntity player, String slot) {
         if (!hasSplash(player)) return;
+        if (player.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+
+            return;
+        }
+
         State s = getState(player);
 
         if ("secondary".equals(slot)) {
-            s.beamSendTimer = 0;
             s.hoseHealTimer = 0;
             s.hoseStalled = false;
             s.streamAppliedTimer = 0;
+
             syncState(player, s, true);
+            if (player.getWorld() instanceof ServerWorld sw) {
+                boolean auraActive = s.auraOn && s.resource > 0;
+                boolean hoseActive = true && s.resource > 0; // will become true in tick if meter allows
+                broadcastVisual(sw, player, s, auraActive, hoseActive, true);
+            }
         }
     }
 
@@ -315,12 +384,13 @@ public final class SplashPower implements Power, HoldReleasePower {
 
         if ("secondary".equals(slot)) {
             s.hoseStalled = false;
-            if (player.getWorld() instanceof ServerWorld sw) {
-                // stop beam for everyone immediately
-                sendBeam(sw, player, false, s.beamStart, s.beamEnd);
-            }
             s.beamWasActive = false;
+
             syncState(player, s, true);
+            if (player.getWorld() instanceof ServerWorld sw) {
+                boolean auraActive = s.auraOn && s.resource > 0;
+                broadcastVisual(sw, player, s, auraActive, false, true);
+            }
         }
     }
 
@@ -329,8 +399,24 @@ public final class SplashPower implements Power, HoldReleasePower {
        ========================= */
 
     public static void serverTick(ServerPlayerEntity player) {
-        // If you swapped powers while suspended, ensure cleanup.
+        // If you swapped powers while suspended, ensure cleanup + stop visuals once.
         if (!hasSplash(player)) {
+            State s = STATE.get(player.getUuid());
+            if (s != null) {
+                // kill any leftover visuals immediately (one-shot)
+                if (player.getWorld() instanceof ServerWorld sw) {
+                    if (s.lastVisAura || s.lastVisHose) {
+                        broadcastVisual(sw, player, s, false, false, true);
+                    }
+                }
+                // stop owner loops quickly
+                if (s.auraOn || s.beamWasActive) {
+                    s.auraOn = false;
+                    s.beamWasActive = false;
+                    syncState(player, s, true);
+                }
+            }
+
             clearSuspensionIfNeeded(player);
             applyGravityDamp(player, PASSIVE_FALL_FACTOR);
             return;
@@ -338,10 +424,43 @@ public final class SplashPower implements Power, HoldReleasePower {
 
         State s = getState(player);
 
-        // First tick after state creation: sync immediately so HUD shows instantly
+        // POWERLESS override (hard stop)
+        if (player.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+            // regen meter while powerless, but never allow casting
+            s.resource = Math.min(RESOURCE_MAX, s.resource + RESOURCE_REGEN_PER_TICK);
+
+            boolean hadAny = s.auraOn || s.beamWasActive || s.lastVisAura || s.lastVisHose;
+            s.auraOn = false;
+            s.hoseStalled = true;
+            s.hoseHealTimer = 0;
+            s.streamAppliedTimer = 0;
+            s.beamWasActive = false;
+
+            clearSuspensionIfNeeded(player);
+            applyGravityDamp(player, PASSIVE_FALL_FACTOR);
+
+            if (hadAny && player.getWorld() instanceof ServerWorld sw) {
+                broadcastVisual(sw, player, s, false, false, true);
+            }
+
+            // keep owner state fresh enough to stop loops/UI immediately
+            s.syncTimer++;
+            if (s.syncTimer >= 10) {
+                s.syncTimer = 0;
+                syncState(player, s, true);
+            }
+            return;
+        }
+
+        // First tick after state creation: sync immediately
         if (s.firstSync) {
             s.firstSync = false;
             syncState(player, s, true);
+            if (player.getWorld() instanceof ServerWorld sw) {
+                boolean auraActive = s.auraOn && s.resource > 0;
+                boolean hoseActive = false;
+                broadcastVisual(sw, player, s, auraActive, hoseActive, true);
+            }
         }
 
         // Passive frog feel (always)
@@ -386,11 +505,11 @@ public final class SplashPower implements Power, HoldReleasePower {
         if (s.resource <= 0) {
             if (s.auraOn) {
                 s.auraOn = false;
-                player.sendMessage(Text.literal("Bubbles: exhausted."), true);
+
             }
             if (secondaryHeld && !s.hoseStalled) {
                 s.hoseStalled = true;
-                player.sendMessage(Text.literal("Hose: exhausted."), true);
+
             }
         }
 
@@ -398,13 +517,12 @@ public final class SplashPower implements Power, HoldReleasePower {
         boolean auraActive = s.auraOn && s.resource > 0;
         boolean hoseActive = secondaryHeld && !s.hoseStalled && s.resource > 0;
 
-        // Casting suspension (freeze movement + stop falling)
+        // Casting suspension
         if (auraActive || hoseActive) {
             applySuspension(player);
             applyCastSlowMo(player);
         } else {
             clearSuspensionIfNeeded(player);
-            // only apply gentle frog gravity when NOT casting
             applyGravityDamp(player, PASSIVE_FALL_FACTOR);
         }
 
@@ -429,7 +547,7 @@ public final class SplashPower implements Power, HoldReleasePower {
             s.auraParticleTimer = 0;
         }
 
-        // Secondary: Beam while active
+        // Secondary: Beam while active (server hit logic)
         if (hoseActive) {
             if (player.getWorld() instanceof ServerWorld sw) {
                 computeBeam(player, s);
@@ -443,50 +561,64 @@ public final class SplashPower implements Power, HoldReleasePower {
                 }
 
                 boolean hitSomeone = applyBeamEffects(sw, player, s, doHeal);
+
+                // only ModSounds for others, and played FROM THE PLAYER
                 if (hitSomeone) {
                     s.streamAppliedTimer++;
-                    if (s.streamAppliedTimer >= 10) { // not spammy
+                    if (s.streamAppliedTimer >= 10) {
                         s.streamAppliedTimer = 0;
-                        sw.playSoundFromEntity(null, player, ModSounds.STREAM_APPLIED, net.minecraft.sound.SoundCategory.PLAYERS, 0.9f, 1.0f);
+                        sw.playSoundFromEntity(null, player, ModSounds.STREAM_APPLIED,
+                                net.minecraft.sound.SoundCategory.PLAYERS, 0.9f, 1.0f);
                     }
                 } else {
                     s.streamAppliedTimer = 0;
                 }
 
-                // send beam packets throttled
-                s.beamSendTimer++;
-                if (s.beamSendTimer >= 2) {
-                    s.beamSendTimer = 0;
-                    sendBeam(sw, player, true, s.beamStart, s.beamEnd);
-                }
-
-                // very reduced particles: a few inside the stream (server-side for everyone)
+                // beam particles: for everyone
                 if ((player.age % 4) == 0) spawnBeamBubbles(sw, s.beamStart, s.beamEnd, 4);
 
                 s.beamWasActive = true;
             }
         } else {
             s.hoseHealTimer = 0;
-
-            // If beam was active last tick, shut it off once (so render + audio stop cleanly)
-            if (s.beamWasActive && player.getWorld() instanceof ServerWorld sw) {
-                sendBeam(sw, player, false, s.beamStart, s.beamEnd);
-            }
+            s.streamAppliedTimer = 0;
             s.beamWasActive = false;
         }
 
-        // HUD sync pacing: ALWAYS keep it alive if Splash is equipped
+        // Owner sync pacing (resource for UI + LOCAL loops)
         s.syncTimer++;
-        int rate = (auraActive || hoseActive) ? 5 : 20; // fast while active, slow idle
+        int rate = (auraActive || hoseActive) ? 5 : 20;
         if (s.syncTimer >= rate) {
             s.syncTimer = 0;
             syncState(player, s, false);
+        }
+
+        // World visual broadcast pacing (for smooth beam render + aura hue)
+        if (player.getWorld() instanceof ServerWorld sw) {
+            broadcastVisual(sw, player, s, auraActive, hoseActive, false);
         }
     }
 
     /* =========================
        Aura helpers
        ========================= */
+    private static void spawnBeamHitRainbow(ServerWorld sw, LivingEntity e, int total) {
+        // total stays the same; just split across colors (10 -> 4/3/3)
+        int base = total / 3;
+        int rem = total - base * 3;
+
+        int green = base + (rem > 0 ? 1 : 0);
+        int aqua  = base + (rem > 1 ? 1 : 0);
+        int pink  = base;
+
+        double cx = e.getX();
+        double cy = e.getBodyY(0.6);
+        double cz = e.getZ();
+
+        sw.spawnParticles(OddParticles.SPLASH_BUBBLE_GREEN, cx, cy, cz, green, 0.35, 0.35, 0.35, 0.0);
+        sw.spawnParticles(OddParticles.SPLASH_BUBBLE_AQUA,  cx, cy, cz, aqua,  0.35, 0.35, 0.35, 0.0);
+        sw.spawnParticles(OddParticles.SPLASH_BUBBLE_PINK,  cx, cy, cz, pink,  0.35, 0.35, 0.35, 0.0);
+    }
 
     private static StatusEffectInstance modeEffect(Mode mode, int durationTicks) {
         return switch (mode) {
@@ -497,7 +629,6 @@ public final class SplashPower implements Power, HoldReleasePower {
     }
 
     private static ParticleEffect modeBubbleParticle(Mode mode) {
-        // Your naming convention: OddParticles (NOT ModParticles)
         return switch (mode) {
             case LEAP   -> OddParticles.SPLASH_BUBBLE_GREEN;
             case TONGUE -> OddParticles.SPLASH_BUBBLE_AQUA;
@@ -515,18 +646,15 @@ public final class SplashPower implements Power, HoldReleasePower {
         for (LivingEntity e : targets) {
             if (e.squaredDistanceTo(caster) > (AURA_RADIUS * AURA_RADIUS)) continue;
 
-            // buff effect
             e.addStatusEffect(modeEffect(mode, durationTicks));
-
-            // ALSO show clearly-colored bubbles on whoever currently has the effect (even if aura later turns off)
             spawnStatusBubbles(sw, e, mode, 6);
         }
     }
 
     private static void spawnAuraRing(ServerWorld sw, ServerPlayerEntity caster, Mode mode) {
-        final int points = 36;                 // smooth ring
+        final int points = 36;
         final double r = AURA_RADIUS;
-        final double y = caster.getY() + 0.20; // slightly above ground
+        final double y = caster.getY() + 0.20;
 
         ParticleEffect bubble = modeBubbleParticle(mode);
 
@@ -535,7 +663,6 @@ public final class SplashPower implements Power, HoldReleasePower {
             double px = caster.getX() + Math.cos(a) * r;
             double pz = caster.getZ() + Math.sin(a) * r;
 
-            // custom colored bubble particles (clear + not too spammy)
             sw.spawnParticles(bubble, px, y, pz, 1, 0.02, 0.01, 0.02, 0.0);
         }
     }
@@ -550,11 +677,10 @@ public final class SplashPower implements Power, HoldReleasePower {
     }
 
     /* =========================
-       Beam helpers
+       Beam helpers (server hit logic)
        ========================= */
 
     private static void computeBeam(ServerPlayerEntity player, State s) {
-        // spawn slightly downward for visuals, but keep aim direction
         Vec3d start = player.getEyePos().add(0, -0.18, 0);
         Vec3d look = player.getRotationVec(1.0f);
         Vec3d end = start.add(look.multiply(HOSE_RANGE));
@@ -599,15 +725,10 @@ public final class SplashPower implements Power, HoldReleasePower {
             if (d2 <= (0.85 * 0.85)) {
                 hitAny = true;
 
-                // Apply Froggy Time (visible)
                 e.addStatusEffect(new StatusEffectInstance(ModStatusEffects.FROGGY_TIME, HOSE_EFFECT_DURATION, 0, false, false, true));
-
-                // healing
                 if (doHealThisTick) e.heal(HOSE_HEAL_AMOUNT);
 
-                // VERY clear “hit” bubbles on target (cycling colors handled client-side for beam itself)
-                // Here: use current mode bubbles as a simple clear indicator.
-                spawnStatusBubbles(sw, e, s.mode, 10);
+                spawnBeamHitRainbow(sw, e, 10);
             }
         }
 
@@ -634,13 +755,12 @@ public final class SplashPower implements Power, HoldReleasePower {
     }
 
     /* =========================
-       S2C state + beam
+       S2C state (owner only)
        ========================= */
 
     private static void syncState(ServerPlayerEntity player, State s, boolean force) {
         if (!ServerPlayNetworking.canSend(player, S2C_SPLASH_STATE)) return;
 
-        // Compute “active” flags here so HUD + client loop sounds are correct even when meter is empty/stalled.
         boolean secondaryHeld = PowerAPI.isHeld(player, "secondary");
         boolean auraActive = s.auraOn && s.resource > 0;
         boolean hoseActive = secondaryHeld && !s.hoseStalled && s.resource > 0;
@@ -664,17 +784,38 @@ public final class SplashPower implements Power, HoldReleasePower {
         syncState(player, s, false);
     }
 
-    private static void sendBeam(ServerWorld sw, ServerPlayerEntity owner, boolean active, Vec3d start, Vec3d end) {
+    /* =========================
+       S2C visuals (everyone)
+       ========================= */
+
+    private static void broadcastVisual(ServerWorld sw, ServerPlayerEntity owner, State s, boolean auraActive, boolean hoseActive, boolean force) {
+        int modeOrd = s.mode.ordinal();
+
+        s.visualTimer++;
+        int rate = (auraActive || hoseActive) ? 5 : 20;
+
+        boolean changed =
+                (auraActive != s.lastVisAura) ||
+                        (hoseActive != s.lastVisHose) ||
+                        (modeOrd != s.lastVisModeOrd);
+
+        if (!force && !changed && s.visualTimer < rate) return;
+        s.visualTimer = 0;
+
+        s.lastVisAura = auraActive;
+        s.lastVisHose = hoseActive;
+        s.lastVisModeOrd = modeOrd;
+
         for (ServerPlayerEntity p : sw.getPlayers()) {
-            if (!ServerPlayNetworking.canSend(p, S2C_SPLASH_BEAM)) continue;
+            if (!ServerPlayNetworking.canSend(p, S2C_SPLASH_VISUAL)) continue;
 
             PacketByteBuf buf = PacketByteBufs.create();
             buf.writeUuid(owner.getUuid());
-            buf.writeBoolean(active);
-            buf.writeDouble(start.x); buf.writeDouble(start.y); buf.writeDouble(start.z);
-            buf.writeDouble(end.x);   buf.writeDouble(end.y);   buf.writeDouble(end.z);
+            buf.writeVarInt(modeOrd);
+            buf.writeBoolean(auraActive);
+            buf.writeBoolean(hoseActive);
 
-            ServerPlayNetworking.send(p, S2C_SPLASH_BEAM, buf);
+            ServerPlayNetworking.send(p, S2C_SPLASH_VISUAL, buf);
         }
     }
 
@@ -683,16 +824,13 @@ public final class SplashPower implements Power, HoldReleasePower {
        ========================= */
 
     private static void applySuspension(ServerPlayerEntity p) {
-        // do nothing weird if riding something
         if (p.hasVehicle()) return;
 
-        // hard freeze
         Vec3d v = p.getVelocity();
         if (Math.abs(v.x) > CAST_VEL_EPS || Math.abs(v.y) > CAST_VEL_EPS || Math.abs(v.z) > CAST_VEL_EPS) {
             p.setVelocity(0, 0, 0);
             p.velocityDirty = true;
         } else {
-            // still force y to 0 to prevent micro-fall
             p.setVelocity(0, 0, 0);
             p.velocityDirty = true;
         }
@@ -706,17 +844,15 @@ public final class SplashPower implements Power, HoldReleasePower {
         UUID id = p.getUuid();
         if (!SUSPENDED.contains(id)) return;
 
-        // restore vanilla gravity
         p.setNoGravity(false);
         SUSPENDED.remove(id);
     }
+
     private static void applyCastSlowMo(ServerPlayerEntity p) {
         if (p.hasVehicle()) return;
 
-        // Keep gravity ON (so it doesn't feel like floating)
         p.setNoGravity(false);
 
-        // Hidden slowness so movement inputs feel slow too (ground + air)
         p.addStatusEffect(new StatusEffectInstance(
                 net.minecraft.entity.effect.StatusEffects.SLOWNESS,
                 CAST_SLOWNESS_DURATION,
@@ -726,26 +862,21 @@ public final class SplashPower implements Power, HoldReleasePower {
 
         Vec3d v = p.getVelocity();
 
-        // Dampen vertical like "time dilation"
         double vy = v.y;
         if (vy > 0) vy *= CAST_UP_DAMP;
         else vy = Math.max(vy * CAST_DOWN_DAMP, CAST_MAX_FALL_SPEED);
 
-        // Dampen horizontal drift, but DON'T hard-freeze (keeps it feeling like slow-mo)
         double vx = v.x * CAST_HORIZ_DAMP;
         double vz = v.z * CAST_HORIZ_DAMP;
 
-        // Also soften player-driven movement a bit (helps it feel syrupy instead of "snappy but damp")
         vx *= CAST_INPUT_DAMP;
         vz *= CAST_INPUT_DAMP;
 
         p.setVelocity(vx, vy, vz);
         p.velocityDirty = true;
 
-        // Prevent fall damage while slow-mo casting
         p.fallDistance = 0.0f;
     }
-
 
     private static void applyGravityDamp(LivingEntity e, double fallFactor) {
         if (e.isOnGround() || e.isClimbing() || e.isTouchingWater() || e.hasVehicle()) return;

@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "odd:boggy_log",
+    "odd:stripped_boggy_log",
+    "odd:boggy_wood",
+    "odd:stripped_boggy_wood"
+  ]
+}

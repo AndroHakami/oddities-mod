@@ -90,6 +90,7 @@ import net.seep.odd.commands.OddCooldownCommand;
 import net.seep.odd.enchant.ItalianStompersHandler;
 import net.seep.odd.enchant.ModEnchantments;
 
+import net.seep.odd.entity.ModBoats;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.car.radio.RadioTracksInit;
@@ -101,9 +102,11 @@ import net.seep.odd.entity.seal.SealEntity;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 
+import net.seep.odd.entity.umbra.UmbraEntities;
 import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
 import net.seep.odd.expeditions.Expeditions;
 import net.seep.odd.expeditions.rottenroots.RottenRootsCommands;
+
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
@@ -140,6 +143,8 @@ public final class Oddities implements ModInitializer {
 			GateCommands.register(dispatcher, registryAccess);
 		});
 
+		net.seep.odd.worldgen.ModStructures.init();
+
 
 
 
@@ -152,11 +157,32 @@ public final class Oddities implements ModInitializer {
 
 
 		FuelRegistry.INSTANCE.add(ModItems.COAL_BRIQUETTE, 200);
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_PLANKS.asItem(), 300);
+
+		// Common “wood-like” fuel values (tweak if you want):
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_LOG.asItem(), 300);
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_WOOD.asItem(), 300);
+		FuelRegistry.INSTANCE.add(ModBlocks.STRIPPED_BOGGY_LOG.asItem(), 300);
+		FuelRegistry.INSTANCE.add(ModBlocks.STRIPPED_BOGGY_WOOD.asItem(), 300);
+
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_SLAB.asItem(), 150);
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_STAIRS.asItem(), 300);
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_FENCE.asItem(), 300);
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_FENCE_GATE.asItem(), 300);
+		FuelRegistry.INSTANCE.add(ModItems.BOGGY_BOAT, 300);
+		FuelRegistry.INSTANCE.add(ModItems.BOGGY_CHEST_BOAT, 500);
+		FuelRegistry.INSTANCE.add(ModBlocks.BOGGY_DOOR.asItem(), 500);
 		net.seep.odd.util.TickScheduler.init();
 		OddParticles.register();
+		ModBoats.registerBoats();
 
 		// EXPEDITIONS
 		Expeditions.register();
+
+		// Rotten Roots
+
+		net.seep.odd.entity.rotten_roots.ShroomTrades.init();
+
 
 
 
@@ -254,6 +280,13 @@ public final class Oddities implements ModInitializer {
 		WardBulwarkHandler.init();
 		GazeOfTheEndNet.registerServer();
 		WhirlpoolHarpoonHandler.init();
+		LootScrambleHandler.init();
+		LeechPlateHandler.init();
+		MuteBladeHandler.init();
+		WayfinderRicochetHandler.init();
+		TectonicPistonHandler.init();
+		ShaperGuardHandler.init();
+		HostSwapNet.registerServer();
 
 
 
@@ -271,6 +304,7 @@ public final class Oddities implements ModInitializer {
 		AstralInventory.init(ModItems.GHOST_HAND);
 
 		// Umbra (server tick)
+		UmbraEntities.init();
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			for (var p : server.getPlayerManager().getPlayerList()) {
 				UmbraSoulPower.serverTick(p);
@@ -284,7 +318,7 @@ public final class Oddities implements ModInitializer {
 		});
 
 		// Net channels (server/common)
-		UmbraNet.registerServerAstral();
+
 		UmbraAirSwimBoostNet.initServer();
 		MistyNet.init(); // server receivers
 
@@ -395,7 +429,10 @@ public final class Oddities implements ModInitializer {
 			}
 		});
 
+
 		net.seep.odd.abilities.power.LookerPower.installPersistHooks();
+
+
 
 		// Rat
 		RatPower.bootstrap();
@@ -446,7 +483,7 @@ public final class Oddities implements ModInitializer {
 
 		// Owl
 
-		OwlPower.registerNetworking();
+		net.seep.odd.abilities.owl.net.OwlNetworking.registerServer();
 
 		// Rise
 		RisePower.registerNetworking();

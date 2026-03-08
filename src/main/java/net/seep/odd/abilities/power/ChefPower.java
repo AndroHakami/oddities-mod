@@ -94,7 +94,7 @@ public final class ChefPower implements Power {
                     dustBurst(sw, Vec3d.ofCenter(oldPos).add(0, 0.6, 0));
 
                     sw.playSound(null, oldPos, SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.BLOCKS, 0.6f, 1.35f);
-                    p.sendMessage(Text.literal("Cooker dismissed."), true);
+
                 }
                 data.clearCooker(p.getUuid());
                 return;
@@ -106,13 +106,13 @@ public final class ChefPower implements Power {
         // Spawn new cooker above the block you’re looking at
         HitResult hr = p.raycast(6.0, 0.0f, false);
         if (!(hr instanceof BlockHitResult bhr) || hr.getType() != HitResult.Type.BLOCK) {
-            p.sendMessage(Text.literal("Look at a block to place the cooker."), true);
+
             return;
         }
 
         BlockPos place = bhr.getBlockPos().up();
         if (!sw.getBlockState(place).isAir()) {
-            p.sendMessage(Text.literal("Not enough space above that block."), true);
+
             return;
         }
 
@@ -130,7 +130,7 @@ public final class ChefPower implements Power {
 
         data.setCooker(p.getUuid(), sw.getRegistryKey().getValue(), place);
         sw.playSound(null, place, SoundEvents.BLOCK_ANVIL_PLACE, SoundCategory.BLOCKS, 0.6f, 1.2f);
-        p.sendMessage(Text.literal("Cooker summoned."), true);
+
     }
 
     /* ============================================================
@@ -151,7 +151,7 @@ public final class ChefPower implements Power {
         if (pullExistingRecipeBookToMainHand(p)) {
             bookFx(sw, p.getPos().add(0, 1.0, 0));
             sw.playSound(null, p.getBlockPos(), SoundEvents.ITEM_BOOK_PAGE_TURN, SoundCategory.PLAYERS, 0.75f, 1.05f);
-            p.sendMessage(Text.literal("Recipe Book: ready."), true);
+
             return;
         }
 
@@ -169,7 +169,7 @@ public final class ChefPower implements Power {
 
         bookFx(sw, p.getPos().add(0, 1.0, 0));
         sw.playSound(null, p.getBlockPos(), SoundEvents.ITEM_BOOK_PAGE_TURN, SoundCategory.PLAYERS, 0.8f, 1.10f);
-        p.sendMessage(Text.literal("Recipe Book pulled out."), true);
+
     }
 
     /** Finds a marked recipe book in offhand/inventory and swaps it into main hand. */

@@ -202,7 +202,7 @@ public final class CultistPower implements Power {
 
         // already casting
         if (PENDING.containsKey(player.getUuid())) {
-            player.sendMessage(Text.literal("Divine Touch: channeling..."), true);
+
             return;
         }
 
@@ -217,7 +217,7 @@ public final class CultistPower implements Power {
         BlockHitResult bhr = raycastBlock(player, 6.0);
         if (bhr.getType() != HitResult.Type.BLOCK) {
             divineTouchFx(sw, player.getPos().add(0, player.getStandingEyeHeight() * 0.6, 0), 8, 4);
-            player.sendMessage(Text.literal("Divine Touch: nothing to bless."), true);
+
             return;
         }
 
@@ -251,7 +251,7 @@ public final class CultistPower implements Power {
         divineTouchFx(sw, fxPos, 10, 5);
         sw.playSound(null, caster.getBlockPos(), SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 0.7f, 1.6f);
 
-        caster.sendMessage(Text.literal("Divine Touch: channeling..."), true);
+
     }
 
     private static void startCastBlock(ServerPlayerEntity caster, BlockPos hit) {
@@ -271,7 +271,7 @@ public final class CultistPower implements Power {
         divineTouchFx(sw, fxPos, 12, 6);
         sw.playSound(null, hit, SoundEvents.BLOCK_AMETHYST_BLOCK_HIT, SoundCategory.PLAYERS, 0.7f, 1.4f);
 
-        caster.sendMessage(Text.literal("Divine Touch: channeling..."), true);
+
     }
 
     private static void finishCast(ServerPlayerEntity caster, Pending pend) {
@@ -292,13 +292,13 @@ public final class CultistPower implements Power {
         if (pend.kind == CastKind.PLAYER && pend.targetPlayer != null) {
             ServerPlayerEntity target = sw.getServer().getPlayerManager().getPlayer(pend.targetPlayer);
             if (target == null || target.getWorld() != caster.getWorld()) {
-                caster.sendMessage(Text.literal("Divine Touch failed (target gone)."), true);
+
                 return;
             }
 
             // Must still be near at the final moment
             if (caster.squaredDistanceTo(target) > (6.0 * 6.0)) {
-                caster.sendMessage(Text.literal("Divine Touch failed (too far)."), true);
+
                 return;
             }
 
@@ -312,13 +312,13 @@ public final class CultistPower implements Power {
             // Must still be near the structure at the final moment
             Vec3d center = Vec3d.ofCenter(hit);
             if (caster.squaredDistanceTo(center.x, center.y, center.z) > (6.0 * 6.0)) {
-                caster.sendMessage(Text.literal("Divine Touch failed (too far)."), true);
+
                 return;
             }
 
             BlockState at = sw.getBlockState(hit);
             if (at.isAir()) {
-                caster.sendMessage(Text.literal("Divine Touch failed (no construct)."), true);
+
                 return;
             }
 
@@ -326,7 +326,7 @@ public final class CultistPower implements Power {
                 divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 16, 8);
                 sw.playSound(null, hit, SoundEvents.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
                 sw.emitGameEvent(caster, GameEvent.ENTITY_PLACE, hit);
-                caster.sendMessage(Text.literal("Divine Touch: Sightseer awakened."), true);
+
                 return;
             }
 
@@ -334,7 +334,7 @@ public final class CultistPower implements Power {
                 divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 16, 8);
                 sw.playSound(null, hit, SoundEvents.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
                 sw.emitGameEvent(caster, GameEvent.ENTITY_PLACE, hit);
-                caster.sendMessage(Text.literal("Divine Touch: Shy Guy awakened."), true);
+
                 return;
             }
 
@@ -342,7 +342,7 @@ public final class CultistPower implements Power {
                 divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 14, 7);
                 sw.playSound(null, hit, SoundEvents.BLOCK_SOUL_SAND_BREAK, SoundCategory.PLAYERS, 1.0f, 0.7f);
                 sw.emitGameEvent(caster, GameEvent.ENTITY_PLACE, hit);
-                caster.sendMessage(Text.literal("Divine Touch: Weeping Angel awakened."), true);
+
                 return;
             }
 
@@ -350,12 +350,12 @@ public final class CultistPower implements Power {
                 divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 16, 8);
                 sw.playSound(null, hit, SoundEvents.BLOCK_RESPAWN_ANCHOR_SET_SPAWN, SoundCategory.PLAYERS, 1.0f, 0.7f);
                 sw.emitGameEvent(caster, GameEvent.BLOCK_CHANGE, hit);
-                caster.sendMessage(Text.literal("Divine Touch: Centipede nest awakened."), true);
+
                 return;
             }
 
             divineTouchFx(sw, Vec3d.ofCenter(hit).add(0, 0.6, 0), 10, 5);
-            caster.sendMessage(Text.literal("Divine Touch: no valid construct found."), true);
+
         }
     }
 
@@ -384,9 +384,9 @@ public final class CultistPower implements Power {
                     SoundEvents.BLOCK_AMETHYST_BLOCK_BREAK, SoundCategory.PLAYERS, 0.8f, 1.4f);
 
             if (target instanceof ServerPlayerEntity st)
-                st.sendMessage(Text.literal("Divine Protection removed."), true);
 
-            caster.sendMessage(Text.literal("Divine Touch: removed protection."), true);
+
+
             return;
         }
 
@@ -404,10 +404,10 @@ public final class CultistPower implements Power {
         sw.playSound(null, target.getBlockPos(),
                 SoundEvents.BLOCK_AMETHYST_BLOCK_PLACE, SoundCategory.PLAYERS, 0.9f, 1.2f);
 
-        if (target instanceof ServerPlayerEntity st)
-            st.sendMessage(Text.literal("Divine Protection granted."), true);
 
-        caster.sendMessage(Text.literal("Divine Touch: granted protection."), true);
+
+
+
     }
 
     /* =========================================================

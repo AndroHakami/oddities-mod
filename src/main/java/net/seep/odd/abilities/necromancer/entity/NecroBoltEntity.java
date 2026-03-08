@@ -42,7 +42,7 @@ public class NecroBoltEntity extends ThrownItemEntity {
             new DustParticleEffect(new Vector3f(1f, 0f, 1f), 1.15f);
 
     // Tuning
-    private static final float DAMAGE = 4.0f; // 2 hearts
+    private static final float DAMAGE = 2.0f; // 2 hearts
     private static final int MAX_LIFE_T = 20 * 6;
 
     public NecroBoltEntity(EntityType<? extends NecroBoltEntity> type, World world) {

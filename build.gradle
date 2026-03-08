@@ -93,6 +93,8 @@ dependencies {
 	// VoiceAttack + Cloth Config
 	modImplementation "maven.modrinth:voiceattackapi:${voiceattackapi_version}"
 	modImplementation "maven.modrinth:cloth-config:${cloth_config_version}"
+	modImplementation "com.terraformersmc.terraform-api:terraform-wood-api-v1:7.0.1"
+	include "com.terraformersmc.terraform-api:terraform-wood-api-v1:7.0.1"
 
 	// CPM (Custom Player Models)
 	compileOnly    "com.tom5454.cpm:CustomPlayerModels-API:${project.cpm_api_version}"

@@ -1,0 +1,28 @@
+{
+  "replace": false,
+  "values": [
+    "odd:boggy_log",
+    "odd:stripped_boggy_log",
+    "odd:boggy_wood",
+    "odd:stripped_boggy_wood",
+
+    "odd:boggy_planks",
+    "odd:boggy_stairs",
+    "odd:boggy_slab",
+
+    "odd:boggy_fence",
+    "odd:boggy_fence_gate",
+
+    "odd:boggy_door",
+    "odd:boggy_trapdoor",
+
+    "odd:boggy_button",
+    "odd:boggy_pressure_plate",
+
+    "odd:boggy_sign",
+    "odd:boggy_wall_sign",
+    "odd:boggy_hanging_sign",
+    "odd:boggy_wall_hanging_sign",
+    "odd:blue_mushroom_block"
+  ]
+}

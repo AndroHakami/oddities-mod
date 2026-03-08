@@ -1,0 +1,12 @@
+{
+  "textures": { "cap": "odd:block/blue_mushroom_block" },
+  "elements": [
+    {
+      "from": [ -0.01, 0, 0 ],
+      "to":   [ 0, 16, 16 ],
+      "faces": {
+        "west": { "uv": [0, 0, 16, 16], "texture": "#cap", "cullface": "west" }
+      }
+    }
+  ]
+}

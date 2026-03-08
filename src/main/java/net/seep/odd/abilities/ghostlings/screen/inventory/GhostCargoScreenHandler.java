@@ -53,6 +53,8 @@ public class GhostCargoScreenHandler extends ScreenHandler {
         return true;
     }
 
+
+
     // shift-click move
     @Override
     public ItemStack quickMove(PlayerEntity player, int index) {

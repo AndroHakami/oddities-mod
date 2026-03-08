@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "powered=false": { "model": "odd:block/boggy_pressure_plate" },
+    "powered=true":  { "model": "odd:block/boggy_pressure_plate_down" }
+  }
+}

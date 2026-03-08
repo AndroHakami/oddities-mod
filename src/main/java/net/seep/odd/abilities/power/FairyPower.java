@@ -272,7 +272,7 @@ public final class FairyPower implements Power {
         boolean next = !isBeamOn(player);
         setBeamOnAndSync(player, next);
 
-        player.sendMessage(Text.literal(next ? "Beam: ON" : "Beam: OFF"), true);
+
     }
 
     /* ---------------- Tick ---------------- */
@@ -515,7 +515,7 @@ public final class FairyPower implements Power {
                 if (enable) player.stopUsingItem();
                 setBeamOnAndSync(player, enable);
 
-                player.sendMessage(Text.literal(enable ? "Beam: ON" : "Beam: OFF"), true);
+
             });
         });
     }

@@ -1,5 +1,6 @@
 package net.seep.odd;
 
+import com.terraformersmc.terraform.boat.api.client.TerraformBoatClientHelper;
 import dev.architectury.registry.client.rendering.BlockEntityRendererRegistry;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
@@ -7,17 +8,23 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.ColorProviderRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.*;
+import net.fabricmc.fabric.api.object.builder.v1.block.type.WoodTypeBuilder;
+import net.minecraft.block.WoodType;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 import net.minecraft.client.item.ModelPredicateProviderRegistry;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.TexturedRenderLayers;
 import net.minecraft.client.render.block.entity.BlockEntityRendererFactories;
+import net.minecraft.client.render.block.entity.HangingSignBlockEntityRenderer;
+import net.minecraft.client.render.block.entity.SignBlockEntityRenderer;
 import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
+import net.minecraft.client.render.entity.model.EntityModelLayers;
+import net.minecraft.client.util.SpriteIdentifier;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.text.MutableText;
@@ -63,6 +70,8 @@ import net.seep.odd.abilities.fallingsnow.FallingSnowPowerAccessor;
 import net.seep.odd.abilities.firesword.FireSwordNet;
 import net.seep.odd.abilities.firesword.client.FireSwordCpmBridge;
 import net.seep.odd.abilities.firesword.client.FireSwordFx;
+import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
+import net.seep.odd.abilities.gamble.item.client.GambleRevolverClient;
 import net.seep.odd.abilities.ghostlings.GhostPackets;
 import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
 import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
@@ -70,16 +79,27 @@ import net.seep.odd.abilities.ghostlings.screen.client.GhostManageScreen;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreen;
 import net.seep.odd.abilities.ghostlings.screen.inventory.GhostCargoScreenHandler;
 import net.seep.odd.abilities.icewitch.IceWitchInit;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
+import net.minecraft.client.render.TexturedRenderLayers;
+
+import net.seep.odd.block.ModBlocks;
+import net.seep.odd.entity.ModBoats;
+import net.seep.odd.entity.ModEntities;
+
+
 import net.seep.odd.abilities.icewitch.IceWitchPackets;
 import net.seep.odd.abilities.icewitch.client.IceProjectileRenderer;
 import net.seep.odd.abilities.icewitch.client.IceSpellAreaRenderer;
 import net.seep.odd.abilities.icewitch.client.IceWitchHud;
+import net.seep.odd.abilities.icewitch.client.IceWitchSoarFx;
 import net.seep.odd.abilities.init.ArtificerCondenserRegistry;
 import net.seep.odd.abilities.init.ArtificerMixerClient;
 import net.seep.odd.abilities.init.ArtificerMixerRegistry;
 import net.seep.odd.abilities.looker.LookerClient;
+import net.seep.odd.abilities.looker.client.LookerInvisFx;
 import net.seep.odd.abilities.lunar.item.LunarDrillItem;
 import net.seep.odd.abilities.lunar.net.LunarPackets;
+import net.seep.odd.abilities.misty.client.MistyHoverFx;
 import net.seep.odd.abilities.necromancer.NecromancerNet;
 import net.seep.odd.abilities.necromancer.client.NecromancerClient;
 import net.seep.odd.abilities.necromancer.client.NecromancerSummonCircleClient;
@@ -104,6 +124,7 @@ import net.seep.odd.abilities.tamer.client.EmeraldShurikenRenderer;
 import net.seep.odd.abilities.tamer.client.TamerHudOverlay;
 import net.seep.odd.abilities.tamer.client.TameBallRenderer;
 import net.seep.odd.abilities.tamer.client.VillagerEvo1Renderer;
+import net.seep.odd.abilities.umbra.client.UmbraEntitiesClient;
 import net.seep.odd.abilities.vampire.client.render.BloodCrystalProjectileRenderer;
 import net.seep.odd.abilities.voids.client.VoidCpmBridge;
 
@@ -118,12 +139,14 @@ import net.seep.odd.abilities.wizard.client.WizardClientInit;
 import net.seep.odd.abilities.wizard.client.WizardNoRenderRenderer;
 import net.seep.odd.abilities.wizard.entity.client.CapybaraFamiliarRenderer;
 import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
-import net.seep.odd.abilities.zerosuit.client.AnnihilationShaderClient;
+
 import net.seep.odd.abilities.zerosuit.client.ZeroSuitCpmBridge;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.block.combiner.client.CombinerRenderer;
 import net.seep.odd.block.combiner.client.CombinerScreen;
+import net.seep.odd.block.combiner.enchant.HostSwapNet;
 import net.seep.odd.block.combiner.enchant.client.GazeOfTheEndClient;
+
 import net.seep.odd.block.combiner.net.CombinerNet;
 import net.seep.odd.block.falseflower.FalseFlowerTracker;
 import net.seep.odd.block.falseflower.client.FalseFlowerAuraClient;
@@ -144,22 +167,35 @@ import net.seep.odd.entity.client.IceStatueEntityRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
 import net.seep.odd.entity.cultist.ShyGuyRenderer;
 import net.seep.odd.entity.cultist.SightseerRenderer;
+import net.seep.odd.entity.eggasaur.client.EggasaurRenderer;
 import net.seep.odd.entity.falsefrog.client.FalseFrogRenderer;
 import net.seep.odd.entity.firefly.client.FireflyRenderer;
+import net.seep.odd.entity.flyingwitch.client.FlyingWitchRenderer;
+import net.seep.odd.entity.flyingwitch.client.HexProjectileRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.necromancer.client.CorpseRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
+import net.seep.odd.entity.rotten_roots.ElderShroomRenderer;
+import net.seep.odd.entity.rotten_roots.ShroomRenderer;
+import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileRenderer;
 import net.seep.odd.entity.seal.client.SealRenderer;
+import net.seep.odd.entity.skitter.client.SkitterRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 
+import net.seep.odd.entity.whiskers.client.WhiskersRenderer;
+import net.seep.odd.entity.windwitch.client.TornadoProjectileRenderer;
+import net.seep.odd.entity.windwitch.client.WindWitchRenderer;
 import net.seep.odd.entity.zerosuit.ZeroBeamRenderer;
 import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
 import net.seep.odd.entity.zerosuit.client.ZeroSuitMissileRenderer;
 import net.seep.odd.event.alien.client.AlienInvasionSkyClient;
 import net.seep.odd.event.alien.client.AlienOverworldGradeClient;
+import net.seep.odd.expeditions.rottenroots.boggy.client.BoggyBoatRenderer;
+
+import net.seep.odd.item.ModItems;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.particles.client.OddParticlesClient;
 import net.seep.odd.particles.client.SpottedStepsParticle;
@@ -176,7 +212,10 @@ import net.seep.odd.sky.client.RottenRootsClient;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_START_ID;
 import static net.seep.odd.abilities.astral.AstralInventory.HUD_STOP_ID;
 
+
 public final class OdditiesClient implements ClientModInitializer {
+
+
     @Override
     public void onInitializeClient() {
         // Power sync + cooldowns (client)
@@ -208,6 +247,8 @@ public final class OdditiesClient implements ClientModInitializer {
         BlockEntityRendererRegistry.register(ModBlocks.COMBINER_BE, CombinerRenderer::new);
         HandledScreens.register(ModScreens.COMBINER, CombinerScreen::new);
         GazeOfTheEndClient.init();
+        net.seep.odd.block.combiner.enchant.client.HostSwapKeybind.init();
+
 
         // Blockade
         net.seep.odd.abilities.blockade.client.BlockadeFx.init();
@@ -216,6 +257,7 @@ public final class OdditiesClient implements ClientModInitializer {
         // Umbra (client)
         UmbraNet.registerClient();
         UmbraAirSwimBoostNetClient.initClient();
+        UmbraEntitiesClient.init();
         PossessionClientController.register();
         AstralClientController.register();
 
@@ -260,6 +302,7 @@ public final class OdditiesClient implements ClientModInitializer {
         // Misty (client)
         net.seep.odd.abilities.client.MistyClientController.register();
         MistyNet.initClient();
+        MistyHoverFx.init();
 
         // ---- Tamer (client) ----
         TamerNet.initClient();
@@ -350,6 +393,7 @@ public final class OdditiesClient implements ClientModInitializer {
         // Ice Witch (Client)
 
         IceWitchPackets.registerClient();
+        IceWitchSoarFx.init();
 
         // Spotted Phantom
         SpottedPhantomPower.Client.init();
@@ -367,13 +411,14 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.init();
         ZeroSuitCpmBridge.init();
         AnnihilationFx.init();
-        AnnihilationShaderClient.init();
+
 
 
 
 
         // Looker (Client)
         LookerClient.init();
+        LookerInvisFx.init();
 
 
         // Supercharge (Client)
@@ -400,6 +445,7 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(SuperEntities.THROWN_ITEM, SuperThrownItemEntityRenderer::new);
 
         // Gamble (client)
+        GambleRevolverClient.init();
         net.seep.odd.abilities.gamble.item.GambleRevolverItem.initClientHooks();
 
 
@@ -440,6 +486,7 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.LUNAR_MARK, ctx -> new FlyingItemEntityRenderer<>(ctx));
         LunarPower.Hud.init();
         LunarDrillItem.initClientHooks();
+        net.seep.odd.abilities.lunar.client.LunarDrillFx.init();
 
         // Fire Sword (Client)
         // Client init ONLY
@@ -511,6 +558,40 @@ public final class OdditiesClient implements ClientModInitializer {
         // Atheneum
         AtheneumClient.init();
         AtheneumGradeFx.init();
+        // rotten roots
+        ModelPredicateProviderRegistry.register(
+                ModItems.SPORE_BOW,
+                new Identifier("minecraft", "pull"),
+                (stack, world, entity, seed) -> {
+                    if (entity == null) return 0.0F;
+                    if (entity.getActiveItem() != stack) return 0.0F;
+
+                    int useTicks = stack.getMaxUseTime() - entity.getItemUseTimeLeft();
+                    float pull = useTicks / 20.0F;
+                    pull = (pull * pull + pull * 2.0F) / 3.0F;
+                    return Math.min(pull, 1.0F);
+                }
+        );
+
+        ModelPredicateProviderRegistry.register(
+                ModItems.SPORE_BOW,
+                new Identifier("minecraft", "pulling"),
+                (stack, world, entity, seed) ->
+                        (entity != null && entity.isUsingItem() && entity.getActiveItem() == stack) ? 1.0F : 0.0F
+        );
+        TerraformBoatClientHelper.registerModelLayers(ModBoats.BOGGY_BOAT_ID, false);
+        TerraformBoatClientHelper.registerModelLayers(ModBoats.BOGGY_BOAT_ID, true);
+        BlockRenderLayerMap.INSTANCE.putBlock(ModBlocks.BLUE_MUSHROOM, RenderLayer.getCutout());
+
+
+
+
+
+
+
+
+
+
 
         // Sniper (Client)
         SniperItem.initClientHooks();
@@ -639,6 +720,17 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.SNIPER_GRAPPLE_ANCHOR,
                 net.seep.odd.abilities.sniper.client.render.SniperGrappleAnchorRenderer::new);
         EntityRendererRegistry.register(ModEntities.BOOKLET, BookletRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SHROOM, ShroomRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ELDER_SHROOM, ElderShroomRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SPORE_MUSHROOM_PROJECTILE, SporeMushroomProjectileRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SKITTER, SkitterRenderer::new);
+        EntityRendererRegistry.register(ModEntities.WHISKERS, WhiskersRenderer::new);
+        EntityRendererRegistry.register(ModEntities.EGGASAUR, EggasaurRenderer::new);
+        EntityRendererRegistry.register(ModEntities.FLYING_WITCH, FlyingWitchRenderer::new);
+        EntityRendererRegistry.register(ModEntities.HEX_PROJECTILE, HexProjectileRenderer::new);
+        EntityRendererRegistry.register(ModEntities.WIND_WITCH, WindWitchRenderer::new);
+        EntityRendererRegistry.register(ModEntities.TORNADO_PROJECTILE, TornadoProjectileRenderer::new);
+
 
 
 

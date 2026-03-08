@@ -1,0 +1,1 @@
+{ "parent": "minecraft:block/outer_stairs", "textures": { "bottom": "odd:block/boggy_planks", "top": "odd:block/boggy_planks", "side": "odd:block/boggy_planks" } }

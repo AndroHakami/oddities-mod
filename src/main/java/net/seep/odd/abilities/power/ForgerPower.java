@@ -61,7 +61,7 @@ public final class ForgerPower implements Power {
                     }
                     sw.setBlockState(old, net.minecraft.block.Blocks.AIR.getDefaultState(), 3);
                     sw.playSound(null, old, SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.BLOCKS, 0.55f, 1.25f);
-                    p.sendMessage(Text.literal("Combiner dismissed."), true);
+
                 }
                 data.clear(p.getUuid());
                 return;
@@ -72,13 +72,13 @@ public final class ForgerPower implements Power {
         // place above looked block
         HitResult hr = p.raycast(6.0, 0.0f, false);
         if (!(hr instanceof BlockHitResult bhr) || hr.getType() != HitResult.Type.BLOCK) {
-            p.sendMessage(Text.literal("Look at a block to place the combiner."), true);
+
             return;
         }
 
         BlockPos place = bhr.getBlockPos().up();
         if (!sw.getBlockState(place).isAir()) {
-            p.sendMessage(Text.literal("Not enough space above that block."), true);
+
             return;
         }
 
@@ -94,6 +94,6 @@ public final class ForgerPower implements Power {
 
         data.set(p.getUuid(), sw.getRegistryKey().getValue(), place);
         sw.playSound(null, place, SoundEvents.BLOCK_ANVIL_PLACE, SoundCategory.BLOCKS, 0.65f, 1.2f);
-        p.sendMessage(Text.literal("Combiner summoned."), true);
+
     }
 }

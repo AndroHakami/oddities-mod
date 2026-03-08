@@ -23,6 +23,8 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.particle.BlockStateParticleEffect;
 import net.minecraft.particle.ParticleEffect;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.EntityView;
@@ -50,7 +52,8 @@ public class CapybaraFamiliarEntity extends TameableEntity implements GeoEntity 
     private static final RawAnimation WALK   = RawAnimation.begin().thenLoop("walk");
     private static final RawAnimation DANCE_T = RawAnimation.begin().thenPlay("transition_to_dance");
     private static final RawAnimation DANCE  = RawAnimation.begin().thenLoop("dancing");
-    private static final int DANCE_TRANS_TICKS_MAX = 18;
+
+    private static final int DANCE_TRANS_TICKS_MAX = 30;
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
@@ -60,6 +63,7 @@ public class CapybaraFamiliarEntity extends TameableEntity implements GeoEntity 
     private int element = 0; // 0 fire,1 water,2 air,3 earth
 
     private boolean dancing = false;
+    private boolean prevDancing = false;
     private int danceTransTicks = 0;
 
     public CapybaraFamiliarEntity(EntityType<? extends TameableEntity> type, World world) {
@@ -70,13 +74,15 @@ public class CapybaraFamiliarEntity extends TameableEntity implements GeoEntity 
     public static DefaultAttributeContainer.Builder createAttributes() {
         return TameableEntity.createMobAttributes()
                 .add(EntityAttributes.GENERIC_MAX_HEALTH, 20.0D)
-                .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.28D)
-                .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 32.0D);
+                // ✅ faster so he actually keeps up while WALKING
+                .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.35D)
+                .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 48.0D);
     }
 
     @Override
     protected void initGoals() {
-        this.goalSelector.add(2, new FollowOwnerGoal(this, 1.1D, 3.0F, 18.0F, false) {
+        // ✅ Use vanilla follow goal so he PATHFINDS/WALKS (not teleports)
+        this.goalSelector.add(2, new FollowOwnerGoal(this, 1.35D, 3.0F, 22.0F, false) {
             @Override public boolean canStart() { return !hasOrbitTarget() && super.canStart(); }
             @Override public boolean shouldContinue() { return !hasOrbitTarget() && super.shouldContinue(); }
         });
@@ -105,54 +111,103 @@ public class CapybaraFamiliarEntity extends TameableEntity implements GeoEntity 
         if (!(this.getWorld() instanceof ServerWorld sw)) return;
 
         if (ownerId == null) { this.discard(); return; }
-        var owner = sw.getPlayerByUuid(ownerId);
+
+        MinecraftServer server = sw.getServer();
+        ServerPlayerEntity owner = (server != null) ? server.getPlayerManager().getPlayer(ownerId) : null;
+
+        // owner offline/disconnected -> vanish
         if (owner == null || owner.isDead()) { this.discard(); return; }
 
-        // HARD SYNC element to owner’s real element (fixes “always fire”)
+        // wrong dimension -> despawn (WizardCasting will respawn properly)
+        if (this.getWorld().getRegistryKey() != owner.getWorld().getRegistryKey()) {
+            this.discard();
+            return;
+        }
+
+        // HARD SYNC element
         WizardElement e = WizardPower.getElement(owner);
         this.element = e.id;
 
+        // dance detection
         if ((this.age % 10) == 0) {
             boolean nowDancing = isJukeboxWithRecordNearby(6);
-            if (nowDancing && !dancing) danceTransTicks = DANCE_TRANS_TICKS_MAX;
+            prevDancing = dancing;
             dancing = nowDancing;
+
+            if (dancing && !prevDancing) {
+                danceTransTicks = DANCE_TRANS_TICKS_MAX;
+            }
         }
         if (danceTransTicks > 0) danceTransTicks--;
 
         if (orbitTargetId != null) {
             Entity t = sw.getEntity(orbitTargetId);
-            if (t == null) {
+
+            // target invalid -> stop orbit and recall to owner
+            if (t == null || !t.isAlive()) {
                 orbitTargetId = null;
-            } else {
-                double ang = (this.age * 0.18);
-                double r = 1.6;
-                double ox = Math.cos(ang) * r;
-                double oz = Math.sin(ang) * r;
-
-                this.getNavigation().stop();
-                this.setVelocity(0, 0, 0);
-                this.refreshPositionAndAngles(
-                        t.getX() + ox,
-                        t.getY() + 0.6,
-                        t.getZ() + oz,
-                        this.getYaw(),
-                        this.getPitch()
-                );
-
-                if ((this.age % 20) == 0 && t instanceof net.minecraft.entity.LivingEntity living) {
-                    applyElementBuff(living);
-                }
-
-                // REDUCED particles: only every 5 ticks and fewer count
-                if ((this.age % 5) == 0) {
-                    spawnElementParticles(sw, t.getX(), t.getY() + 1.0, t.getZ());
-                }
+                recallToOwnerOrDie(owner);
+                return;
             }
+
+            // owner too far from target -> stop orbit and recall
+            if (owner.squaredDistanceTo(t) > 64 * 64) {
+                orbitTargetId = null;
+                recallToOwnerOrDie(owner);
+                return;
+            }
+
+            // orbit by positioning (NOT navigation)
+            double ang = (this.age * 0.22);
+            double r = 1.6;
+            double ox = Math.cos(ang) * r;
+            double oz = Math.sin(ang) * r;
+
+            this.getNavigation().stop();
+            this.setVelocity(0, 0, 0);
+            this.refreshPositionAndAngles(
+                    t.getX() + ox,
+                    t.getY() + 0.6,
+                    t.getZ() + oz,
+                    this.getYaw(),
+                    this.getPitch()
+            );
+
+            if ((this.age % 20) == 0 && t instanceof net.minecraft.entity.LivingEntity living) {
+                applyElementBuff(living);
+            }
+
+            if ((this.age % 5) == 0) {
+                spawnElementParticles(sw, t.getX(), t.getY() + 1.0, t.getZ());
+            }
+
         } else {
-            if (this.squaredDistanceTo(owner) > 40 * 40) {
+            // ✅ Let FollowOwnerGoal do the walking.
+            // Only hard-teleport if SUPER far (stuck/lag/desync).
+            double d2 = this.squaredDistanceTo(owner);
+
+            if (d2 > 80 * 80) {
+                // extremely far -> snap
                 this.refreshPositionAndAngles(owner.getX(), owner.getY(), owner.getZ(), this.getYaw(), this.getPitch());
+                this.setVelocity(0, 0, 0);
+                this.velocityModified = true;
+            } else if (d2 > 28 * 28) {
+                // moderately far -> give navigation a nudge so it commits to pathing
+                // (prevents "stands still" if goal didn't tick yet)
+                this.getNavigation().startMovingTo(owner, 1.35D);
             }
         }
+    }
+
+    private void recallToOwnerOrDie(ServerPlayerEntity owner) {
+        if (owner == null || owner.isDead()) {
+            this.discard();
+            return;
+        }
+        // recall = teleport to owner position (as per your previous request)
+        this.refreshPositionAndAngles(owner.getX(), owner.getY(), owner.getZ(), this.getYaw(), this.getPitch());
+        this.setVelocity(0, 0, 0);
+        this.velocityModified = true;
     }
 
     private void applyElementBuff(net.minecraft.entity.LivingEntity target) {
@@ -191,7 +246,12 @@ public class CapybaraFamiliarEntity extends TameableEntity implements GeoEntity 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "main", 0, state -> {
+
             if (dancing) {
+                // ✅ reliable transition
+                if (danceTransTicks == DANCE_TRANS_TICKS_MAX - 1) {
+                    state.getController().forceAnimationReset();
+                }
                 if (danceTransTicks > 0) state.setAndContinue(DANCE_T);
                 else state.setAndContinue(DANCE);
                 return PlayState.CONTINUE;
@@ -238,5 +298,6 @@ public class CapybaraFamiliarEntity extends TameableEntity implements GeoEntity 
         element = nbt.getInt("Element");
         dancing = nbt.getBoolean("Dancing");
         danceTransTicks = nbt.getInt("DanceTrans");
+        prevDancing = dancing;
     }
 }

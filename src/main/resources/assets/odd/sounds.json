@@ -18,10 +18,70 @@
       "odd:vacuum_essence"
     ]
   },
+  "glitter_music_disc": {
+    "subtitle": "odd.glitter_music_disc",
+    "sounds": [
+      "odd:glitter_music_disc"
+    ]
+  },
   "cosmic_prepare": {
     "subtitle": "odd.cosmic_prepare",
     "sounds": [
       "odd:cosmic_prepare"
+    ]
+  },
+  "jetpack_flying": {
+    "subtitle": "odd.jetpack_flying",
+    "sounds": [
+      "odd:jetpack_flying"
+    ]
+  },
+  "jetpack_activate": {
+    "subtitle": "odd.jetpack_activate",
+    "sounds": [
+      "odd:jetpack_activate"
+    ]
+  },
+  "sniper_shot": {
+    "subtitle": "odd.sniper_shot",
+    "sounds": [
+      "odd:sniper_shot"
+    ]
+  },
+  "rocket_fly": {
+    "subtitle": "odd.rocket_fly",
+    "sounds": [
+      "odd:rocket_fly"
+    ]
+  },
+  "rocket_fire": {
+    "subtitle": "odd.rocket_fire",
+    "sounds": [
+      "odd:rocket_fire"
+    ]
+  },
+  "sniper_land": {
+    "subtitle": "odd.sniper_land",
+    "sounds": [
+      "odd:sniper_land"
+    ]
+  },
+  "owl_sonar": {
+    "subtitle": "odd.owl_sonar",
+    "sounds": [
+      "odd:owl_sonar"
+    ]
+  },
+  "gamble_fire": {
+    "subtitle": "odd.gamble_fire",
+    "sounds": [
+      "odd:gamble_fire"
+    ]
+  },
+  "looker_invis": {
+    "subtitle": "odd.looker_invis",
+    "sounds": [
+      "odd:looker_invis"
     ]
   },
   "cosmic_dash": {
@@ -134,6 +194,54 @@
     "subtitle": "odd.gravity_switch",
     "sounds": [
       "odd:gravity_switch"
+    ]
+  },
+  "supercharge_throw_hold": {
+    "subtitle": "odd.supercharge_throw_hold",
+    "sounds": [
+      "odd:supercharge_throw_hold"
+    ]
+  },
+  "shadow_kunai_throw": {
+    "subtitle": "odd.shadow_kunai_throw",
+    "sounds": [
+      "odd:shadow_kunai_throw"
+    ]
+  },
+  "shadow_kunai_tp": {
+    "subtitle": "odd.shadow_kunai_tp",
+    "sounds": [
+      "odd:shadow_kunai_tp"
+    ]
+  },
+  "umbra_shadow_shift": {
+    "subtitle": "odd.umbra_shadow_shift",
+    "sounds": [
+      "odd:umbra_shadow_shift"
+    ]
+  },
+  "shadow_kunai_swap": {
+    "subtitle": "odd.shadow_kunai_swap",
+    "sounds": [
+      "odd:shadow_kunai_swap"
+    ]
+  },
+  "supercharge_throw": {
+    "subtitle": "odd.supercharge_throw",
+    "sounds": [
+      "odd:supercharge_throw"
+    ]
+  },
+  "supercharge_ready": {
+    "subtitle": "odd.supercharge_ready",
+    "sounds": [
+      "odd:supercharge_ready"
+    ]
+  },
+  "supercharge_cancel": {
+    "subtitle": "odd.supercharge_cancel",
+    "sounds": [
+      "odd:supercharge_cancel"
     ]
   },
   "stream_applied": {

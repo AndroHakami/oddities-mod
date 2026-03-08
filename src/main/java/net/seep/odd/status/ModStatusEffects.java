@@ -25,6 +25,9 @@ public final class ModStatusEffects {
     public static final StatusEffect FROGGY_TIME     = reg("froggy_time", new FroggyTimeStatusEffect());
     public static final StatusEffect DIVINE_PROTECTION = reg("divine_protection", new DivineProtectionStatusEffect());
     public static final StatusEffect POWERLESS         = reg("powerless", new PowerlessStatusEffect());
+    public static final StatusEffect MIST_VEIL        = reg("mist_veil", new net.seep.odd.status.effect.MistVeilStatusEffect());
+    public static final StatusEffect MIST_VEIL_BROKEN = reg("mist_veil_broken", new net.seep.odd.status.effect.MistVeilBrokenStatusEffect());
+    public static final StatusEffect MISTY_HOVER      = reg("misty_hover", new net.seep.odd.status.effect.MistyHoverStatusEffect());
 
     /* =========================
        Chef foods

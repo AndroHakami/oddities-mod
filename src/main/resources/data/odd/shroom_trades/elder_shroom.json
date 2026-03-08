@@ -1,0 +1,31 @@
+{
+  "profile": "odd:elder_shroom",
+  "rolls": 3,
+  "offers": [
+    {
+      "buy": { "item": "minecraft:emerald", "count": 12 },
+      "sell": { "item": "minecraft:nether_wart", "count": 10 },
+      "maxUses": 6,
+      "xp": 6,
+      "priceMultiplier": 0.05,
+      "weight": 2
+    },
+    {
+      "buy": { "item": "minecraft:emerald", "count": 20 },
+      "sell": { "item": "minecraft:enchanted_book", "count": 1, "nbt": "{StoredEnchantments:[{id:\"minecraft:unbreaking\",lvl:2s}]}" },
+      "maxUses": 3,
+      "xp": 10,
+      "priceMultiplier": 0.05,
+      "weight": 1
+    },
+    {
+      "buy": { "item": "minecraft:emerald", "count": 8 },
+      "buyB": { "item": "minecraft:brown_mushroom", "count": 16 },
+      "sell": { "item": "minecraft:suspicious_stew", "count": 1, "nbt": "{Effects:[{EffectId:1b,EffectDuration:200}]}" },
+      "maxUses": 10,
+      "xp": 4,
+      "priceMultiplier": 0.05,
+      "weight": 3
+    }
+  ]
+}

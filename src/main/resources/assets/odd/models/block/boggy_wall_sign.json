@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/builtin/entity",
+  "textures": { "particle": "odd:block/boggy_planks" }
+}

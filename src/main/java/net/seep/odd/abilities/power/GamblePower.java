@@ -1,5 +1,6 @@
 package net.seep.odd.abilities.power;
 
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -14,11 +15,11 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.MathHelper;
 
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.gamble.GambleMode;
 import net.seep.odd.abilities.gamble.item.GambleRevolverItem;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.Map;
 import java.util.UUID;
@@ -38,6 +39,7 @@ public final class GamblePower implements Power {
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
     }
+
     @Override public String slotTitle(String slot) {
         return switch (slot) {
             case "primary" -> "SWITCH UP!";
@@ -64,8 +66,45 @@ public final class GamblePower implements Power {
     public static GambleMode getMode(PlayerEntity p) { return S(p).mode; }
     public static void setMode(PlayerEntity p, GambleMode m) { S(p).mode = m; }
 
+    /* =================== POWERLESS override =================== */
+
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+
+    /** usable from items too */
+    public static boolean isPowerless(PlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    public static void warnPowerlessOncePerSec(ServerPlayerEntity p) {
+        if (p == null) return;
+        long now = p.getWorld().getTime();
+        long nextOk = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < nextOk) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal("§cYou are powerless."), true);
+    }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        if (player == null) return;
+
+        // stop any active reloads immediately (prevents continued heart drain while powerless)
+        for (Hand h : Hand.values()) {
+            ItemStack s = player.getStackInHand(h);
+            if (s.getItem() instanceof GambleRevolverItem) {
+                s.getOrCreateNbt().putBoolean("gamble_reloading", false);
+                s.getOrCreateNbt().putInt("gamble_reloadT", 0);
+            }
+        }
+    }
+
     @Override
     public void activate(ServerPlayerEntity p) {
+        if (isPowerless(p)) {
+            warnPowerlessOncePerSec(p);
+            return; // do NOT switch modes while powerless
+        }
+
         St st = S(p);
         st.mode = st.mode.next();
         p.sendMessage(Text.literal("Gamble mode: " + st.mode.display()), true);
@@ -73,6 +112,11 @@ public final class GamblePower implements Power {
 
     @Override
     public void activateSecondary(ServerPlayerEntity p) {
+        if (isPowerless(p)) {
+            warnPowerlessOncePerSec(p);
+            return;
+        }
+
         // find the revolver in either hand and ask it to reload (no vanilla “use” animations)
         for (Hand h : Hand.values()) {
             ItemStack s = p.getStackInHand(h);
@@ -90,11 +134,13 @@ public final class GamblePower implements Power {
             HudRenderCallback.EVENT.register((DrawContext ctx, float td) -> {
                 var mc = MinecraftClient.getInstance();
                 if (mc.player == null) return;
+
                 String label = switch (GamblePower.getMode(mc.player)) {
                     case BUFF -> "Buff";
                     case DEBUFF -> "Debuff";
                     default -> "Shoot";
                 };
+
                 int sw = mc.getWindow().getScaledWidth(), sh = mc.getWindow().getScaledHeight();
                 int w = mc.textRenderer.getWidth(label);
                 ctx.drawText(mc.textRenderer, label, sw/2 - w/2, sh - 55, 0xFFEAA73C, true);

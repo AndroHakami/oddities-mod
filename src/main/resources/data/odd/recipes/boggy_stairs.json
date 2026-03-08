@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["#  ","## ","###"],
+  "key": { "#": { "item": "odd:boggy_planks" } },
+  "result": { "item": "odd:boggy_stairs", "count": 4 }
+}

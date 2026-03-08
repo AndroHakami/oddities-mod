@@ -1,4 +1,4 @@
-// src/main/java/net/seep/odd/abilities/power/VampirePower.java
+// FILE: src/main/java/net/seep/odd/abilities/power/VampirePower.java
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
@@ -36,6 +36,7 @@ import net.seep.odd.Oddities;
 import net.seep.odd.abilities.vampire.CpmVampireHooks;
 import net.seep.odd.abilities.vampire.VampireUtil;
 import net.seep.odd.abilities.vampire.entity.BloodCrystalProjectileEntity;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.UUID;
 
@@ -91,6 +92,27 @@ public final class VampirePower implements Power {
         var b = PacketByteBufs.create();
         b.writeBoolean(on);
         ServerPlayNetworking.send(p, S2C_FRENZY_STATE, b);
+    }
+
+    /* ---------------- POWERLESS override ---------------- */
+
+    private static final Object2LongOpenHashMap<UUID> LAST_POWERLESS_MSG = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    /** Returns true if we should block ability use (POWERLESS). */
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
+
+        long now = p.getServerWorld().getTime();
+        long last = LAST_POWERLESS_MSG.getOrDefault(p.getUuid(), Long.MIN_VALUE);
+        if (now - last >= 20) {
+            LAST_POWERLESS_MSG.put(p.getUuid(), now);
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
+        }
+        return true;
     }
 
     /* ---------------- Tuning ---------------- */
@@ -236,6 +258,7 @@ public final class VampirePower implements Power {
     @Override
     public void activate(ServerPlayerEntity player) {
         if (!VampireUtil.isVampire(player)) return;
+        if (blockIfPowerless(player)) return;
 
         UUID id = player.getUuid();
         if (SUCKING.containsKey(id)) {
@@ -277,6 +300,7 @@ public final class VampirePower implements Power {
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
         if (!VampireUtil.isVampire(player)) return;
+        if (blockIfPowerless(player)) return;
 
         if (!drainBloodLikeHunger(player, CRYSTAL_COST)) {
             player.sendMessage(Text.literal("Not enough Blood."), true);
@@ -296,6 +320,7 @@ public final class VampirePower implements Power {
     @Override
     public void activateThird(ServerPlayerEntity player) {
         if (!VampireUtil.isVampire(player)) return;
+        if (blockIfPowerless(player)) return;
 
         UUID id = player.getUuid();
         boolean on = FRENZY_ON.getOrDefault(id, 0L) != 0L;
@@ -346,6 +371,8 @@ public final class VampirePower implements Power {
 
         STEALTH_ACTIVE.removeLong(id);
         STEALTH_COOLDOWN_UNTIL.removeLong(id);
+
+        LAST_POWERLESS_MSG.removeLong(id);
     }
 
     public static void addBloodExhaustion(ServerPlayerEntity p, float amount) {
@@ -391,7 +418,6 @@ public final class VampirePower implements Power {
             if (!VampireUtil.isVampire(sp)) return ActionResult.PASS;
             if (!(world instanceof ServerWorld sw)) return ActionResult.PASS;
 
-            // Only break if we were actually stealthing / invisible.
             if (STEALTH_ACTIVE.getOrDefault(sp.getUuid(), 0L) != 0L || sp.hasStatusEffect(StatusEffects.INVISIBILITY)) {
                 breakStealth(sw, sp, true);
             }
@@ -403,8 +429,22 @@ public final class VampirePower implements Power {
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
 
         enforceNoHunger(p);
-
         tickBloodLikeHunger(sw, p);
+
+        // ✅ POWERLESS: disable active vampire abilities + passives (but do not delete projectiles already spawned)
+        if (isPowerless(p)) {
+            // stop continuous abilities
+            stopSuck(p, false);
+            setFrenzy(p, false);
+
+            // stop stealth/invis without applying stealth-break cooldown (powerless is the reason)
+            if (STEALTH_ACTIVE.getOrDefault(p.getUuid(), 0L) != 0L || p.hasStatusEffect(StatusEffects.INVISIBILITY)) {
+                breakStealth(sw, p, false);
+            }
+
+            maybeSyncHud(sw, p, getBlood(p));
+            return;
+        }
 
         tickSuck(sw, p);
         tickFrenzy(sw, p);
@@ -567,7 +607,7 @@ public final class VampirePower implements Power {
             t = t * t * (3f - 2f * t);
 
             target.setYaw(s.targetYaw0);
-            target.setPitch(s.targetPitch0 + SUCK_FLIP_DEGREES * t); // ✅ was setYaw by mistake
+            target.setPitch(s.targetPitch0 + SUCK_FLIP_DEGREES * t);
 
             if ((s.age % SUCK_DAMAGE_INTERVAL_TICKS) == 0) {
                 target.damage(sw.getDamageSources().playerAttack(p), SUCK_DAMAGE_PER_HIT);
@@ -698,7 +738,6 @@ public final class VampirePower implements Power {
         UUID id = p.getUuid();
         long nowT = sw.getTime();
 
-        // track movement
         Vec3d now = p.getPos();
         Vec3d last = LAST_POS.get(id);
         LAST_POS.put(id, now);
@@ -719,7 +758,6 @@ public final class VampirePower implements Power {
         stillTicks = (sneaking && still) ? (stillTicks + 1L) : 0L;
         STILL_TICKS.put(id, stillTicks);
 
-        // ✅ Always allow the “hunt trails” while sneaking (even when moving).
         long lastTrail = LAST_STEALTH_PARTICLES.getOrDefault(id, Long.MIN_VALUE);
         if (sneaking && (nowT - lastTrail) >= STEALTH_PARTICLE_INTERVAL) {
             LAST_STEALTH_PARTICLES.put(id, nowT);
@@ -728,26 +766,22 @@ public final class VampirePower implements Power {
 
         boolean wasStealth = STEALTH_ACTIVE.getOrDefault(id, 0L) != 0L;
 
-        // If not sneaking, and we were stealthing, break + cooldown.
         if (!sneaking) {
             if (wasStealth) breakStealth(sw, p, true);
             return;
         }
 
-        // If on cooldown, we can still show trails, but invis cannot re-apply.
         if (stealthOnCooldown(sw, id)) {
             if (wasStealth) breakStealth(sw, p, false);
             return;
         }
 
-        // ✅ Invisibility requires stillness buildup
         boolean eligibleInvis = stillTicks >= STEALTH_STILL_REQUIRED_TICKS;
 
         if (eligibleInvis) {
             p.addStatusEffect(new StatusEffectInstance(StatusEffects.INVISIBILITY, 10, 0, false, false, true));
             STEALTH_ACTIVE.put(id, 1L);
         } else {
-            // If we *were* invisible/stealthing and lost it (moved), apply 3s cooldown.
             if (wasStealth || p.hasStatusEffect(StatusEffects.INVISIBILITY)) {
                 breakStealth(sw, p, true);
             }

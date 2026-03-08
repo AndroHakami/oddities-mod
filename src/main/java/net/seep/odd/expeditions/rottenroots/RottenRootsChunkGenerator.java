@@ -23,6 +23,7 @@ import net.minecraft.world.gen.chunk.Blender;
 import net.minecraft.world.gen.chunk.ChunkGenerator;
 import net.minecraft.world.gen.chunk.VerticalBlockSample;
 import net.minecraft.world.gen.noise.NoiseConfig;
+import net.seep.odd.block.ModBlocks;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,11 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
     private static final int   LENGTH_MULT    = 3;
     private static final int   THICK_SCALE_MAX= 2;
 
+    // --- Blue Sap tuning ---
+    // "quite rarely" overall, but when it hits we make a small clump.
+    private static final int BLUE_SAP_RARE_CHANCE = 2800; // lower = more common
+    private static final int BLUE_SAP_CLUMP_TRIES = 7;    // how many nearby shell spots we try to also convert
+
     private final long seed;
     private final float density;
 
@@ -66,7 +72,6 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         return CODEC; // stable instance
     }
 
-
     public ChunkGenerator withSeed(long seed) {
         return new RottenRootsChunkGenerator(this.biomeSource, seed, this.density);
     }
@@ -81,6 +86,7 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
     public CompletableFuture<Chunk> populateNoise(Executor executor, Blender blender, NoiseConfig noiseConfig,
                                                   StructureAccessor structures, Chunk chunk) {
         paintBedrockFloor(chunk);
+        paintBedrockCeiling(chunk); // ✅ add this
         paintRoots(chunk);
         return CompletableFuture.completedFuture(chunk);
     }
@@ -115,6 +121,29 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         BlockPos.Mutable m = new BlockPos.Mutable();
         for (int dx = 0; dx < 16; dx++) for (int dz = 0; dz < 16; dz++) {
             m.set(x0 + dx, y, z0 + dz);
+            chunk.setBlockState(m, bedrock, false);
+        }
+    }
+
+    private void paintBedrockCeiling(Chunk chunk) {
+        // topExclusive = bottomY + height (same convention as HeightLimitView)
+        final int topExclusive = chunk.getBottomY() + chunk.getHeight();
+        final int yTop = topExclusive - 1;     // max buildable Y in this chunk
+        final int yTop2 = topExclusive - 2;    // 2nd bedrock layer
+
+        final int x0 = chunk.getPos().getStartX();
+        final int z0 = chunk.getPos().getStartZ();
+        final BlockState bedrock = Blocks.BEDROCK.getDefaultState();
+
+        BlockPos.Mutable m = new BlockPos.Mutable();
+        for (int dx = 0; dx < 16; dx++) for (int dz = 0; dz < 16; dz++) {
+            int x = x0 + dx;
+            int z = z0 + dz;
+
+            m.set(x, yTop, z);
+            chunk.setBlockState(m, bedrock, false);
+
+            m.set(x, yTop2, z);
             chunk.setBlockState(m, bedrock, false);
         }
     }
@@ -280,6 +309,7 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         double pitch = Math.toRadians(pitchDeg) * (toward.y < 0 ? -1 : 1);
         return fromAngles(yaw, pitch);
     }
+
     private static Vec3d fromAngles(double yaw, double pitch) {
         double x = Math.cos(yaw) * Math.cos(pitch);
         double y = Math.sin(pitch);
@@ -296,9 +326,7 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
 
     private static BlockState pickLog(Random r) {
         List<BlockState> logs = List.of(
-                Blocks.OAK_LOG.getDefaultState(),
-                Blocks.SPRUCE_LOG.getDefaultState(),
-                Blocks.DARK_OAK_LOG.getDefaultState()
+                ModBlocks.BOGGY_LOG.getDefaultState()
         );
         return logs.get(r.nextInt(logs.size()));
     }
@@ -330,16 +358,76 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             if (x < minX - thick || x > maxX + thick || z < minZ - thick || z > maxZ + thick) continue;
 
             Direction.Axis axis = dominantAxis(d);
-            BlockState oriented = log.with(PillarBlock.AXIS, axis);
+
+            // core (inside) is boggy_log (the 'log' passed in)
+            BlockState coreOriented  = log.with(PillarBlock.AXIS, axis);
+
+            // shell (outside) is boggy_wood
+            BlockState shellOriented = ModBlocks.BOGGY_WOOD.getDefaultState().with(PillarBlock.AXIS, axis);
+
+            int outerR2 = thick * thick;
+
+            // shell is 1-block thick:
+            // core radius = (thick - 1), shell is everything outside that up to thick
+            int coreR = Math.max(0, thick - 1);
+            int coreR2 = coreR * coreR;
 
             for (int dx = -thick; dx <= thick; dx++)
                 for (int dy = -thick; dy <= thick; dy++)
                     for (int dz = -thick; dz <= thick; dz++) {
-                        if (dx*dx + dy*dy + dz*dz > thick*thick) continue;
+
+                        int dist2 = dx*dx + dy*dy + dz*dz;
+                        if (dist2 > outerR2) continue;
+
                         int px = x + dx, py = y + dy, pz = z + dz;
                         if (px < minX || px > maxX || pz < minZ || pz > maxZ) continue;
+
                         m.set(px, py, pz);
-                        if (chunk.getBlockState(m).isAir()) chunk.setBlockState(m, oriented, false);
+                        if (!chunk.getBlockState(m).isAir()) continue;
+
+                        boolean isShell = dist2 > coreR2;
+
+                        if (!isShell) {
+                            // inside
+                            chunk.setBlockState(m, coreOriented, false);
+                            continue;
+                        }
+
+                        // outside shell: usually boggy_wood, rarely blue_sap (in clumps)
+                        // NOTE: rename ModBlocks.BLUE_SAP if your field name differs.
+                        boolean placeBlueSap = (r.nextInt(BLUE_SAP_RARE_CHANCE) == 0);
+
+                        if (placeBlueSap) {
+                            chunk.setBlockState(m, ModBlocks.GLOW_SAP.getDefaultState(), false);
+
+                            // Make a small clump: try to convert a few nearby shell blocks
+                            for (int t = 0; t < BLUE_SAP_CLUMP_TRIES; t++) {
+                                int ox = r.nextBetween(-2, 2);
+                                int oy = r.nextBetween(-2, 2);
+                                int oz = r.nextBetween(-2, 2);
+
+                                int nx = px + ox, ny = py + oy, nz = pz + oz;
+                                if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
+
+                                // must still be on/near the shell band for this local blob
+                                int sdx = (nx - x);
+                                int sdy = (ny - y);
+                                int sdz = (nz - z);
+                                int nd2 = sdx*sdx + sdy*sdy + sdz*sdz;
+                                if (nd2 > outerR2) continue;
+                                if (nd2 <= coreR2) continue; // don't go into core
+
+                                m.set(nx, ny, nz);
+                                if (!chunk.getBlockState(m).isAir()) continue;
+
+                                // a little extra randomness so clumps aren't perfect spheres
+                                if (r.nextInt(3) != 0) continue;
+
+                                chunk.setBlockState(m, ModBlocks.GLOW_SAP.getDefaultState(), false);
+                            }
+                        } else {
+                            chunk.setBlockState(m, shellOriented, false);
+                        }
                     }
         }
     }

@@ -1,4 +1,4 @@
-// src/main/java/net/seep/odd/abilities/power/NecromancerPower.java
+// FILE: src/main/java/net/seep/odd/abilities/power/NecromancerPower.java
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
@@ -38,7 +38,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.util.math.random.Random;
-import net.minecraft.world.Heightmap;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.explosion.Explosion;
 
@@ -53,6 +52,7 @@ import net.seep.odd.abilities.necromancer.NecromancerNet;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.necromancer.AbstractCorpseEntity;
 import net.seep.odd.item.ModItems;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.*;
 
@@ -62,12 +62,18 @@ public final class NecromancerPower implements Power {
     private static final String TAG_SUMMONED = "odd_necro_summoned";
     private static final String TAG_OWNER_PREFIX = "odd_necro_owner:";
 
+    // NEW: expiry tag for minions
+    private static final String TAG_EXPIRES_PREFIX = "odd_necro_expires:";
+
     // ===== Summon config =====
     private static final int SUMMON_COOLDOWN_T = 20 * 10; // 10s
     private static final int SUMMON_MIN = 5;
     private static final int SUMMON_MAX = 6;
     private static final int SUMMON_RAY_RANGE = 32;
     private static final double SUMMON_SPREAD = 3.5;
+
+    // 30s lifetime
+    private static final int MINION_LIFE_T = 20 * 30;
 
     // ===== Fear ray config =====
     private static final double FEAR_RANGE = 25.0;
@@ -95,14 +101,22 @@ public final class NecromancerPower implements Power {
     private static final int MODE_HARD_T = 20 * 12;  // 12s absolute failsafe
     private static final int CAST_KEEPALIVE_T = 15;  // keepalive extension step
     private static final int CAST_SLOWNESS_AMP = 2;
-    // ===== Minion tags =====
 
+    // ===== POWERLESS =====
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
 
-    // NEW: expiry tag for minions
-    private static final String TAG_EXPIRES_PREFIX = "odd_necro_expires:";
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
 
-    // 30s lifetime
-    private static final int MINION_LIFE_T = 20 * 30; // slowness III
+    private static void warnPowerlessOncePerSec(ServerPlayerEntity p) {
+        if (p == null) return;
+        long now = p.getWorld().getTime();
+        long next = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < next) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal("§cYou are powerless."), true);
+    }
 
     @Override public String id() { return "necromancer"; }
 
@@ -189,16 +203,15 @@ public final class NecromancerPower implements Power {
         return until < now; // true = ignore, false = can target
     }
 
-
     public static boolean isSummonModeActive(ServerPlayerEntity p) {
+        if (p == null) return false;
+        if (isPowerless(p)) return false; // ✅ don't “trap” the player while powerless
         St st = DATA.get(p.getUuid());
         if (st == null) return false;
         if (!(p.getWorld() instanceof ServerWorld sw)) return false;
         long now = sw.getTime();
         return st.summonMode && now <= st.modeSoftUntil && now <= st.modeHardUntil;
     }
-
-
 
     /* ===================== Init ===================== */
 
@@ -227,7 +240,7 @@ public final class NecromancerPower implements Power {
             long now = sw.getTime();
             St st = S(sp);
 
-            if (st.summonMode && now <= st.modeSoftUntil && now <= st.modeHardUntil) {
+            if (st.summonMode && now <= st.modeSoftUntil && now <= st.modeHardUntil && !isPowerless(sp)) {
                 return ActionResult.FAIL;
             }
 
@@ -266,6 +279,30 @@ public final class NecromancerPower implements Power {
         }
     }
 
+    /* ===================== forceDisable ===================== */
+
+    // ✅ NEW: static helper so static contexts (like onClientSummonRequest) can disable safely
+    private static void forceDisableStatic(ServerPlayerEntity p) {
+        if (p == null) return;
+        St st = DATA.get(p.getUuid());
+        if (st == null) return;
+
+        st.summonMode = false;
+        st.modeSoftUntil = 0;
+        st.modeHardUntil = 0;
+
+        st.detonating = false;
+        st.detonateTicks = 0;
+
+        sendSummonModeIfChanged(p, st, false);
+    }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity p) {
+        // keep your override, but route through the static helper
+        forceDisableStatic(p);
+    }
+
     /* ===================== Primary: enter mode (NOT toggle) ===================== */
 
     @Override
@@ -273,13 +310,19 @@ public final class NecromancerPower implements Power {
         if (!isCurrent(p)) return;
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
 
+        if (isPowerless(p)) {
+            // ensure we drop out if they were mid-mode
+            forceDisableStatic(p);
+            warnPowerlessOncePerSec(p);
+            return;
+        }
+
         if (!holdingStaffItem(p)) {
             p.sendMessage(Text.literal("You need the Necromancer Staff equipped."), true);
             return;
         }
 
         St st = S(p);
-
         long now = sw.getTime();
 
         // Always ENTER/REFRESH mode (never "toggle off" via button)
@@ -292,7 +335,7 @@ public final class NecromancerPower implements Power {
         sw.playSound(null, p.getX(), p.getY(), p.getZ(),
                 SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 0.7f, 1.35f);
 
-        p.sendMessage(Text.literal("Summoning Mode: aim then LMB/RMB."), true);
+
     }
 
     /* ===================== Secondary: fear ray ===================== */
@@ -300,6 +343,12 @@ public final class NecromancerPower implements Power {
     @Override
     public void activateSecondary(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
+
+        if (isPowerless(p)) {
+            warnPowerlessOncePerSec(p);
+            return;
+        }
+
         if (!holdingStaffItem(p)) {
             p.sendMessage(Text.literal("You need the Necromancer Staff equipped."), true);
             return;
@@ -309,6 +358,12 @@ public final class NecromancerPower implements Power {
 
     public static void onClientFearRequest(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
+
+        if (isPowerless(p)) {
+            warnPowerlessOncePerSec(p);
+            return;
+        }
+
         if (!holdingStaffItem(p)) return;
         fireFearRay(p);
     }
@@ -318,6 +373,16 @@ public final class NecromancerPower implements Power {
     @Override
     public void activateThird(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
+
+        if (isPowerless(p)) {
+            // cancel any in-progress detonation immediately
+            St st = S(p);
+            st.detonating = false;
+            st.detonateTicks = 0;
+            warnPowerlessOncePerSec(p);
+            return;
+        }
+
         if (!holdingStaffItem(p)) {
             p.sendMessage(Text.literal("You need the Necromancer Staff equipped."), true);
             return;
@@ -330,15 +395,15 @@ public final class NecromancerPower implements Power {
             st.detonateTicks = 0;
 
             p.getWorld().playSound(null, p.getX(), p.getY(), p.getZ(),
-                    SoundEvents.BLOCK_BEACON_AMBIENT, SoundCategory.PLAYERS, 0.85f, 0.8f);
-            p.sendMessage(Text.literal("Exploding corpses..."), true);
+                    SoundEvents.BLOCK_BEACON_AMBIENT, SoundCategory.PLAYERS, 1.85f, 0.8f);
+
         } else {
             st.detonating = false;
             st.detonateTicks = 0;
 
             p.getWorld().playSound(null, p.getX(), p.getY(), p.getZ(),
                     SoundEvents.BLOCK_BEACON_DEACTIVATE, SoundCategory.PLAYERS, 0.7f, 0.9f);
-            p.sendMessage(Text.literal("Cancelled."), true);
+
         }
     }
 
@@ -350,6 +415,15 @@ public final class NecromancerPower implements Power {
 
         St st = S(p);
         long now = sw.getTime();
+
+        if (isPowerless(p)) {
+            // hard drop out
+            st.summonMode = false;
+            st.modeSoftUntil = 0;
+            st.modeHardUntil = 0;
+            sendSummonModeIfChanged(p, st, false);
+            return;
+        }
 
         if (!casting) {
             // client says “exit/cancel”
@@ -376,6 +450,13 @@ public final class NecromancerPower implements Power {
         if (!isCurrent(p)) return;
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
 
+        if (isPowerless(p)) {
+            // ✅ FIX: cannot call instance method from static context
+            forceDisableStatic(p);
+            warnPowerlessOncePerSec(p);
+            return;
+        }
+
         St st = S(p);
         long now = sw.getTime();
 
@@ -398,7 +479,6 @@ public final class NecromancerPower implements Power {
         }
 
         if (st.summonCooldown > 0) {
-            // tell them and keep mode off so it doesn’t feel broken
             p.sendMessage(Text.literal("Summon is on cooldown."), true);
             st.summonMode = false;
             st.modeSoftUntil = 0;
@@ -432,29 +512,33 @@ public final class NecromancerPower implements Power {
 
         String ownerTag = TAG_OWNER_PREFIX + p.getUuid();
 
+        // ✅ IMPORTANT FIX:
+        // Previously you used Heightmap topY which can snap spawns upward (roof/surface/ceiling).
+        // Now we spawn near the requested target Y (groundBlockPos.up()) and only nudge a tiny amount to find free space.
+        BlockPos base = groundBlockPos.up();
+
         for (int i = 0; i < count; i++) {
             double ox = (rng.nextDouble() - 0.5) * 2.0 * SUMMON_SPREAD;
             double oz = (rng.nextDouble() - 0.5) * 2.0 * SUMMON_SPREAD;
 
-            int sx = groundBlockPos.getX() + (int)Math.round(ox);
-            int sz = groundBlockPos.getZ() + (int)Math.round(oz);
+            int sx = base.getX() + (int) Math.round(ox);
+            int sz = base.getZ() + (int) Math.round(oz);
 
-            int topY = sw.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, sx, sz);
-            int baseY = Math.max(groundBlockPos.getY() + 1, topY);
-            BlockPos sp = new BlockPos(sx, baseY, sz);
+            BlockPos start = new BlockPos(sx, base.getY(), sz);
 
             Entity e = skeleton ? EntityType.SKELETON.create(sw) : EntityType.ZOMBIE.create(sw);
             if (!(e instanceof MobEntity mob)) continue;
 
-            mob.refreshPositionAndAngles(sp.getX() + 0.5, sp.getY(), sp.getZ() + 0.5,
+            BlockPos spawnPos = findSafeSpawnNear(sw, start);
+            if (spawnPos == null) spawnPos = start; // last resort: at least don't jump to ceiling
+
+            mob.refreshPositionAndAngles(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5,
                     rng.nextFloat() * 360f, 0f);
-            mob.initialize(sw, sw.getLocalDifficulty(sp), SpawnReason.MOB_SUMMONED, null, null);
+            mob.initialize(sw, sw.getLocalDifficulty(spawnPos), SpawnReason.MOB_SUMMONED, null, null);
 
             mob.addCommandTag(TAG_SUMMONED);
             mob.addCommandTag(ownerTag);
             mob.addCommandTag(TAG_EXPIRES_PREFIX + (sw.getTime() + MINION_LIFE_T));
-
-
 
             mob.addStatusEffect(new StatusEffectInstance(StatusEffects.RESISTANCE, 20 * 2, 1, true, false, true));
             sw.spawnEntity(mob);
@@ -468,6 +552,50 @@ public final class NecromancerPower implements Power {
                 SoundEvents.ENTITY_WITHER_SPAWN, SoundCategory.PLAYERS, 0.65f, skeleton ? 1.35f : 1.1f);
 
         p.sendMessage(Text.literal((skeleton ? "Skeleton" : "Zombie") + " horde summoned."), true);
+    }
+
+    /** Finds a nearby spot that is 2-high free and has solid ground under it. Never scans “up to the ceiling”. */
+    private static BlockPos findSafeSpawnNear(ServerWorld sw, BlockPos start) {
+        if (!sw.isChunkLoaded(start)) return null;
+
+        // try a few small offsets first (so group spawns don't collide)
+        int[][] OFFS = new int[][]{
+                {0,0},{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1},{2,0},{-2,0},{0,2},{0,-2}
+        };
+
+        for (int[] o : OFFS) {
+            BlockPos s = start.add(o[0], 0, o[1]);
+
+            // check small vertical nudges (won’t climb to roofs)
+            for (int dy = 0; dy <= 2; dy++) {
+                BlockPos p = s.up(dy);
+                if (isValidSpawnCell(sw, p)) return p;
+            }
+            for (int dy = 1; dy <= 2; dy++) {
+                BlockPos p = s.down(dy);
+                if (isValidSpawnCell(sw, p)) return p;
+            }
+        }
+
+        // fallback
+        return isValidSpawnCell(sw, start) ? start : null;
+    }
+
+    private static boolean isValidSpawnCell(ServerWorld sw, BlockPos pos) {
+        if (!sw.isChunkLoaded(pos)) return false;
+
+        // must have solid-ish ground
+        BlockPos below = pos.down();
+        if (!sw.getBlockState(below).isSideSolidFullSquare(sw, below, Direction.UP)) return false;
+
+        // 2-high free space, no fluids
+        if (!sw.getFluidState(pos).isEmpty()) return false;
+        if (!sw.getFluidState(pos.up()).isEmpty()) return false;
+
+        if (!sw.getBlockState(pos).getCollisionShape(sw, pos).isEmpty()) return false;
+        if (!sw.getBlockState(pos.up()).getCollisionShape(sw, pos.up()).isEmpty()) return false;
+
+        return true;
     }
 
     /* ===================== Focus API (unchanged) ===================== */
@@ -495,6 +623,19 @@ public final class NecromancerPower implements Power {
 
         // cooldown tick
         if (st.summonCooldown > 0) st.summonCooldown--;
+
+        // ✅ POWERLESS: drop any active casting/detonation and skip all ability logic
+        if (isPowerless(p)) {
+            if (st.summonMode) {
+                st.summonMode = false;
+                st.modeSoftUntil = 0;
+                st.modeHardUntil = 0;
+                sendSummonModeIfChanged(p, st, false);
+            }
+            st.detonating = false;
+            st.detonateTicks = 0;
+            return;
+        }
 
         // mode timeout -> force off + resync client
         if (st.summonMode && (now > st.modeSoftUntil || now > st.modeHardUntil || !holdingStaffItem(p))) {

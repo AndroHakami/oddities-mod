@@ -1,6 +1,8 @@
+// FILE: src/main/java/net/seep/odd/abilities/power/RisePower.java
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 
@@ -9,6 +11,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
+import net.minecraft.entity.EntityDimensions;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.SpawnGroup;
 import net.minecraft.entity.attribute.EntityAttribute;
@@ -22,14 +25,17 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Box;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.rise.entity.RisenZombieEntity;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.UUID;
 
@@ -62,11 +68,31 @@ public final class RisePower implements Power {
     private static final int CAST_SLOW_TICKS  = 20; // 1.0 sec
     private static final int CPM_ANIM_TICKS   = 26; // 1.3 sec
 
+    // hitbox clamp (we still match mob-per-mob, but keep it sane)
+    private static final float MIN_HITBOX = 0.2f;
+    private static final float MAX_HITBOX = 6.0f;
+
     private static final Object2ObjectOpenHashMap<UUID, Int2ObjectOpenHashMap<Soul>> SOULS = new Object2ObjectOpenHashMap<>();
     private static final Object2IntOpenHashMap<UUID> NEXT_SOUL_ID = new Object2IntOpenHashMap<>();
     private static final Object2ObjectOpenHashMap<UUID, PendingCast> PENDING = new Object2ObjectOpenHashMap<>();
 
     private static boolean tickHooked = false;
+
+    /* =================== POWERLESS override helpers =================== */
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnPowerlessOncePerSec(ServerPlayerEntity p) {
+        if (p == null) return;
+        long now = p.getWorld().getTime();
+        long next = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < next) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal("§cYou are powerless."), true);
+    }
 
     private record Soul(
             int id,
@@ -76,7 +102,9 @@ public final class RisePower implements Power {
             long expiresAtOverworldTime,
             double addMaxHp,
             double addAttackDamage,
-            boolean canFly
+            boolean canFly,
+            float sourceW,
+            float sourceH
     ) {}
 
     private record PendingCast(int soulId, long executeAtOverworldTime) {}
@@ -114,6 +142,12 @@ public final class RisePower implements Power {
         return "rise".equals(current);
     }
 
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        // POWERLESS or any forced shutdown: stop casting (do NOT kill existing minions)
+        cancelPending(player);
+    }
+
     /** Call once in common init. */
     public static void registerNetworking() {
 
@@ -145,6 +179,9 @@ public final class RisePower implements Power {
             if (!(attacker instanceof ServerPlayerEntity player)) return;
             if (!hasRise(player)) return;
 
+            // ✅ POWERLESS: no souls created while powerless
+            if (isPowerless(player)) return;
+
             LivingEntity living = killed;
 
             boolean ok =
@@ -165,6 +202,7 @@ public final class RisePower implements Power {
             SOULS.remove(id);
             NEXT_SOUL_ID.removeInt(id);
             PENDING.remove(id);
+            WARN_UNTIL.removeLong(id);
         });
     }
 
@@ -186,7 +224,7 @@ public final class RisePower implements Power {
         if (server == null) return;
         long now = server.getOverworld().getTime();
 
-        // expire souls
+        // expire souls always
         Int2ObjectOpenHashMap<Soul> map = SOULS.get(id);
         if (map != null && !map.isEmpty()) {
             PendingCast pc = PENDING.get(id);
@@ -205,6 +243,12 @@ public final class RisePower implements Power {
                 }
             }
             if (map.isEmpty()) SOULS.remove(id);
+        }
+
+        // ✅ POWERLESS: cancel any casting, but don't delete souls/minions
+        if (isPowerless(player)) {
+            cancelPending(player);
+            return;
         }
 
         // process pending cast
@@ -268,6 +312,9 @@ public final class RisePower implements Power {
 
         risen.setCanFly(s.canFly);
 
+        // ✅ per-mob hitbox match (width/height)
+        risen.setSourceHitbox(s.sourceW, s.sourceH);
+
         applyBonusAttributes(risen, s.addMaxHp, s.addAttackDamage);
 
         player.getWorld().spawnEntity(risen);
@@ -289,6 +336,13 @@ public final class RisePower implements Power {
     public void activate(ServerPlayerEntity player) {
         if (player.getWorld().isClient) return;
         if (!hasRise(player)) return;
+
+        // ✅ POWERLESS: block raise + cancel any cast
+        if (isPowerless(player)) {
+            warnPowerlessOncePerSec(player);
+            cancelPending(player);
+            return;
+        }
 
         UUID id = player.getUuid();
         if (PENDING.containsKey(id)) return;
@@ -313,14 +367,12 @@ public final class RisePower implements Power {
         if (server == null) return;
         long now = server.getOverworld().getTime();
 
-        // slow 1s (no particles/icon)
         try {
             player.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, CAST_SLOW_TICKS, 1, false, false, false));
         } catch (Throwable ignored) {}
 
         PENDING.put(id, new PendingCast(best.id, now + CAST_DELAY_TICKS));
 
-        // still send cast packet for CPM/third-person client logic
         int remaining = safeRemainingTicks(best.expiresAtOverworldTime, now);
         sendCastStart(player, best.id, CAST_DELAY_TICKS, CPM_ANIM_TICKS, best.pos, remaining);
     }
@@ -380,10 +432,21 @@ public final class RisePower implements Power {
 
         boolean canFly = killed.hasNoGravity() || isInstanceOf(killed, "net.minecraft.entity.mob.FlyingEntity");
 
-        Soul soul = new Soul(next, pos, typeId, renderNbt, expiresAt, addHp, addAtk, canFly);
+        // ✅ capture per-mob hitbox (width/height) at time of death
+// ✅ capture per-mob hitbox (width/height) at time of death
+        float srcW = 0.6f;
+        float srcH = 1.95f;
+        try {
+            EntityDimensions d = killed.getDimensions(killed.getPose());
+            if (d != null) {
+                srcW = MathHelper.clamp(d.width,  MIN_HITBOX, MAX_HITBOX);
+                srcH = MathHelper.clamp(d.height, MIN_HITBOX, MAX_HITBOX);
+            }
+        } catch (Throwable ignored) {}
+
+        Soul soul = new Soul(next, pos, typeId, renderNbt, expiresAt, addHp, addAtk, canFly, srcW, srcH);
         map.put(next, soul);
 
-        // ✅ send particles marker to this player only
         sendSoulAdd(player, soul, SOUL_LIFETIME_TICKS);
     }
 
@@ -406,7 +469,6 @@ public final class RisePower implements Power {
         NbtCompound nbt = new NbtCompound();
         killed.writeNbt(nbt);
 
-        // movement / identity
         nbt.remove("UUID");
         nbt.remove("Pos");
         nbt.remove("Motion");
@@ -419,7 +481,6 @@ public final class RisePower implements Power {
         nbt.remove("Air");
         nbt.remove("OnGround");
 
-        // prevent red snapshot carryover
         nbt.remove("HurtTime");
         nbt.remove("HurtByTimestamp");
         nbt.remove("DeathTime");
@@ -427,11 +488,9 @@ public final class RisePower implements Power {
         nbt.remove("AbsorptionAmount");
         nbt.remove("FallFlying");
 
-        // prevent names
         nbt.remove("CustomName");
         nbt.remove("CustomNameVisible");
 
-        // big/unstable
         nbt.remove("Brain");
         nbt.remove("Inventory");
         nbt.remove("Items");
@@ -442,8 +501,6 @@ public final class RisePower implements Power {
 
         return nbt;
     }
-
-    // --------- SYNC (particles only) ---------
 
     private static void sendAllSouls(ServerPlayerEntity player) {
         MinecraftServer server = player.getServer();
@@ -467,8 +524,6 @@ public final class RisePower implements Power {
         return (int) rem;
     }
 
-    // --------- PACKETS ---------
-
     private static void sendSoulAdd(ServerPlayerEntity player, Soul s, int lifetimeTicks) {
         PacketByteBuf out = net.fabricmc.fabric.api.networking.v1.PacketByteBufs.create();
         out.writeVarInt(s.id);
@@ -490,13 +545,10 @@ public final class RisePower implements Power {
         out.writeVarInt(soulId);
         out.writeVarInt(delayTicks);
         out.writeVarInt(animTicks);
-
-        // keep these for client-side cast FX logic (even if no orb)
         out.writeDouble(pos.x);
         out.writeDouble(pos.y);
         out.writeDouble(pos.z);
         out.writeVarInt(remainingLifetimeTicks);
-
         ServerPlayNetworking.send(player, RISE_CAST_START_S2C, out);
     }
 

@@ -21,50 +21,64 @@ public final class CombinerEnchantments {
         var general = EnchantmentTarget.BREAKABLE;
 
         // Shield-intended (slots only; actual restriction handled by GearKind/recipes)
-        SENTRY = reg("combiner_sentry", new CombinerEnchantment(Enchantment.Rarity.RARE, general,
-                EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND));
+        SENTRY = reg("combiner_sentry",
+                new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND));
 
-        COAST  = reg("combiner_coast",  new CombinerEnchantment(Enchantment.Rarity.RARE, general,
-                EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND));
+        COAST  = reg("combiner_coast",
+                new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND));
 
-        // Bow + Crossbow intended (effect triggers later however you want; but enchant can exist on both)
-        WILD   = reg("combiner_wild",   new CombinerEnchantment(Enchantment.Rarity.RARE, general,
-                EquipmentSlot.MAINHAND));
+        // Bow + Crossbow intended (enchant can exist on both; effect can choose crossbow-only later)
+        WILD   = reg("combiner_wild",
+                new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.MAINHAND));
 
         // Weapon / boots intents
-        VEX    = reg("combiner_vex",    new CombinerEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.WEAPON,
-                EquipmentSlot.MAINHAND));
+        VEX    = reg("combiner_vex",
+                new CombinerEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.WEAPON, EquipmentSlot.MAINHAND));
 
-        SPIRE  = reg("combiner_spire",  new CombinerEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_FEET,
-                EquipmentSlot.FEET));
+        SPIRE  = reg("combiner_spire",
+                new CombinerEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_FEET, EquipmentSlot.FEET));
 
-        // Everything else (trim-mapped)
-        DUNE =reg("combiner_dune", new CombinerDuneStrideEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_FEET, EquipmentSlot.FEET));
+        // Trim-mapped custom classes
+        DUNE = reg("combiner_dune",
+                new CombinerDuneStrideEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_FEET, EquipmentSlot.FEET));
+
         WARD = reg("combiner_ward",
-                new CombinerWardBulwarkEnchantment(
-                        Enchantment.Rarity.RARE,
-                        EnchantmentTarget.ARMOR_CHEST,
-                        EquipmentSlot.CHEST
-                ));
-// inside CombinerEnchantments.init()
+                new CombinerWardBulwarkEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_CHEST, EquipmentSlot.CHEST));
+
         EYE = reg("combiner_eye",
                 new CombinerGazeOfTheEndEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_HEAD, EquipmentSlot.HEAD));
+
         TIDE = reg("combiner_tide",
-                new CombinerWhirlpoolHarpoonEnchantment(
-                        Enchantment.Rarity.RARE,
-                        EnchantmentTarget.BREAKABLE,
-                        EquipmentSlot.MAINHAND
-                )
-        );
-        SNOUT      = reg("combiner_snout",      new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.values()));
-        RIB        = reg("combiner_rib",        new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.values()));
-        WAYFINDER  = reg("combiner_wayfinder",  new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.values()));
-        SHAPER     = reg("combiner_shaper",     new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.values()));
-        SILENCE    = reg("combiner_silence",    new CombinerEnchantment(Enchantment.Rarity.VERY_RARE, general, EquipmentSlot.values()));
-        RAISER     = reg("combiner_raiser",     new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.values()));
-        HOST       = reg("combiner_host",       new CombinerEnchantment(Enchantment.Rarity.RARE, general, EquipmentSlot.values()));
-        FLOW       = reg("combiner_flow",       new CombinerEnchantment(Enchantment.Rarity.VERY_RARE, general, EquipmentSlot.values()));
-        BOLT       = reg("combiner_bolt",       new CombinerEnchantment(Enchantment.Rarity.VERY_RARE, general, EquipmentSlot.values()));
+                new CombinerWhirlpoolHarpoonEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.BREAKABLE, EquipmentSlot.MAINHAND));
+
+        /* =========================
+           Starting from SNOUT: do it “like before”
+           (i.e., dedicated enchant classes)
+           ========================= */
+
+        SNOUT = reg("combiner_snout",
+                new CombinerLootScrambleEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_LEGS, EquipmentSlot.LEGS));
+
+        RIB = reg("combiner_rib",
+                new CombinerLeechPlateEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_CHEST, EquipmentSlot.CHEST));
+
+        WAYFINDER = reg("combiner_wayfinder",
+                new CombinerWayfinderRicochetEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.BOW, EquipmentSlot.MAINHAND));
+
+        SHAPER = reg("combiner_shaper",
+                new CombinerShaperGuardEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.WEAPON, EquipmentSlot.MAINHAND));
+
+        SILENCE = reg("combiner_silence",
+                new CombinerMuteBladeEnchantment(Enchantment.Rarity.VERY_RARE, EnchantmentTarget.WEAPON, EquipmentSlot.MAINHAND));
+
+        RAISER = reg("combiner_raiser",
+                new CombinerTectonicPistonEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_LEGS, EquipmentSlot.LEGS));
+
+        HOST = reg("combiner_host",
+                new CombinerHostSwapEnchantment(Enchantment.Rarity.RARE, EnchantmentTarget.ARMOR_HEAD, EquipmentSlot.HEAD));
+
+        // (kept as broad placeholders unless you have custom classes for them)
+
     }
 
     private static Enchantment reg(String id, Enchantment e) {

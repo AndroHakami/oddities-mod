@@ -12,11 +12,29 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
 import net.seep.odd.Oddities;
+import net.seep.odd.abilities.power.LookerPower;
 
 public final class LookerNet {
     private LookerNet() {}
 
     public static final Identifier S2C_OVERLAY = new Identifier(Oddities.MOD_ID, "looker_overlay");
+
+    // ✅ NEW: client -> server request (in case your ability activation is client-side)
+    public static final Identifier C2S_TOGGLE_INVIS = new Identifier(Oddities.MOD_ID, "looker_toggle_invis");
+
+    private static boolean c2sRegistered = false;
+
+    /** Call from common init (server-safe). Idempotent. */
+    public static void registerC2S() {
+        if (c2sRegistered) return;
+        c2sRegistered = true;
+
+        ServerPlayNetworking.registerGlobalReceiver(C2S_TOGGLE_INVIS, (server, player, handler, buf, responder) -> {
+            server.execute(() -> {
+                LookerPower.netToggleInvis(player);
+            });
+        });
+    }
 
     /** Server -> client: toggle overlay + send current meter + max (ticks). */
     public static void sendOverlay(ServerPlayerEntity to, boolean on, int meter, int max) {
@@ -35,5 +53,11 @@ public final class LookerNet {
             int max     = buf.readVarInt();
             client.execute(() -> LookerClient.handleOverlay(on, meter, max));
         });
+    }
+
+    /** Optional: call this from your client keybind/ability trigger if secondary isn’t reaching the server. */
+    @Environment(EnvType.CLIENT)
+    public static void requestToggleInvis() {
+        ClientPlayNetworking.send(C2S_TOGGLE_INVIS, PacketByteBufs.create());
     }
 }

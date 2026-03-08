@@ -1,0 +1,5 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [ { "item": "odd:boggy_planks" } ],
+  "result": { "item": "odd:boggy_button", "count": 1 }
+}

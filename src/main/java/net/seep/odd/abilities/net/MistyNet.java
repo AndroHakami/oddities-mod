@@ -1,3 +1,4 @@
+// FILE: src/main/java/net/seep/odd/abilities/net/MistyNet.java
 package net.seep.odd.abilities.net;
 
 import net.fabricmc.api.EnvType;
@@ -6,18 +7,22 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.abilities.misty.client.MistyHoverFx;
 import net.seep.odd.abilities.power.MistyVeilPower;
 import net.seep.odd.abilities.power.Powers;
 
 public final class MistyNet {
     private MistyNet() {}
 
-    public static final Identifier MISTY_INPUT = new Identifier("odd", "misty_input");
+    public static final Identifier MISTY_INPUT      = new Identifier("odd", "misty_input");
+    public static final Identifier S2C_HOVER_STATE  = new Identifier("odd", "misty_hover_state");
 
     /** Call from common init (server+client), e.g. Oddities#onInitialize. */
     public static void init() {
+        // C2S input (jump + intent)
         ServerPlayNetworking.registerGlobalReceiver(MISTY_INPUT, (server, player, handler, buf, responseSender) -> {
             final int mask = buf.readVarInt();
 
@@ -39,10 +44,24 @@ public final class MistyNet {
         });
     }
 
+    /** Server -> client: tells client whether hover toggle is ON, and whether player is actively hovering. */
+    public static void sendHoverState(ServerPlayerEntity to, boolean enabled, boolean active) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeBoolean(enabled);
+        buf.writeBoolean(active);
+        ServerPlayNetworking.send(to, S2C_HOVER_STATE, buf);
+    }
+
     /** Call from client init, e.g. OdditiesClient#onInitializeClient. */
     @Environment(EnvType.CLIENT)
     public static void initClient() {
-        // no S2C needed for this feature
+        // S2C hover overlay state
+        ClientPlayNetworking.registerGlobalReceiver(S2C_HOVER_STATE, (client, handler, buf, responseSender) -> {
+            final boolean enabled = buf.readBoolean();
+            final boolean active  = buf.readBoolean();
+
+            client.execute(() -> MistyHoverFx.setState(enabled, active));
+        });
     }
 
     // ---------- client send helpers ----------

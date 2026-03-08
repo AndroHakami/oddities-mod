@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["S#S","S#S"],
+  "key": {
+    "#": { "item": "odd:boggy_planks" },
+    "S": { "item": "minecraft:stick" }
+  },
+  "result": { "item": "odd:boggy_fence_gate", "count": 1 }
+}

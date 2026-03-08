@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "odd:boggy_boat" },
+    { "item": "minecraft:chest" }
+  ],
+  "result": { "item": "odd:boggy_chest_boat", "count": 1 }
+}

@@ -5,6 +5,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.math.Vec3d;
@@ -19,7 +20,6 @@ public final class WizardComboTargetClient {
 
     private static WizardCombo pending = null;
 
-    // edge detect for left click (robust even if other code calls wasPressed())
     private static boolean prevAttackDown = false;
 
     public static boolean isTargeting() {
@@ -31,24 +31,31 @@ public final class WizardComboTargetClient {
         prevAttackDown = false;
     }
 
-    public static void cancel() {
+    private static void sendCancel() {
+        ClientPlayNetworking.send(WizardPower.C2S_CANCEL_COMBO, PacketByteBufs.create());
+    }
+
+    private static void cancel(boolean clearCooldown) {
         pending = null;
         WizardSummonCircleClient.setActive(false, null, 0f, 0f, WizardSummonCircleClient.Style.COMBO_BLUE_GOLD);
         prevAttackDown = false;
+
+        if (clearCooldown) {
+            sendCancel();
+        }
     }
 
     public static void tick(MinecraftClient mc) {
         if (pending == null) return;
-        if (mc.player == null || mc.world == null) { cancel(); return; }
+        if (mc.player == null || mc.world == null) { cancel(true); return; }
 
-        // don’t confirm while in any GUI
         if (mc.currentScreen != null) {
             prevAttackDown = mc.options.attackKey.isPressed();
             return;
         }
 
         boolean holdingStick = mc.player.getMainHandStack().isOf(ModItems.WALKING_STICK);
-        if (!holdingStick) { cancel(); return; }
+        if (!holdingStick) { cancel(true); return; }
 
         Vec3d at = WizardTargetingClient.getCirclePos(mc);
 
@@ -58,7 +65,7 @@ public final class WizardComboTargetClient {
             WizardSummonCircleClient.setActive(false, null, 0f, 0f, WizardSummonCircleClient.Style.COMBO_BLUE_GOLD);
         }
 
-        // ✅ confirm with LEFT CLICK (edge detect)
+        // confirm with LEFT CLICK (edge detect)
         boolean attackDown = mc.options.attackKey.isPressed();
         boolean justPressed = attackDown && !prevAttackDown;
 
@@ -71,15 +78,17 @@ public final class WizardComboTargetClient {
                 buf.writeDouble(at.z);
 
                 ClientPlayNetworking.send(WizardPower.C2S_CAST_COMBO_AT, buf);
-                cancel();
+
+                // ✅ successful cast => DO NOT clear cooldown
+                cancel(false);
             }
         }
 
         prevAttackDown = attackDown;
 
-        // optional cancel: sneak
+        // cancel: sneak
         if (mc.options.sneakKey.isPressed()) {
-            cancel();
+            cancel(true);
         }
     }
 }

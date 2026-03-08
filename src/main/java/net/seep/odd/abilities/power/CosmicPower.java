@@ -206,13 +206,13 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
 
         // Starting charge requires katana in hand
         if (!hasKatanaInHand(player)) {
-            player.sendMessage(Text.literal("You need the Cosmic Katana to use Dimensional Slash."), true);
+
             return;
         }
 
         long rem = PowerAPI.getRemainingCooldownTicks(player, "primary");
         if (rem > 0) {
-            player.sendMessage(Text.literal(String.format("Slash cooling: %.1fs", rem / 20.0)), true);
+
             return;
         }
 

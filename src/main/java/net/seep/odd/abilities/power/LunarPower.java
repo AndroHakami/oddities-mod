@@ -1,5 +1,6 @@
 package net.seep.odd.abilities.power;
 
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -26,6 +27,7 @@ import net.minecraft.util.math.*;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.lunar.entity.LunarMarkProjectileEntity;
 import net.seep.odd.abilities.lunar.net.LunarPackets;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.Map;
 import java.util.UUID;
@@ -36,16 +38,15 @@ public final class LunarPower implements Power {
         return "primary".equals(slot) || "secondary".equals(slot) || "third".equals(slot);
     }
 
-    @Override public long cooldownTicks() { return 0; }               // primary toggle
-    @Override public long secondaryCooldownTicks() { return 20 * 25; } // Moonlight throw cooldown (normal system cooldown)
-    @Override public long thirdCooldownTicks() { return 20; }         // Remove Moonlight (short cd)
+    @Override public long cooldownTicks() { return 0; }
+    @Override public long secondaryCooldownTicks() { return 20 * 25; }
+    @Override public long thirdCooldownTicks() { return 20; }
 
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
             case "primary"   -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/lunar_tether.png");
             case "secondary" -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/lunar_moonlight.png");
-            // Keep existing texture path to avoid missing-asset errors (was burst icon)
             case "third"     -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/lunar_burst.png");
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
@@ -75,12 +76,26 @@ public final class LunarPower implements Power {
 
     @Override public Identifier portraitTexture() { return new Identifier(Oddities.MOD_ID, "textures/gui/overview/lunar.png"); }
 
+    /* =================== POWERLESS override =================== */
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnOncePerSec(ServerPlayerEntity p, String msg) {
+        long now = p.getWorld().getTime();
+        long nextOk = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < nextOk) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal(msg), true);
+    }
+
     /* ==================== Per-player state ==================== */
     private static final class St {
         boolean tetherOn = false;
         Anchor anchor = null;
 
-        // tether charge
         float energy = MAX_ENERGY;
         boolean outNotified = false;
         int syncTimer = 0;
@@ -88,7 +103,6 @@ public final class LunarPower implements Power {
     private static final Map<UUID, St> DATA = new Object2ObjectOpenHashMap<>();
     private static St S(PlayerEntity p) { return DATA.computeIfAbsent(p.getUuid(), u -> new St()); }
 
-    /* Anchor can be pinned to a block (pos) or to a living entity (target UUID). */
     private static final class Anchor {
         final BlockPos pos; final UUID target;
         Anchor(BlockPos pos) { this.pos = pos; this.target = null; }
@@ -105,45 +119,50 @@ public final class LunarPower implements Power {
         }
     }
 
-    /* ==================== Tether charge config ==================== */
     private static final float MAX_ENERGY        = 100f;
-    private static final float DRAIN_PER_TICK    = 0.55f; // while tetherOn
-    private static final float RECHARGE_PER_TICK = 0.30f; // when not tethering
+    private static final float DRAIN_PER_TICK    = 0.55f;
+    private static final float RECHARGE_PER_TICK = 0.30f;
 
     /* ==================== Slot actions ==================== */
 
-    /** PRIMARY: toggle continuous tether (requires charge). */
     @Override public void activate(ServerPlayerEntity p) {
+        if (isPowerless(p)) {
+            // force tether off while powerless (but keep anchor)
+            St st = S(p);
+            if (st.tetherOn) {
+                st.tetherOn = false;
+                LunarPackets.syncTether(p, st.energy, MAX_ENERGY, false);
+            }
+            warnOncePerSec(p, "§cYou are powerless.");
+            return;
+        }
+
         var st = S(p);
         if (!st.tetherOn) {
             if (st.energy <= 0f) {
-                p.sendMessage(Text.literal("Tether: no charge"), true);
+
                 return;
             }
             st.outNotified = false;
             st.tetherOn = true;
-            p.sendMessage(Text.literal("Tether: ON"), true);
+            ;
         } else {
             st.tetherOn = false;
-            p.sendMessage(Text.literal("Tether: OFF"), true);
+
         }
         LunarPackets.syncTether(p, st.energy, MAX_ENERGY, st.tetherOn);
     }
 
-    /**
-     * SECONDARY: Moonlight — ALWAYS throw.
-     * If a mark already exists, delete it first, then throw a new Moonlight.
-     * Cooldown is handled by the normal Power cooldown system (secondaryCooldownTicks()).
-     */
     @Override public void activateSecondary(ServerPlayerEntity p) {
-        var st = S(p);
-
-        if (st.anchor != null) {
-            clearAnchor(p);
-            // do NOT message spam here; we’ll just replace cleanly
+        if (isPowerless(p)) {
+            warnOncePerSec(p, "§cYou are powerless.");
+            return;
         }
 
-        // spawn the dedicated projectile — it will set the anchor on collision
+        var st = S(p);
+
+        if (st.anchor != null) clearAnchor(p);
+
         ServerWorld sw = (ServerWorld)p.getWorld();
         var proj = new LunarMarkProjectileEntity(sw, p);
         Vec3d look = p.getRotationVec(1f).normalize();
@@ -155,38 +174,38 @@ public final class LunarPower implements Power {
         p.swingHand(Hand.MAIN_HAND, true);
         sw.playSound(null, p.getX(), p.getY(), p.getZ(),
                 SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 0.6f, 1.2f);
-        p.sendMessage(Text.literal("Moonlight →"), true);
+
     }
 
-    /**
-     * THIRD: REMOVE MOONLIGHT — clears the current anchor (no pull / no burst).
-     * Has its own normal cooldown (thirdCooldownTicks()).
-     */
     @Override public void activateThird(ServerPlayerEntity p) {
+        if (isPowerless(p)) {
+            warnOncePerSec(p, "§cYou are powerless.");
+            return;
+        }
+
         var st = S(p);
         if (st.anchor == null) {
-            p.sendMessage(Text.literal("No Moonlight mark."), true);
+
             return;
         }
         clearAnchor(p);
         p.sendMessage(Text.literal("Moonlight removed."), true);
     }
 
-    /* ==================== Called by projectile on server when it collides ==================== */
     public static void setAnchorPosFromProjectile(ServerPlayerEntity p, BlockPos pos) {
         var st = S(p);
         st.anchor = new Anchor(pos.toImmutable());
         fxAnchor((ServerWorld)p.getWorld(), Vec3d.ofCenter(pos));
         LunarPackets.sendAnchorPos(p, pos);
-        p.sendMessage(Text.literal("Moonlight mark anchored."), true);
+
     }
     public static void setAnchorEntityFromProjectile(ServerPlayerEntity p, LivingEntity target) {
         var st = S(p);
         st.anchor = new Anchor(target.getUuid());
-        target.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 20*30, 0, true, false)); // visual
+        target.addStatusEffect(new StatusEffectInstance(StatusEffects.GLOWING, 20*30, 0, true, false));
         fxAnchor((ServerWorld)p.getWorld(), target.getPos().add(0, target.getStandingEyeHeight()*0.6, 0));
         LunarPackets.sendAnchorEntity(p, target.getId());
-        p.sendMessage(Text.literal("Moonlight mark attached to " + target.getName().getString()), true);
+
     }
 
     private static void clearAnchor(ServerPlayerEntity p) {
@@ -196,7 +215,6 @@ public final class LunarPower implements Power {
             if (e instanceof LivingEntity le) le.removeStatusEffect(StatusEffects.GLOWING);
         }
         st.anchor = null;
-        // DO NOT auto-toggle tether; user controls it. Just stop movement effect when no anchor.
         LunarPackets.clearAnchor(p);
     }
 
@@ -207,28 +225,37 @@ public final class LunarPower implements Power {
                 SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE, SoundCategory.PLAYERS, 0.8f, 1.2f);
     }
 
-    /* ==================== Tether physics + charge drain ==================== */
     private static final double TETHER_ACCEL = 0.12;
     private static final double MAX_SPEED    = 1.25;
-    private static final double DEADZONE     = 1.5; // near anchor, don't accelerate, but don't toggle off
+    private static final double DEADZONE     = 1.5;
 
     private static void serverTickPlayer(ServerPlayerEntity p) {
         var st = S(p);
 
-        // charge logic
+        // POWERLESS: no tether drain + no pull (also force toggle off, keep anchor)
+        if (isPowerless(p)) {
+            if (st.tetherOn) {
+                st.tetherOn = false;
+                LunarPackets.syncTether(p, st.energy, MAX_ENERGY, false);
+            }
+            // recharge while powerless
+            st.energy = Math.min(MAX_ENERGY, st.energy + RECHARGE_PER_TICK);
+            if (st.energy > 5f) st.outNotified = false;
+            return;
+        }
+
         boolean consuming = (st.tetherOn && st.anchor != null);
         if (consuming) {
             st.energy = Math.max(0f, st.energy - DRAIN_PER_TICK);
             if (st.energy == 0f && !st.outNotified) {
                 st.outNotified = true;
-                p.sendMessage(Text.literal("Tether: out of charge"), true);
+
             }
         } else {
             st.energy = Math.min(MAX_ENERGY, st.energy + RECHARGE_PER_TICK);
             if (st.energy > 5f) st.outNotified = false;
         }
 
-        // movement only if we have an anchor AND tether is on AND we have charge
         if (st.anchor == null) { syncMaybe(p, st); return; }
         ServerWorld sw = (ServerWorld)p.getWorld();
         if (!st.anchor.valid(sw)) { clearAnchor(p); syncMaybe(p, st); return; }
@@ -247,7 +274,6 @@ public final class LunarPower implements Power {
             Vec3d dir = to.normalize();
             Vec3d v   = p.getVelocity().add(dir.multiply(TETHER_ACCEL));
 
-            // clamp horizontal speed
             Vec3d hor = new Vec3d(v.x, 0, v.z);
             double hlen = hor.length();
             if (hlen > MAX_SPEED) {
@@ -255,7 +281,6 @@ public final class LunarPower implements Power {
                 v = new Vec3d(hor.x, v.y, hor.z);
             }
 
-            // mild lift & sink clamp
             v = new Vec3d(v.x, MathHelper.clamp(v.y + 0.02, -0.30, 0.55), v.z);
 
             p.setVelocity(v);
@@ -270,7 +295,7 @@ public final class LunarPower implements Power {
     }
 
     private static void syncMaybe(ServerPlayerEntity p, St st) {
-        if (++st.syncTimer >= 5) { // throttle
+        if (++st.syncTimer >= 5) {
             st.syncTimer = 0;
             LunarPackets.syncTether(p, st.energy, MAX_ENERGY, st.tetherOn);
         }
@@ -282,14 +307,11 @@ public final class LunarPower implements Power {
         });
     }
 
-    /* ==================== Client HUD: tether charge bar ==================== */
     @Environment(EnvType.CLIENT)
     public static final class Hud {
-        // updated via packet:
         private static float energy = MAX_ENERGY, max = MAX_ENERGY;
         private static boolean on = false;
 
-        /** Called from client packet handler. */
         public static void setClientTether(float e, float m, boolean enabled) {
             energy = e; max = m; on = enabled;
         }
@@ -298,7 +320,7 @@ public final class LunarPower implements Power {
             HudRenderCallback.EVENT.register((DrawContext ctx, float td) -> {
                 var mc = MinecraftClient.getInstance();
                 if (mc == null || mc.player == null) return;
-                if (!on) return; // only show while tether is toggled on
+                if (!on) return;
 
                 int sw = mc.getWindow().getScaledWidth();
                 int sh = mc.getWindow().getScaledHeight();
@@ -307,14 +329,12 @@ public final class LunarPower implements Power {
                 int x = sw/2 - barW/2;
                 int y = sh - 48;
 
-                // background (vanilla-ish dark)
                 ctx.fill(x-2, y-2, x+barW+2, y+barH+2, 0x88000000);
                 ctx.fill(x, y, x+barW, y+barH, 0xCC1C1C1C);
 
                 float pct = Math.max(0f, Math.min(1f, energy / Math.max(1f, max)));
                 int fillW = Math.round(barW * pct);
 
-                // color: green → yellow → red
                 int col = pct > 0.5f ? 0xFF7EE08F : (pct > 0.2f ? 0xFFFFCF6A : 0xFFFF6B6B);
                 ctx.fill(x, y, x + fillW, y + barH, col);
 

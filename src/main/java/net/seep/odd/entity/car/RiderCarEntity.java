@@ -1,5 +1,7 @@
+// FILE: src/main/java/net/seep/odd/entity/car/RiderCarEntity.java
 package net.seep.odd.entity.car;
 
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.command.argument.EntityAnchorArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
@@ -15,8 +17,10 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.network.packet.s2c.play.EntityPassengersSetS2CPacket;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.registry.Registries;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
@@ -168,6 +172,11 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
     private static final int    RAM_IFRAMES_T   = 8;
     private final Map<UUID, Integer> ramIframes = new HashMap<>();
 
+    // ✅ rotated “hitbox” for ramming (turns with the car)
+    private static final double RAM_HALF_WIDTH  = 1.00;
+    private static final double RAM_HALF_LENGTH = 1.60;
+    private static final double RAM_HEIGHT      = 1.00;
+
     /* ---------- radio (SoundEvent, not RegistryEntry) ---------- */
     private static final int RADIO_TICK_PERIOD = 40; // (unused now; playback is client-only)
     private boolean radioOn = false;
@@ -196,14 +205,12 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         RADIO_TITLES.add(title);
     }
 
-    /* ---------- SFX state ---------- */
-    private int accSoundCooldown = 60;
-
     public RiderCarEntity(EntityType<RiderCarEntity> type, World world) {
         super(type, world);
         this.setStepHeight((float) STEP_HEIGHT);
         this.ignoreCameraFrustum = true;
     }
+
     public static SoundEvent getRadioSoundAt(int idx) {
         if (RADIO_TRACKS.isEmpty()) return null;
         return RADIO_TRACKS.get(MathHelper.clamp(idx, 0, RADIO_TRACKS.size()-1));
@@ -217,6 +224,19 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
                 .add(EntityAttributes.GENERIC_KNOCKBACK_RESISTANCE, 1.0);
     }
 
+    /* ===== mount sync (fixes “desync riders/vehicle” visuals) ===== */
+    private void syncPassengers() {
+        if (!(getWorld() instanceof ServerWorld sw)) return;
+
+        EntityPassengersSetS2CPacket pkt = new EntityPassengersSetS2CPacket(this);
+        HashSet<ServerPlayerEntity> targets = new HashSet<>();
+
+        for (ServerPlayerEntity sp : PlayerLookup.tracking(this)) targets.add(sp);
+        for (Entity e : this.getPassengerList()) if (e instanceof ServerPlayerEntity sp) targets.add(sp);
+
+        for (ServerPlayerEntity sp : targets) sp.networkHandler.sendPacket(pkt);
+    }
+
     /* ===== mounting via right-click ===== */
     @Override
     public ActionResult interact(PlayerEntity player, Hand hand) {
@@ -224,54 +244,54 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
 
         boolean wasEmpty = !this.hasPassengers();
         if (wasEmpty) {
-            player.startRiding(this);
-            // driver seat taken -> play start SFX
+            player.startRiding(this, true);
+            syncPassengers();
+
             if (ModSounds.CAR_START != null) {
-                ((ServerWorld)getWorld()).playSound(null, getBlockPos(), ModSounds.CAR_START, SoundCategory.PLAYERS, 1.0f, 1.0f);
+                ((ServerWorld)getWorld()).playSound(null, getX(), getY(), getZ(),
+                        ModSounds.CAR_START, SoundCategory.PLAYERS, 1.0f, 1.0f);
             }
             return ActionResult.SUCCESS;
         }
+
         if (this.getPassengerList().size() == 1 && this.getFirstPassenger() != player) {
-            player.startRiding(this);
+            player.startRiding(this, true);
+            syncPassengers();
             return ActionResult.SUCCESS;
         }
+
         return ActionResult.PASS;
     }
 
     public void tryMountDriver(PlayerEntity p) {
         if (this.hasPassengers()) {
-            if (getFirstPassenger() != null && !getFirstPassenger().equals(p)) p.startRiding(this);
+            if (getFirstPassenger() != null && !getFirstPassenger().equals(p)) {
+                p.startRiding(this, true);
+                syncPassengers();
+            }
         } else {
-            p.startRiding(this);
+            p.startRiding(this, true);
+            syncPassengers();
+
             if (!getWorld().isClient && ModSounds.CAR_START != null) {
-                ((ServerWorld)getWorld()).playSound(null, getBlockPos(), ModSounds.CAR_START, SoundCategory.PLAYERS, 1.0f, 1.0f);
+                ((ServerWorld)getWorld()).playSound(null, getX(), getY(), getZ(),
+                        ModSounds.CAR_START, SoundCategory.PLAYERS, 1.0f, 1.0f);
             }
         }
     }
+
     public boolean isDriver(PlayerEntity p) {
         return !this.getPassengerList().isEmpty() && this.getPassengerList().get(0) == p;
     }
 
     /* ===== radio controls (server) ===== */
-    public void serverRadioToggle() {
-        radioOn = !radioOn;
-        syncRadioTracker();
-    }
-    public void serverRadioSetVolume(float v01) {
-        radioVolume = MathHelper.clamp(v01, 0f, 1f);
-        syncRadioTracker();
-    }
+    public void serverRadioToggle() { radioOn = !radioOn; syncRadioTracker(); }
+    public void serverRadioSetVolume(float v01) { radioVolume = MathHelper.clamp(v01, 0f, 1f); syncRadioTracker(); }
     public void serverRadioNext() {
-        if (!RADIO_TRACKS.isEmpty()) {
-            radioIdx = (radioIdx + 1) % RADIO_TRACKS.size();
-            syncRadioTracker();
-        }
+        if (!RADIO_TRACKS.isEmpty()) { radioIdx = (radioIdx + 1) % RADIO_TRACKS.size(); syncRadioTracker(); }
     }
     public void serverRadioPrev() {
-        if (!RADIO_TRACKS.isEmpty()) {
-            radioIdx = (radioIdx - 1 + RADIO_TRACKS.size()) % RADIO_TRACKS.size();
-            syncRadioTracker();
-        }
+        if (!RADIO_TRACKS.isEmpty()) { radioIdx = (radioIdx - 1 + RADIO_TRACKS.size()) % RADIO_TRACKS.size(); syncRadioTracker(); }
     }
 
     /* ===== rider seats ===== */
@@ -295,7 +315,6 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
 
         updater.accept(passenger, this.getX() + off.x, this.getY() + off.y, this.getZ() + off.z);
 
-        // glue + no rider fall damage
         passenger.setVelocity(Vec3d.ZERO);
         passenger.velocityDirty = true;
         passenger.fallDistance = 0f;
@@ -328,7 +347,6 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         this.dataTracker.startTracking(DRIFT_TICK, 0);
         this.dataTracker.startTracking(BOOST_LVL, 0);
 
-        // radio defaults
         this.dataTracker.startTracking(RADIO_ON, false);
         this.dataTracker.startTracking(RADIO_TRACK, 0);
         this.dataTracker.startTracking(RADIO_VOL, (int)(radioVolume * 100f));
@@ -352,7 +370,7 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         radioOn = nbt.getBoolean("RadioOn");
         radioVolume = nbt.getFloat("RadioVol");
         radioIdx = nbt.getInt("RadioIdx");
-        syncRadioTracker(); // make sure tracker reflects loaded values
+        syncRadioTracker();
     }
     @Override public void writeCustomDataToNbt(NbtCompound nbt) {
         if (owner != null) nbt.putUuid("Owner", owner);
@@ -361,7 +379,8 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         nbt.putFloat("RadioVol", radioVolume);
         nbt.putInt("RadioIdx", radioIdx);
     }
-    public int  getDriftTicksClient() { return this.dataTracker.get(DRIFT_TICK); }
+
+    public int getDriftTicksClient() { return this.dataTracker.get(DRIFT_TICK); }
 
     /* ===== main tick ===== */
     @Override
@@ -369,6 +388,8 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         super.tick();
 
         if (!getWorld().isClient) {
+            if (this.age <= 1) yawDegrees = this.getYaw();
+
             // decay ramming i-frames
             if (!ramIframes.isEmpty()) {
                 Iterator<Map.Entry<UUID,Integer>> it = ramIframes.entrySet().iterator();
@@ -379,19 +400,12 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
                 }
             }
 
-            // Acceleration SFX (forward accel bursts, not spammy)
-            if (accSoundCooldown > 0) accSoundCooldown--;
-            if (ModSounds.CAR_ACC != null && accSoundCooldown == 0) {
-                if (inputThrottle > 0 && speed >= 0.02) {
-                    float vol = (float)MathHelper.clamp(0.4 + 0.6 * (speed / MAX_FWD), 0.4, 1.0);
-                    ((ServerWorld)getWorld()).playSound(null, getBlockPos(), ModSounds.CAR_ACC, SoundCategory.PLAYERS, vol, 1.0f);
-                    accSoundCooldown = 12;
-                }
-            }
+            // ✅ REMOVED: CAR_ACC playSound spam here (that causes “dropping” audio trails)
 
             // Honk (momentary)
             if (inputHonk) {
-                getWorld().playSound(null, getBlockPos(), SoundEvents.ITEM_GOAT_HORN_PLAY, SoundCategory.PLAYERS, 1.0f, 1.0f);
+                getWorld().playSound(null, getX(), getY(), getZ(),
+                        SoundEvents.ITEM_GOAT_HORN_PLAY, SoundCategory.PLAYERS, 1.0f, 1.0f);
                 triggerHonk();
                 inputHonk = false;
             }
@@ -418,7 +432,8 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
                     this.velocityDirty = true;
 
                     ((ServerWorld)getWorld()).spawnParticles(OddParticles.SPECTRAL_BURST, getX(), getBodyY(0.5), getZ(), 20, 0.2, 0.1, 0.2, 0.12);
-                    getWorld().playSound(null, getBlockPos(), SoundEvents.ENTITY_FIREWORK_ROCKET_LAUNCH, SoundCategory.PLAYERS, 0.8f, 1.2f);
+                    getWorld().playSound(null, getX(), getY(), getZ(),
+                            SoundEvents.ENTITY_FIREWORK_ROCKET_LAUNCH, SoundCategory.PLAYERS, 0.8f, 1.2f);
                 }
                 driftHeld = false;
                 driftTicks = 0;
@@ -468,7 +483,8 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
                     double vy = MathHelper.lerp(t, JUMP_MIN, JUMP_MAX);
                     this.setVelocity(this.getVelocity().x, vy, this.getVelocity().z);
                     this.velocityDirty = true;
-                    ((ServerWorld)getWorld()).playSound(null, getBlockPos(), SoundEvents.ENTITY_HORSE_JUMP, SoundCategory.PLAYERS, 0.9f, 1.1f);
+                    ((ServerWorld)getWorld()).playSound(null, getX(), getY(), getZ(),
+                            SoundEvents.ENTITY_HORSE_JUMP, SoundCategory.PLAYERS, 0.9f, 1.1f);
                     triggerJump();
                 }
                 chargingJump = false;
@@ -492,22 +508,20 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
             this.setVelocity(vel);
             this.move(MovementType.SELF, this.getVelocity());
 
-            // landing ease: kill bounce
+            // landing ease
             if (this.isOnGround() && this.getVelocity().y < 0) {
                 this.setVelocity(this.getVelocity().x, 0, this.getVelocity().z);
             }
 
-            // drift skid puffs
             if (driftHeld && this.isOnGround() && age % 3 == 0) {
                 ((ServerWorld)getWorld()).spawnParticles(ParticleTypes.CLOUD, getX(), getY() + 0.05, getZ(), 2, 0.25, 0.0, 0.25, 0.0);
             }
 
-            // keep riders safe each tick
             if (this.hasPassengers()) {
                 for (var e : this.getPassengerList()) e.fallDistance = 0f;
             }
 
-            // High-speed ramming
+            // High-speed ramming (rotated box)
             handleRamming(forward);
 
             syncDriftState();
@@ -515,9 +529,7 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         }
     }
 
-    /* ===== helpers (client-side logic for animation choice) ===== */
-
-    // Tracked-data getters for the anim controller / client radio HUD
+    /* ===== client-side getters ===== */
     public boolean isDriftingClient() { return this.dataTracker.get(DRIFTING); }
     public int getBoostLevelClient()  { return this.dataTracker.get(BOOST_LVL); }
     public boolean isRadioOnClient()      { return this.dataTracker.get(RADIO_ON); }
@@ -543,17 +555,15 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         Vec3d fwd = new Vec3d(-MathHelper.sin((float)rad), 0, MathHelper.cos((float)rad));
         return v.dotProduct(fwd) < -0.02;
     }
-    // Positive => turning LEFT (Minecraft yaw increases CCW)
-    private float yawDeltaClient() {
-        return MathHelper.wrapDegrees(this.getYaw() - this.prevYaw);
-    }
+    private float yawDeltaClient() { return MathHelper.wrapDegrees(this.getYaw() - this.prevYaw); }
 
+    /* ===== ramming: rotated “hitbox” that turns with the car ===== */
     private void handleRamming(Vec3d forward) {
         double bps = this.getVelocity().horizontalLength() * 20.0;
         if (bps < RAM_SPEED_BPS) return;
 
-        Box box = this.getBoundingBox().expand(RAM_AABB_EXPAND);
-        var targets = this.getWorld().getOtherEntities(this, box, e ->
+        Box broad = this.getBoundingBox().expand(RAM_AABB_EXPAND + 1.2);
+        var targets = this.getWorld().getOtherEntities(this, broad, e ->
                 e instanceof LivingEntity
                         && e.isAlive()
                         && !this.hasPassenger(e)
@@ -561,18 +571,27 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         );
         if (targets.isEmpty()) return;
 
+        double yawRad = Math.toRadians(this.getYaw());
+        double cos = Math.cos(yawRad), sin = Math.sin(yawRad);
+
         for (Entity e : targets) {
             LivingEntity le = (LivingEntity) e;
+
             UUID id = le.getUuid();
             Integer cd = ramIframes.get(id);
             if (cd != null && cd > 0) continue;
 
-            Vec3d to = le.getPos().subtract(this.getPos());
-            if (to.lengthSquared() > 0.0001) {
-                to = new Vec3d(to.x, 0, to.z).normalize();
-                double dot = to.dotProduct(forward.normalize());
-                if (dot < -0.25) continue; // behind us
-            }
+            double dy = le.getBodyY(0.5) - this.getBodyY(0.5);
+            if (Math.abs(dy) > RAM_HEIGHT) continue;
+
+            double dx = le.getX() - this.getX();
+            double dz = le.getZ() - this.getZ();
+
+            double localX = dx * cos - dz * sin; // right
+            double localZ = dx * sin + dz * cos; // forward
+
+            if (localZ < 0.0 || localZ > RAM_HALF_LENGTH) continue;
+            if (Math.abs(localX) > RAM_HALF_WIDTH) continue;
 
             float over = (float)(bps - RAM_SPEED_BPS);
             float dmg = RAM_DMG_BASE + over * RAM_DMG_PER_BPS + (boostLevel > 0 ? 1.0f * boostLevel : 0f);
@@ -586,7 +605,8 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
 
             if (this.getWorld() instanceof ServerWorld sw) {
                 sw.spawnParticles(ParticleTypes.POOF, le.getX(), le.getBodyY(0.5), le.getZ(), 8, 0.2, 0.1, 0.2, 0.02);
-                sw.playSound(null, le.getBlockPos(), SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.PLAYERS, 0.8f, 1.0f);
+                sw.playSound(null, le.getX(), le.getY(), le.getZ(),
+                        SoundEvents.ENTITY_PLAYER_ATTACK_STRONG, SoundCategory.PLAYERS, 0.8f, 1.0f);
             }
 
             ramIframes.put(id, RAM_IFRAMES_T);
@@ -606,7 +626,6 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         this.discard();
     }
 
-    // No auto-detonate loops
     @Override public boolean damage(DamageSource source, float amount) { return super.damage(source, amount); }
 
     /* ===== fall damage easing for the car ===== */
@@ -622,26 +641,20 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         return Math.max(0, dmg - 2);
     }
 
-    /* ===== input from RiderNet (RESTORED) ===== */
+    /* ===== input from RiderNet ===== */
     public void applyDriverInput(float throttle, float steer, boolean drift, boolean honk, boolean jump) {
         this.inputThrottle = MathHelper.clamp(throttle, -1f, 1f);
         this.inputSteer    = MathHelper.clamp(steer, -1f, 1f);
         this.inputDrift    = drift;
-        this.inputHonk    |= honk; // momentary latch for one tick
+        this.inputHonk    |= honk;
         this.inputJump     = jump;
     }
 
-    /* ===== misc ===== */
-    private static Vec3d rotateXZ(Vec3d v, float yawRad) {
-        double c = Math.cos(yawRad), s = Math.sin(yawRad);
-        return new Vec3d(v.x * c - v.z * s, v.y, v.x * s + v.z * c);
-    }
     @Override public void lookAt(EntityAnchorArgumentType.EntityAnchor anchorPoint, Vec3d target) { /* no-op */ }
 
     /* ===== geckolib controllers ===== */
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        // BASE: chooses movement/drift/boost
         controllers.add(new AnimationController<>(this, CTRL_BASE, 5, state -> {
             int boost = getBoostLevelClient();
             if (boost == 3) { state.setAnimation(ANIM_BOOST3); return PlayState.CONTINUE; }
@@ -663,13 +676,12 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
             return PlayState.CONTINUE;
         }));
 
-        // STEER overlay: when NOT drifting, twist wheels left/right while moving
         controllers.add(new AnimationController<>(this, CTRL_STEER, 2, state -> {
-            if (isDriftingClient()) return PlayState.STOP; // drift anim already twists wheels
+            if (isDriftingClient()) return PlayState.STOP;
             if (this.getVelocity().horizontalLengthSquared() < 0.0009) return PlayState.STOP;
 
             float yawDelta = yawDeltaClient();
-            float eps = 0.35f; // ignore micro jitter
+            float eps = 0.35f;
             if (yawDelta > eps) {
                 state.setAnimation(ANIM_TURN_LEFT);
                 return PlayState.CONTINUE;
@@ -680,7 +692,6 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
             return PlayState.STOP;
         }));
 
-        // EVENT one-shots
         controllers.add(new AnimationController<>(this, CTRL_EVENT, state -> PlayState.STOP)
                 .triggerableAnim("honk", ANIM_HONK)
                 .triggerableAnim("jump", ANIM_JUMP)

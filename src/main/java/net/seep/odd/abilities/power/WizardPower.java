@@ -13,7 +13,6 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
@@ -30,6 +29,7 @@ import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.abilities.wizard.*;
 import net.seep.odd.abilities.wizard.entity.CapybaraFamiliarEntity;
 import net.seep.odd.item.ModItems;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.UUID;
 
@@ -43,7 +43,17 @@ public final class WizardPower implements Power {
     }
 
     @Override public long cooldownTicks() { return 0; }
-    @Override public long secondaryCooldownTicks() { return 0; }
+
+    /** Base cooldown started when you OPEN the combo wheel (only if not already cooling down). */
+    public static final long COMBO_OPEN_COOLDOWN_TICKS = 20L * 15L; // 50s
+
+    /** "Variable" you asked for — updated each time we set/adjust cooldown. */
+    public static long COMBO_SECONDARY_COOLDOWN_TICKS = COMBO_OPEN_COOLDOWN_TICKS;
+
+    @Override
+    public long secondaryCooldownTicks() {
+        return Math.max(0L, COMBO_SECONDARY_COOLDOWN_TICKS);
+    }
 
     @Override
     public Identifier iconTexture(String slot) {
@@ -80,15 +90,36 @@ public final class WizardPower implements Power {
     public static final Identifier S2C_SCREEN_SHAKE       = new Identifier(Oddities.MOD_ID, "wizard/screen_shake");
 
     public static final Identifier C2S_SET_ELEMENT        = new Identifier(Oddities.MOD_ID, "wizard/set_element");
-    public static final Identifier C2S_CAST_COMBO_AT = new Identifier(Oddities.MOD_ID, "wizard/cast_combo_at");
+    public static final Identifier C2S_CAST_COMBO_AT      = new Identifier(Oddities.MOD_ID, "wizard/cast_combo_at");
 
+    // ✅ NEW: cancel combo wheel/targeting => clear cooldown to 0 (only if session is active)
+    public static final Identifier C2S_CANCEL_COMBO       = new Identifier(Oddities.MOD_ID, "wizard/cancel_combo");
 
+    /* ---------------- POWERLESS gating ---------------- */
+
+    private static final Object2LongOpenHashMap<UUID> LAST_POWERLESS_MSG = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
+
+        long now = p.getServerWorld().getTime();
+        long last = LAST_POWERLESS_MSG.getOrDefault(p.getUuid(), Long.MIN_VALUE);
+        if (now - last >= 20) {
+            LAST_POWERLESS_MSG.put(p.getUuid(), now);
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
+        }
+        return true;
+    }
 
     /* ---------------- Mana ---------------- */
 
     public static final float MANA_MAX = 100f;
-    public static float MANA_REGEN_PER_TICK = 0.750f;
-    public static int MANA_SYNC_INTERVAL = 5;
+    public static float MANA_REGEN_PER_TICK = 0.350f;
+    public static int MANA_SYNC_INTERVAL = 2;
 
     private static void sendManaHud(ServerPlayerEntity p, boolean hasWizard, float mana) {
         var b = PacketByteBufs.create();
@@ -115,16 +146,26 @@ public final class WizardPower implements Power {
 
     @Override
     public void activate(ServerPlayerEntity player) {
+        if (blockIfPowerless(player)) return;
         ServerPlayNetworking.send(player, S2C_OPEN_ELEMENT_WHEEL, PacketByteBufs.create());
     }
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
+        if (blockIfPowerless(player)) return;
+
+        // ✅ DO NOT BLOCK OPENING.
+        // Only start the base cooldown when opening IF you were not already on cooldown.
+        if (WizardCasting.comboCooldownRemainingTicks(player) <= 0L) {
+            WizardCasting.startComboCooldownOnOpen(player);
+        }
+
         ServerPlayNetworking.send(player, S2C_OPEN_COMBO_WHEEL, PacketByteBufs.create());
     }
 
     @Override
     public void activateThird(ServerPlayerEntity player) {
+        if (blockIfPowerless(player)) return;
         if (!(player.getWorld() instanceof ServerWorld sw)) return;
 
         long now = sw.getTime();
@@ -133,11 +174,9 @@ public final class WizardPower implements Power {
         CapybaraFamiliarEntity fam = WizardCasting.getOrEnsureFamiliar(sw, player);
         if (fam == null) return;
 
-        // keep familiar element synced server-side
         WizardElement e = getElement(player);
         fam.setElement(e.id);
 
-        // If orbiting -> recall and start cooldown
         if (fam.hasOrbitTarget()) {
             fam.clearOrbitTarget();
             LAST_RECALL_TICK.put(id, now);
@@ -145,7 +184,6 @@ public final class WizardPower implements Power {
             return;
         }
 
-        // If NOT orbiting, sending is blocked only if recall cooldown is active
         if (LAST_RECALL_TICK.containsKey(id)) {
             long lastRecall = LAST_RECALL_TICK.getOrDefault(id, 0L);
             long dt = now - lastRecall;
@@ -210,17 +248,26 @@ public final class WizardPower implements Power {
 
         WizardTempEntities.tickCleanup(sw);
 
-        // ensure familiar exists + element sync
         CapybaraFamiliarEntity fam = WizardCasting.getOrEnsureFamiliar(sw, p);
         if (fam != null) fam.setElement(getElement(p).id);
 
-        // regen mana
+        // ✅ POWERLESS override: if capybara was orbiting someone, detach + return to wizard
+        if (isPowerless(p) && fam != null && fam.hasOrbitTarget()) {
+            fam.clearOrbitTarget();
+            fam.refreshPositionAndAngles(p.getX(), p.getY(), p.getZ(), fam.getYaw(), fam.getPitch());
+            fam.setVelocity(Vec3d.ZERO);
+            fam.velocityModified = true;
+        }
+
         float mana = getMana(p);
         mana = Math.min(MANA_MAX, mana + MANA_REGEN_PER_TICK);
         setMana(p, mana);
 
-        // AUTO-RELEASE big cast when fully charged
-        if (p.isUsingItem() && p.getActiveItem().isOf(ModItems.WALKING_STICK)) {
+        if (isPowerless(p) && p.isUsingItem() && p.getActiveItem().isOf(ModItems.WALKING_STICK)) {
+            p.stopUsingItem();
+        }
+
+        if (!isPowerless(p) && p.isUsingItem() && p.getActiveItem().isOf(ModItems.WALKING_STICK)) {
             WizardElement e = getElement(p);
             int needed = WizardCasting.chargeTicksFor(e);
             int used = p.getItemUseTime();
@@ -261,10 +308,12 @@ public final class WizardPower implements Power {
             }
         });
 
-        // element selection
         ServerPlayNetworking.registerGlobalReceiver(C2S_SET_ELEMENT, (server, player, handler, buf, resp) -> {
             int id = buf.readInt();
             server.execute(() -> {
+                if (!(Powers.get(PowerAPI.get(player)) instanceof WizardPower)) return;
+                if (blockIfPowerless(player)) return;
+
                 WizardElement e = WizardElement.fromId(id);
                 setElement(player, e);
                 sendElementHud(player, e);
@@ -278,8 +327,6 @@ public final class WizardPower implements Power {
             });
         });
 
-        // combo casting at a selected location
-// combo casting at a selected location
         ServerPlayNetworking.registerGlobalReceiver(C2S_CAST_COMBO_AT, (server, player, handler, buf, resp) -> {
             int comboId = buf.readInt();
             double x = buf.readDouble();
@@ -287,12 +334,10 @@ public final class WizardPower implements Power {
             double z = buf.readDouble();
 
             server.execute(() -> {
-                // must be wizard
                 if (!(Powers.get(PowerAPI.get(player)) instanceof WizardPower)) return;
+                if (blockIfPowerless(player)) return;
 
                 Vec3d at = new Vec3d(x, y, z);
-
-                // anti-cheat sanity
                 double max = net.seep.odd.abilities.wizard.WizardTargeting.RANGE + 2.0;
                 if (player.getPos().squaredDistanceTo(at) > max * max) return;
 
@@ -300,9 +345,14 @@ public final class WizardPower implements Power {
             });
         });
 
+        // ✅ cancel = clear cooldown to 0 (only if session active)
+        ServerPlayNetworking.registerGlobalReceiver(C2S_CANCEL_COMBO, (server, player, handler, buf, resp) -> {
+            server.execute(() -> {
+                if (!(Powers.get(PowerAPI.get(player)) instanceof WizardPower)) return;
+                WizardCasting.cancelComboCooldown(player);
+            });
+        });
 
-        // keep your left-click logic exactly as you already fixed it elsewhere
-        // (do NOT re-break melee unless you want swing-only casting)
         AttackBlockCallback.EVENT.register((player, world, hand, pos, direction) -> ActionResult.PASS);
         AttackEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> ActionResult.PASS);
 

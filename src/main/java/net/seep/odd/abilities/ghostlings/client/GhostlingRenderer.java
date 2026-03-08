@@ -1,35 +1,31 @@
+// FILE: src/main/java/net/seep/odd/abilities/ghostlings/client/GhostlingRenderer.java
 package net.seep.odd.abilities.ghostlings.client;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.client.render.model.json.ModelTransformationMode;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.RotationAxis;
-import org.jetbrains.annotations.NotNull;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.RenderLayer;
-import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.render.VertexConsumerProvider;
-import net.minecraft.client.render.model.json.ModelTransformationMode;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.RotationAxis;
-
+import software.bernie.geckolib.util.RenderUtils;
 
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 
-/**
- * Renders the Ghostling and attaches its tool stack to the "right_arm" bone.
- * NOTE: GhostlingEntity must expose `public ItemStack getToolStack()` (slot 0).
- */
 public class GhostlingRenderer extends GeoEntityRenderer<GhostlingEntity> {
 
+    // bone in geo.json
+    private static final String ITEM_BONE = "LeftHandItem";
+
+    // make it smaller so it doesn't clip/glint-sheet the whole model
+    private static final float ITEM_SCALE = 0.40f;
+
     public GhostlingRenderer(EntityRendererFactory.Context ctx) {
-        super(ctx, new GhostlingModel()); // your GeoModel<T>
+        super(ctx, new GhostlingModel());
     }
 
     @Override
@@ -46,34 +42,52 @@ public class GhostlingRenderer extends GeoEntityRenderer<GhostlingEntity> {
                                   float red, float green, float blue,
                                   float alpha) {
 
-        // Render the held tool on the "right_arm" bone
-        if ("right_arm".equals(bone.getName())) {
-            ItemStack stack = ghost.getToolStack();   // make sure this getter exists in the entity
+        if (ITEM_BONE.equals(bone.getName())) {
+            ItemStack stack = ghost.getMainHandStack(); // MUST be client-synced (DataTracker solution)
             if (!stack.isEmpty()) {
                 matrices.push();
 
-                // tweak to match your model’s hand position/orientation
-                matrices.translate(0.08f, 0.10f, -0.12f);
-                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90f));
+                // ✅ Apply the bone transform and STAY at the pivot (do NOT translateAway)
+                RenderUtils.translateToPivotPoint(matrices, bone);
+                RenderUtils.rotateMatrixAroundBone(matrices, bone);
+                RenderUtils.scaleMatrixForBone(matrices, bone);
 
+                // ✅ now we're sitting at the pivot - render item here
+                matrices.scale(ITEM_SCALE, ITEM_SCALE, ITEM_SCALE);
+
+                // orientation for held items
+                matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-90f));
+                matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(180f));
+
+                // If you want tiny grip offsets, add them here later:
+                // matrices.translate(0.0f, 0.0f, -0.05f);
+
+                // Use LivingEntity overload (more stable for entity context)
                 MinecraftClient.getInstance().getItemRenderer().renderItem(
+                        ghost,
                         stack,
                         ModelTransformationMode.THIRD_PERSON_RIGHT_HAND,
-                        light,
-                        overlay,
+                        false,
                         matrices,
                         buffers,
-                        ghost.getWorld(),   // 1.20.1 signature requires world + seed
+                        ghost.getWorld(),
+                        light,
+                        overlay,
                         ghost.getId()
                 );
 
                 matrices.pop();
             }
+
+            // ✅ VERY IMPORTANT: let GeckoLib run its normal path for this bone using a fresh buffer
+            // This tends to prevent the “weird zombie texture” render-state leak.
+            VertexConsumer reset = buffers.getBuffer(layer);
+            super.renderRecursively(matrices, ghost, bone, layer, buffers, reset,
+                    isReRender, partialTick, light, overlay, red, green, blue, alpha);
+            return;
         }
 
-        // Let GeckoLib render the rest of the model/bones
         super.renderRecursively(matrices, ghost, bone, layer, buffers, buffer,
                 isReRender, partialTick, light, overlay, red, green, blue, alpha);
     }
-
 }

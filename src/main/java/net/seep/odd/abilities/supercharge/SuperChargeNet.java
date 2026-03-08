@@ -1,3 +1,4 @@
+// src/main/java/net/seep/odd/abilities/supercharge/SuperChargeNet.java
 package net.seep.odd.abilities.supercharge;
 
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -9,6 +10,8 @@ import net.seep.odd.Oddities;
 
 public final class SuperChargeNet {
     private SuperChargeNet() {}
+
+    // Keeping id name is fine; it now drives FX instead of HUD wheel
     public static final Identifier HUD = new Identifier(Oddities.MOD_ID, "supercharge_hud");
 
     public static void initClient() {

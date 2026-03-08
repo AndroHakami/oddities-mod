@@ -129,7 +129,7 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
 
         Vec3d safe = findSafeStandPos(sw, targetPos);
         if (safe == null) {
-            p.sendMessage(Text.literal("No safe spot."), true);
+
             sw.playSound(null, p.getBlockPos(), SoundEvents.BLOCK_SNOW_BREAK, SoundCategory.PLAYERS, 0.8f, 0.8f);
             return;
         }

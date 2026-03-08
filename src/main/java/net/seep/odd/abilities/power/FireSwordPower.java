@@ -255,7 +255,7 @@ public final class FireSwordPower implements Power {
         }
 
         FireSwordNet.sendConjureStop(caster);
-        caster.sendMessage(Text.literal(msg), true);
+
     }
 
     @Override
@@ -279,7 +279,7 @@ public final class FireSwordPower implements Power {
         }
 
         if (PENDING.containsKey(player.getUuid())) {
-            player.sendMessage(Text.literal("Conjuring..."), true);
+
             return;
         }
 
@@ -303,7 +303,7 @@ public final class FireSwordPower implements Power {
             return;
         }
 
-        player.sendMessage(Text.literal("Need a fire source (fire blocks/torches/campfires/candles/lava source) OR target a fire-immune mob."), true);
+
     }
 
     /** Secondary: throw the conjured sword. */
@@ -359,7 +359,7 @@ public final class FireSwordPower implements Power {
         PENDING.put(caster.getUuid(), new Pending(CastKind.BLOCK, pos, -1, finish));
 
         sw.playSound(null, caster.getBlockPos(), SoundEvents.ITEM_FIRECHARGE_USE, SoundCategory.PLAYERS, 0.7f, 0.95f);
-        caster.sendMessage(Text.literal("Conjuring..."), true);
+
     }
 
     private static void startCastEntity(ServerPlayerEntity caster, LivingEntity target) {
@@ -372,7 +372,7 @@ public final class FireSwordPower implements Power {
         PENDING.put(caster.getUuid(), new Pending(CastKind.ENTITY, null, target.getId(), finish));
 
         sw.playSound(null, caster.getBlockPos(), SoundEvents.ENTITY_BLAZE_AMBIENT, SoundCategory.PLAYERS, 0.55f, 1.35f);
-        caster.sendMessage(Text.literal("Transmuting..."), true);
+
     }
 
     private static void startCastItem(ServerPlayerEntity caster, BlockPos dropPos) {
@@ -385,7 +385,7 @@ public final class FireSwordPower implements Power {
         PENDING.put(caster.getUuid(), new Pending(CastKind.ITEM, dropPos, -1, finish));
 
         sw.playSound(null, caster.getBlockPos(), SoundEvents.ITEM_FIRECHARGE_USE, SoundCategory.PLAYERS, 0.65f, 1.05f);
-        caster.sendMessage(Text.literal("Conjuring..."), true);
+
     }
 
     private static void finishCast(ServerPlayerEntity caster, Pending pend) {
@@ -400,7 +400,7 @@ public final class FireSwordPower implements Power {
 
         // final guard (don’t allow last-tick cheese)
         if (!stillValidDuringCast(caster, pend)) {
-            caster.sendMessage(Text.literal("Conjure failed (lost target)."), true);
+
             return;
         }
 
@@ -409,7 +409,7 @@ public final class FireSwordPower implements Power {
                 if (pend.targetPos == null) return;
 
                 if (!isValidFireSource(sw, pend.targetPos)) {
-                    caster.sendMessage(Text.literal("Conjure failed (source gone)."), true);
+
                     return;
                 }
 
@@ -420,18 +420,18 @@ public final class FireSwordPower implements Power {
 
                 dropConjuredSword(sw, spawn);
                 sw.playSound(null, pend.targetPos, SoundEvents.ENTITY_BLAZE_SHOOT, SoundCategory.PLAYERS, 0.85f, 0.9f);
-                caster.sendMessage(Text.literal("Fire Sword formed."), true);
+
             }
 
             case ENTITY -> {
                 Entity ent = sw.getEntityById(pend.targetEntityId);
                 if (!(ent instanceof LivingEntity le) || !le.isAlive()) {
-                    caster.sendMessage(Text.literal("Transmute failed (target gone)."), true);
+
                     return;
                 }
 
                 if (!isFireMob(le)) {
-                    caster.sendMessage(Text.literal("Transmute failed (not a fire creature)."), true);
+
                     return;
                 }
 
@@ -443,7 +443,7 @@ public final class FireSwordPower implements Power {
                 dropConjuredSword(sw, pos.add(0, 0.15, 0));
 
                 sw.playSound(null, le.getBlockPos(), SoundEvents.ENTITY_BLAZE_DEATH, SoundCategory.PLAYERS, 0.95f, 1.1f);
-                caster.sendMessage(Text.literal("Fire Sword transmuted."), true);
+
             }
 
             case ITEM -> {
@@ -453,7 +453,7 @@ public final class FireSwordPower implements Power {
 
                 dropConjuredSword(sw, spawn);
                 sw.playSound(null, bp, SoundEvents.ENTITY_BLAZE_SHOOT, SoundCategory.PLAYERS, 0.80f, 1.0f);
-                caster.sendMessage(Text.literal("Fire Sword formed."), true);
+
             }
         }
     }

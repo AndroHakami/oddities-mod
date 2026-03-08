@@ -1,5 +1,8 @@
 package net.seep.odd.entity.zerosuit;
 
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.MovementType;
@@ -7,16 +10,21 @@ import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.projectile.ProjectileUtil;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 import net.minecraft.world.explosion.Explosion;
+
+import net.seep.odd.sound.ModSounds;
 
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -27,12 +35,10 @@ import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
-import java.util.List;
 import java.util.UUID;
 
 public class ZeroSuitMissileEntity extends Entity implements GeoEntity {
 
-    /* ======================= geckolib ======================= */
     private static final RawAnimation ANIM_FLY  = RawAnimation.begin().thenLoop("idle");
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("idle");
 
@@ -54,33 +60,23 @@ public class ZeroSuitMissileEntity extends Entity implements GeoEntity {
         return geoCache;
     }
 
-    /* ======================= data tracker ======================= */
+    // kept for renderer compatibility (always 0)
     private static final TrackedData<Float> ROLL =
             DataTracker.registerData(ZeroSuitMissileEntity.class, TrackedDataHandlerRegistry.FLOAT);
 
-    /* ======================= state ======================= */
     private UUID ownerUuid = null;
-
-    private float targetYaw;
-    private float targetPitch;
-    private float targetRoll;
-
     private int lifeTicks = 0;
 
-    private boolean clientHasTargets = false;
+    // client-only looping sound holder
+    private Object rocketFlySound = null;
 
-    /* ======================= tuning ======================= */
-    private static final double THRUST = 0.22;
-    private static final double DRAG = 0.985;
-    private static final double MAX_SPEED = 1.25;
-    private static final double MIN_SPEED = 0.35;
-    private static final float TURN_RATE = 6.5f;
-    private static final int   MAX_LIFE = 20 * 12;
+    // tuning
+    private static final int MAX_LIFE = 20 * 5;         // 5s
+    private static final double DRAG = 0.995;           // slight drag
+    private static final float EXPLOSION_POWER = 1.35f; // reduced damage
 
-    // Exhaust visuals
-    private static final double EXHAUST_BACK = 0.62;
-    private static final double EXHAUST_UP   = 0.06;
-    private static final double BOOSTER_SIDE = 0.20;
+    // extra padding for entity raycast
+    private static final double HIT_EXPAND = 0.35;
 
     public ZeroSuitMissileEntity(EntityType<? extends ZeroSuitMissileEntity> type, World world) {
         super(type, world);
@@ -93,7 +89,10 @@ public class ZeroSuitMissileEntity extends Entity implements GeoEntity {
         this.dataTracker.startTracking(ROLL, 0f);
     }
 
-    /* ======================= owner ======================= */
+    public float getRoll() {
+        return this.dataTracker.get(ROLL);
+    }
+
     public void setOwner(Entity owner) {
         this.ownerUuid = (owner != null) ? owner.getUuid() : null;
     }
@@ -103,68 +102,33 @@ public class ZeroSuitMissileEntity extends Entity implements GeoEntity {
         return getWorld().getPlayerByUuid(ownerUuid);
     }
 
-    public void initFromOwner(PlayerEntity owner) {
+    /** Fired projectile: set initial velocity + rotation from owner look. */
+    public void initFromOwner(PlayerEntity owner, float speed) {
         if (owner == null) return;
 
-        this.targetYaw = MathHelper.wrapDegrees(owner.getYaw());
-        this.targetPitch = MathHelper.clamp(owner.getPitch(), -80f, 80f);
-        this.targetRoll = 0f;
-        setRollTracked(0f);
+        this.setYaw(owner.getYaw());
+        this.setPitch(owner.getPitch());
 
-        this.setYaw(this.targetYaw);
-        this.setPitch(this.targetPitch);
-
-        Vec3d fwd = Vec3d.fromPolar(this.targetPitch, this.targetYaw).normalize();
-        this.setVelocity(fwd.multiply(Math.max(MIN_SPEED, 0.55)));
+        Vec3d dir = owner.getRotationVector().normalize();
+        this.setVelocity(dir.multiply(Math.max(0.1, speed)));
     }
 
-    /* ======================= roll helpers ======================= */
-    public float getRoll() {
-        return this.dataTracker.get(ROLL);
-    }
+    private boolean canHit(Entity e) {
+        if (e == null) return false;
+        if (!e.isAlive()) return false;
+        if (!e.isAttackable()) return false; // ✅ IMPORTANT (works for mobs)
+        if (e == this) return false;
 
-    private void setRollTracked(float roll) {
-        roll = MathHelper.clamp(roll, -55f, 55f);
-        float cur = this.dataTracker.get(ROLL);
-        if (Math.abs(cur - roll) > 0.05f) this.dataTracker.set(ROLL, roll);
-    }
+        Entity owner = getOwner();
+        if (owner != null && e == owner) return false;
 
-    public void clientSetVisualRoll(float roll) {
-        if (getWorld() != null && getWorld().isClient) {
-            setRollTracked(roll);
+        if (e instanceof PlayerEntity pe) {
+            if (pe.isSpectator()) return false;
+            if (pe.getAbilities().creativeMode) return false;
         }
+        return true;
     }
 
-    private Vec3d computeForwardVel(Vec3d forward) {
-        double fwdSpeed = getVelocity().dotProduct(forward);
-
-        if (fwdSpeed < MIN_SPEED) fwdSpeed = MIN_SPEED;
-
-        fwdSpeed = Math.min(fwdSpeed + THRUST, MAX_SPEED);
-        fwdSpeed *= DRAG;
-
-        if (fwdSpeed > MAX_SPEED) fwdSpeed = MAX_SPEED;
-
-        return forward.multiply(fwdSpeed);
-    }
-
-    /* ======================= steering API ======================= */
-    public void serverSetRotation(float yaw, float pitch, float roll) {
-        this.targetYaw = MathHelper.wrapDegrees(yaw);
-        this.targetPitch = MathHelper.clamp(pitch, -80f, 80f);
-        this.targetRoll = MathHelper.clamp(roll, -55f, 55f);
-        setRollTracked(this.targetRoll);
-    }
-
-    public void clientSetDesiredRotation(float yaw, float pitch, float roll) {
-        if (getWorld() == null || !getWorld().isClient) return;
-        this.targetYaw = MathHelper.wrapDegrees(yaw);
-        this.targetPitch = MathHelper.clamp(pitch, -80f, 80f);
-        this.targetRoll = MathHelper.clamp(roll, -55f, 55f);
-        this.clientHasTargets = true;
-    }
-
-    /* ======================= explode ======================= */
     public void detonate() {
         if (getWorld() == null) return;
 
@@ -177,17 +141,14 @@ public class ZeroSuitMissileEntity extends Entity implements GeoEntity {
 
         sw.spawnParticles(ParticleTypes.FLASH, getX(), getY(), getZ(), 1, 0, 0, 0, 0);
         sw.spawnParticles(ParticleTypes.EXPLOSION, getX(), getY(), getZ(), 1, 0, 0, 0, 0);
+
         sw.playSound(null, getX(), getY(), getZ(),
-                SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 1.0f, 1.0f);
+                SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 0.9f, 1.1f);
 
         Explosion ex = new Explosion(
-                sw,
-                this,
-                null,
-                null,
+                sw, this, null, null,
                 getX(), getY(), getZ(),
-                2.8f,
-                false,
+                EXPLOSION_POWER, false,
                 Explosion.DestructionType.KEEP
         );
         ex.collectBlocksAndDamageEntities();
@@ -196,161 +157,168 @@ public class ZeroSuitMissileEntity extends Entity implements GeoEntity {
         this.discard();
     }
 
-    /* ======================= tick ======================= */
     @Override
     public void tick() {
         super.tick();
         if (getWorld() == null) return;
 
         if (getWorld().isClient) {
-            if (clientHasTargets) clientPredictRotationOnlyStep();
+            clientTickRocketSound();
             return;
         }
 
-        serverAuthoritativeStep();
-    }
-
-    private void applyTurnStep() {
-        float curYaw = getYaw();
-        float curPitch = getPitch();
-
-        float dy = MathHelper.wrapDegrees(targetYaw - curYaw);
-        float dp = targetPitch - curPitch;
-
-        float stepYaw = MathHelper.clamp(dy, -TURN_RATE, TURN_RATE);
-        float stepPitch = MathHelper.clamp(dp, -TURN_RATE, TURN_RATE);
-
-        curYaw += stepYaw;
-        curPitch = MathHelper.clamp(curPitch + stepPitch, -80f, 80f);
-
-        setYaw(curYaw);
-        setPitch(curPitch);
-
-        float rollNow = getRoll();
-        float rollNew = MathHelper.lerp(0.18f, rollNow, targetRoll);
-        setRollTracked(rollNew);
-    }
-
-    private void clientPredictRotationOnlyStep() {
-        applyTurnStep();
-    }
-
-    private void serverAuthoritativeStep() {
         lifeTicks++;
         if (lifeTicks >= MAX_LIFE) {
             detonate();
             return;
         }
 
-        applyTurnStep();
-
-        Vec3d forward = Vec3d.fromPolar(getPitch(), getYaw()).normalize();
-        Vec3d vel = computeForwardVel(forward);
-        setVelocity(vel);
-
+        Vec3d vel = getVelocity().multiply(DRAG);
         Vec3d start = getPos();
         Vec3d end = start.add(vel);
 
-        HitResult blockHit = getWorld().raycast(new RaycastContext(
+        // keep facing velocity (visual)
+        if (vel.lengthSquared() > 1.0e-6) {
+            float yaw = (float)(MathHelper.atan2(vel.z, vel.x) * 57.2957763671875) - 90.0f;
+            float pitch = (float)(-(MathHelper.atan2(vel.y, Math.sqrt(vel.x * vel.x + vel.z * vel.z)) * 57.2957763671875));
+            setYaw(yaw);
+            setPitch(pitch);
+        }
+
+        // -------- BLOCK raycast
+        BlockHitResult bhr = getWorld().raycast(new RaycastContext(
                 start, end,
                 RaycastContext.ShapeType.COLLIDER,
                 RaycastContext.FluidHandling.NONE,
                 this
         ));
 
-        if (blockHit.getType() == HitResult.Type.BLOCK) {
-            Vec3d hp = blockHit.getPos();
-            Vec3d back = vel.lengthSquared() > 1.0e-6 ? vel.normalize().multiply(-0.08) : Vec3d.ZERO;
+        Vec3d endForEntity = end;
+        double blockDist2 = Double.POSITIVE_INFINITY;
+
+        if (bhr.getType() != HitResult.Type.MISS) {
+            endForEntity = bhr.getPos();
+            blockDist2 = start.squaredDistanceTo(endForEntity);
+        }
+
+        // -------- ENTITY raycast (clamped to block distance)
+        Box box = this.getBoundingBox().stretch(endForEntity.subtract(start)).expand(HIT_EXPAND);
+        EntityHitResult ehr = ProjectileUtil.getEntityCollision(
+                getWorld(),
+                this,
+                start,
+                endForEntity,
+                box,
+                this::canHit
+        );
+
+        if (ehr != null) {
+            Vec3d hp = ehr.getPos();
+            Vec3d back = vel.lengthSquared() > 1.0e-6 ? vel.normalize().multiply(-0.06) : Vec3d.ZERO;
             setPos(hp.x + back.x, hp.y + back.y, hp.z + back.z);
             detonate();
             return;
         }
 
-        this.move(MovementType.SELF, vel);
-
-        // Rocket exhaust (server-side so everyone sees it)
-        if (getWorld() instanceof ServerWorld sw) {
-            spawnRocketTrail(sw, vel);
+        if (bhr.getType() != HitResult.Type.MISS) {
+            Vec3d hp = bhr.getPos();
+            Vec3d back = vel.lengthSquared() > 1.0e-6 ? vel.normalize().multiply(-0.06) : Vec3d.ZERO;
+            setPos(hp.x + back.x, hp.y + back.y, hp.z + back.z);
+            detonate();
+            return;
         }
 
-        this.fallDistance = 0f;
+        // move
+        setVelocity(vel);
+        move(MovementType.SELF, vel);
+
+        // ✅ catches “angled slide / graze” contacts that raycast can miss
+        if (this.horizontalCollision || this.verticalCollision || this.isInsideWall()) {
+            detonate();
+            return;
+        }
+
+        if (getWorld() instanceof ServerWorld sw) {
+            if ((this.age & 1) == 0) {
+                sw.spawnParticles(ParticleTypes.FLAME, getX(), getY(), getZ(), 1, 0.02, 0.02, 0.02, 0.01);
+                sw.spawnParticles(ParticleTypes.SMOKE, getX(), getY(), getZ(), 1, 0.03, 0.03, 0.03, 0.002);
+            }
+        }
+
+        fallDistance = 0f;
     }
 
-    private void spawnRocketTrail(ServerWorld sw, Vec3d vel) {
-        double sp2 = vel.lengthSquared();
-        if (sp2 < 1.0e-6) return;
+    /* ======================= CLIENT: rocket loop sound ======================= */
 
-        Vec3d dir = vel.normalize();
-
-        double sp = Math.sqrt(sp2);
-        float t = (float) MathHelper.clamp((sp - MIN_SPEED) / (MAX_SPEED - MIN_SPEED), 0.0, 1.0);
-
-        int flameMain = 2 + (int) (4 * t);
-        int smokeMain = 1 + (int) (2 * t);
-        int spark     = (t > 0.65f) ? 1 : 0;
-
-        Vec3d up = new Vec3d(0, 1, 0);
-        Vec3d right = dir.crossProduct(up);
-        if (right.lengthSquared() < 1.0e-6) {
-            right = dir.crossProduct(new Vec3d(1, 0, 0));
-        }
-        right = right.normalize();
-
-        Vec3d tail = getPos()
-                .subtract(dir.multiply(EXHAUST_BACK))
-                .add(0, EXHAUST_UP, 0);
-
-        Vec3d tailL = tail.add(right.multiply(BOOSTER_SIDE));
-        Vec3d tailR = tail.subtract(right.multiply(BOOSTER_SIDE));
-
-        sw.spawnParticles(ParticleTypes.FLAME, tail.x, tail.y, tail.z,
-                flameMain, 0.03, 0.03, 0.03, 0.01 + 0.02 * t);
-        sw.spawnParticles(ParticleTypes.SMOKE, tail.x, tail.y, tail.z,
-                smokeMain, 0.05, 0.05, 0.05, 0.005 + 0.01 * t);
-
-        if (spark > 0) {
-            sw.spawnParticles(ParticleTypes.LAVA, tail.x, tail.y, tail.z,
-                    1, 0.02, 0.02, 0.02, 0.01);
+    @Environment(EnvType.CLIENT)
+    private void clientTickRocketSound() {
+        if (this.isRemoved()) {
+            clientStopRocketSound();
+            return;
         }
 
-        sw.spawnParticles(ParticleTypes.FLAME, tailL.x, tailL.y, tailL.z,
-                1 + (int)(2 * t), 0.02, 0.02, 0.02, 0.01 + 0.02 * t);
-        sw.spawnParticles(ParticleTypes.FLAME, tailR.x, tailR.y, tailR.z,
-                1 + (int)(2 * t), 0.02, 0.02, 0.02, 0.01 + 0.02 * t);
+        if (rocketFlySound == null) {
+            var mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null || mc.getSoundManager() == null) return;
 
-        if ((this.age & 1) == 0) {
-            sw.spawnParticles(ParticleTypes.SMOKE, tailL.x, tailL.y, tailL.z,
-                    1, 0.03, 0.03, 0.03, 0.004);
-            sw.spawnParticles(ParticleTypes.SMOKE, tailR.x, tailR.y, tailR.z,
-                    1, 0.03, 0.03, 0.03, 0.004);
+            RocketFlyLoop snd = new RocketFlyLoop(this);
+            rocketFlySound = snd;
+            mc.getSoundManager().play(snd);
         }
+    }
+
+    @Environment(EnvType.CLIENT)
+    private void clientStopRocketSound() {
+        if (rocketFlySound instanceof RocketFlyLoop loop) loop.stopNow();
+        rocketFlySound = null;
+    }
+
+    @Environment(EnvType.CLIENT)
+    private static final class RocketFlyLoop extends net.minecraft.client.sound.MovingSoundInstance {
+        private final ZeroSuitMissileEntity missile;
+        private boolean stopped = false;
+
+        RocketFlyLoop(ZeroSuitMissileEntity missile) {
+            super(ModSounds.ROCKET_FLY, SoundCategory.PLAYERS, net.minecraft.util.math.random.Random.create());
+            this.missile = missile;
+            this.repeat = true;
+            this.repeatDelay = 0;
+            this.volume = 0.55f;
+            this.pitch = 1.0f;
+            this.x = missile.getX();
+            this.y = missile.getY();
+            this.z = missile.getZ();
+            this.attenuationType = net.minecraft.client.sound.SoundInstance.AttenuationType.LINEAR;
+        }
+
+        @Override
+        public void tick() {
+            if (missile == null || missile.isRemoved() || !missile.isAlive()) { stopped = true; return; }
+            this.x = missile.getX(); this.y = missile.getY(); this.z = missile.getZ();
+
+            double sp = missile.getVelocity().length();
+            float t = (float) MathHelper.clamp(sp / 2.0, 0.0, 1.0);
+            this.volume = 0.35f + 0.45f * t;
+            this.pitch  = 0.95f + 0.10f * t;
+        }
+
+        @Override public boolean isDone() { return stopped; }
+        void stopNow() { stopped = true; }
     }
 
     /* ======================= NBT ======================= */
     @Override
     protected void readCustomDataFromNbt(NbtCompound nbt) {
         if (nbt.containsUuid("Owner")) ownerUuid = nbt.getUuid("Owner");
-        targetYaw = MathHelper.wrapDegrees(nbt.getFloat("TYaw"));
-        targetPitch = nbt.getFloat("TPitch");
-        targetRoll = nbt.getFloat("TRoll");
         lifeTicks = nbt.getInt("Life");
-
-        if (getWorld() != null && !getWorld().isClient) {
-            setRollTracked(targetRoll);
-        }
     }
 
     @Override
     protected void writeCustomDataToNbt(NbtCompound nbt) {
         if (ownerUuid != null) nbt.putUuid("Owner", ownerUuid);
-        nbt.putFloat("TYaw", MathHelper.wrapDegrees(targetYaw));
-        nbt.putFloat("TPitch", targetPitch);
-        nbt.putFloat("TRoll", targetRoll);
         nbt.putInt("Life", lifeTicks);
     }
 
     public boolean collides() { return true; }
-
-    @Override
-    public boolean isCollidable() { return true; }
+    @Override public boolean isCollidable() { return true; }
 }

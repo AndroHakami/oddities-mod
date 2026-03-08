@@ -1,10 +1,11 @@
+// FILE: src/main/java/net/seep/odd/abilities/rise/client/render/RisenZombieRenderer.java
 package net.seep.odd.abilities.rise.client.render;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import it.unimi.dsi.fastutil.ints.Int2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.entity.EntityRenderer;
 import net.minecraft.client.render.entity.EntityRendererFactory;
@@ -17,17 +18,25 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
 
 import net.seep.odd.abilities.rise.entity.RisenZombieEntity;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
 public final class RisenZombieRenderer extends EntityRenderer<RisenZombieEntity> {
 
-    private final Int2ObjectOpenHashMap<Entity> dummyCache = new Int2ObjectOpenHashMap<>();
-    private final Int2ByteOpenHashMap lastMoveState = new Int2ByteOpenHashMap(); // 0 idle, 1 walk, 2 run
+    // Dark-green tint (single-pass = no z-fighting shimmer / “head shake”)
+    private static final float TINT_R = 0.42f;
+    private static final float TINT_G = 0.82f;
+    private static final float TINT_B = 0.42f;
+    private static final float TINT_A = 1.00f;
+
+    private static final class DummyState {
+        Entity dummy;
+        EntityType<?> type;
+        NbtCompound lastApplied;
+        String lastTypeId;
+    }
+
+    private final Int2ObjectOpenHashMap<DummyState> dummyCache = new Int2ObjectOpenHashMap<>();
 
     public RisenZombieRenderer(EntityRendererFactory.Context ctx) {
         super(ctx);
@@ -39,120 +48,111 @@ public final class RisenZombieRenderer extends EntityRenderer<RisenZombieEntity>
         return new Identifier("minecraft", "textures/entity/zombie/zombie.png");
     }
 
-    private Entity getOrCreateDummy(RisenZombieEntity risen) {
+    private DummyState getOrCreateDummy(RisenZombieEntity risen) {
         int key = risen.getId();
-        Entity cached = dummyCache.get(key);
+        DummyState st = dummyCache.get(key);
 
-        Identifier typeId = Identifier.tryParse(risen.getSourceTypeId());
+        String typeStr = risen.getSourceTypeId();
+        Identifier typeId = Identifier.tryParse(typeStr);
         EntityType<?> type = (typeId == null) ? EntityType.ZOMBIE : Registries.ENTITY_TYPE.get(typeId);
         if (type == null) type = EntityType.ZOMBIE;
 
+        // never recurse into our own renderer
         if (type == risen.getType()) type = EntityType.ZOMBIE;
 
-        if (cached == null || cached.getType() != type || cached.getWorld() != risen.getWorld()) {
-            cached = type.create(risen.getWorld());
-            if (cached == null) cached = EntityType.ZOMBIE.create(risen.getWorld());
-            dummyCache.put(key, cached);
+        boolean needNew =
+                (st == null)
+                        || (st.dummy == null)
+                        || (st.type != type)
+                        || (st.dummy.getWorld() != risen.getWorld());
+
+        if (needNew) {
+            Entity d = type.create(risen.getWorld());
+            if (d == null) d = EntityType.ZOMBIE.create(risen.getWorld());
+
+            st = new DummyState();
+            st.dummy = d;
+            st.type = type;
+            st.lastApplied = null;
+            st.lastTypeId = typeStr;
+            dummyCache.put(key, st);
         }
-        return cached;
+
+        return st;
     }
 
     @Override
     public void render(RisenZombieEntity risen, float entityYaw, float tickDelta,
                        MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light) {
 
-        Entity dummy = getOrCreateDummy(risen);
-        if (dummy == null) {
+        DummyState st = getOrCreateDummy(risen);
+        if (st == null || st.dummy == null) {
             super.render(risen, entityYaw, tickDelta, matrices, vertexConsumers, light);
             return;
         }
 
-        // Apply appearance NBT
+        Entity dummy = st.dummy;
+
+        // Apply appearance NBT only when it changes (prevents “reset every frame” bugs)
         NbtCompound nbt = risen.getSourceRenderNbt();
         if (nbt != null && !nbt.isEmpty()) {
-            try { dummy.readNbt(nbt.copy()); } catch (Throwable ignored) {}
+            if (st.lastApplied == null || !st.lastApplied.equals(nbt)) {
+                st.lastApplied = nbt.copy();
+                try { dummy.readNbt(st.lastApplied.copy()); } catch (Throwable ignored) {}
+                clearHurtAndDeathTint(dummy);
+            }
+        } else {
+            clearHurtAndDeathTint(dummy);
         }
 
-        // ✅ ensure dummy is NOT stuck in "hurt/death" overlay
-        clearHurtAndDeathTint(dummy);
-
-        // Sync movement/rotation/time + vanilla limb anim + clamp head yaw
+        // Sync pose/time/rotation + limb anim + head yaw (FIXED: no bogus prevYaw fallback)
         syncProxy(risen, dummy, tickDelta);
 
-        // Run > Walk > Idle (geckolib-only, safe)
-        tryRunWalkIdle(dummy, risen);
+        // Stable tint using VertexConsumer wrapper (buffer-safe)
+        VertexConsumerProvider tinted = new TintProvider(vertexConsumers, TINT_R, TINT_G, TINT_B, TINT_A);
 
-        // Two-pass: desaturate then green overlay
-        RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-        try {
-            RenderSystem.setShaderColor(0.62F, 0.62F, 0.62F, 1.0F);
-            MinecraftClient.getInstance().getEntityRenderDispatcher().render(
-                    dummy, 0.0, 0.0, 0.0, entityYaw, tickDelta, matrices, vertexConsumers, light
-            );
+        @SuppressWarnings("unchecked")
+        EntityRenderer<Entity> r = (EntityRenderer<Entity>) MinecraftClient.getInstance()
+                .getEntityRenderDispatcher()
+                .getRenderer(dummy);
 
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            RenderSystem.setShaderColor(0.10F, 0.62F, 0.10F, 0.70F);
-            MinecraftClient.getInstance().getEntityRenderDispatcher().render(
-                    dummy, 0.0, 0.0, 0.0, entityYaw, tickDelta, matrices, vertexConsumers, light
-            );
-        } finally {
-            RenderSystem.disableBlend();
-            RenderSystem.setShaderColor(1F, 1F, 1F, 1F);
-        }
+        r.render(dummy, entityYaw, tickDelta, matrices, tinted, light);
     }
 
     private static void clearHurtAndDeathTint(Entity dummy) {
-        if (!(dummy instanceof LivingEntity)) return;
-        LivingEntity le = (LivingEntity) dummy;
+        if (!(dummy instanceof LivingEntity le)) return;
 
-        // Health: make sure it isn't 0 from the kill snapshot
-        try {
-            le.setHealth(le.getMaxHealth());
-        } catch (Throwable ignored) {}
+        try { le.setHealth(le.getMaxHealth()); } catch (Throwable ignored) {}
 
-        // Reflection: zero the fields used by LivingEntityRenderer overlay
-        trySetIntField(le, LivingEntity.class, "hurtTime", 0);
-        trySetIntField(le, LivingEntity.class, "deathTime", 0);
-        trySetIntField(le, LivingEntity.class, "timeUntilRegen", 0);
-        trySetFloatField(le, LivingEntity.class, "lastDamageTaken", 0.0F);
+        // try reset fields used by hurt/death overlay (mapping can differ)
+        try { var f = LivingEntity.class.getDeclaredField("hurtTime"); f.setAccessible(true); f.setInt(le, 0); } catch (Throwable ignored) {}
+        try { var f = LivingEntity.class.getDeclaredField("deathTime"); f.setAccessible(true); f.setInt(le, 0); } catch (Throwable ignored) {}
+        try { var f = LivingEntity.class.getDeclaredField("timeUntilRegen"); f.setAccessible(true); f.setInt(le, 0); } catch (Throwable ignored) {}
+        try { var f = LivingEntity.class.getDeclaredField("lastDamageTaken"); f.setAccessible(true); f.setFloat(le, 0f); } catch (Throwable ignored) {}
     }
 
     private static void syncProxy(RisenZombieEntity risen, Entity dummy, float tickDelta) {
         dummy.setPos(risen.getX(), risen.getY(), risen.getZ());
         dummy.setVelocity(risen.getVelocity());
 
-        float bodyPrev = risen.prevYaw;
-        float bodyNow  = risen.getYaw();
-
-        dummy.prevYaw = bodyPrev;
-        dummy.setYaw(bodyNow);
+        dummy.prevYaw = risen.prevYaw;
+        dummy.setYaw(risen.getYaw());
 
         dummy.prevPitch = risen.prevPitch;
         dummy.setPitch(risen.getPitch());
 
-        // keep time-based anims alive
-        try {
-            Field f = Entity.class.getDeclaredField("age");
-            f.setAccessible(true);
-            f.setInt(dummy, risen.age);
-        } catch (Throwable ignored) {}
+        // keep time-based anims alive (Yarn usually allows this; ignore if it doesn’t)
+        try { dummy.age = risen.age; } catch (Throwable ignored) {}
 
-        if (dummy instanceof LivingEntity) {
-            LivingEntity d = (LivingEntity) dummy;
+        if (dummy instanceof LivingEntity d) {
+            // Copy body/head yaw *properly* (this is what fixes the “rapid head shake”)
+            try {
+                d.bodyYaw     = risen.bodyYaw;
+                d.prevBodyYaw = risen.prevBodyYaw;
 
-            float desiredNow = risen.getHeadYaw();
-            float desiredPrev = getPrevHeadYawSafe(risen, bodyPrev);
-
-            float headNow = clampHeadToBody(bodyNow, desiredNow);
-            float headPrev = clampHeadToBody(bodyPrev, desiredPrev);
-
-            try { d.setHeadYaw(headNow); } catch (Throwable ignored) {}
-
-            trySetFloatField(d, LivingEntity.class, "prevHeadYaw", headPrev);
-            trySetFloatField(d, LivingEntity.class, "headYaw", headNow);
-            trySetFloatField(d, LivingEntity.class, "prevBodyYaw", bodyPrev);
-            trySetFloatField(d, LivingEntity.class, "bodyYaw", bodyNow);
+                d.headYaw     = risen.headYaw;
+                d.prevHeadYaw = risen.prevHeadYaw;
+            } catch (Throwable ignored) {}
 
             updateLimbAnimatorSafe(d, risen, tickDelta);
         }
@@ -163,20 +163,33 @@ public final class RisenZombieRenderer extends EntityRenderer<RisenZombieEntity>
         float s = MathHelper.clamp(speed * 4.0F, 0.0F, 1.5F);
 
         try {
-            Field f = LivingEntity.class.getDeclaredField("limbAnimator");
+            var f = LivingEntity.class.getDeclaredField("limbAnimator");
             f.setAccessible(true);
             Object limb = f.get(dummy);
             if (limb == null) return;
 
-            if (tryInvoke(limb, "updateLimbs", new Class[]{float.class, float.class, float.class}, new Object[]{s, 1.0F, tickDelta})) return;
-            if (tryInvoke(limb, "updateLimbs", new Class[]{float.class, float.class}, new Object[]{s, tickDelta})) return;
-            tryInvoke(limb, "updateLimbs", new Class[]{float.class}, new Object[]{s});
+            // try multiple signatures (mapping/version safe)
+            if (tryInvoke(limb, "updateLimbs",
+                    new Class[]{float.class, float.class, float.class},
+                    new Object[]{s, 1.0F, tickDelta})) return;
+
+            if (tryInvoke(limb, "updateLimbs",
+                    new Class[]{float.class, float.class},
+                    new Object[]{s, tickDelta})) return;
+
+            if (tryInvoke(limb, "updateLimbs",
+                    new Class[]{float.class, float.class},
+                    new Object[]{s, 1.0F})) return;
+
+            tryInvoke(limb, "updateLimbs",
+                    new Class[]{float.class},
+                    new Object[]{s});
         } catch (Throwable ignored) {}
     }
 
     private static boolean tryInvoke(Object obj, String name, Class<?>[] sig, Object[] args) {
         try {
-            Method m = obj.getClass().getMethod(name, sig);
+            var m = obj.getClass().getMethod(name, sig);
             m.setAccessible(true);
             m.invoke(obj, args);
             return true;
@@ -185,77 +198,64 @@ public final class RisenZombieRenderer extends EntityRenderer<RisenZombieEntity>
         }
     }
 
-    private static float clampHeadToBody(float bodyYaw, float desiredHeadYaw) {
-        float diff = MathHelper.wrapDegrees(desiredHeadYaw - bodyYaw);
-        diff = MathHelper.clamp(diff, -85.0F, 85.0F);
-        return bodyYaw + diff;
-    }
+    /* ===================== Tint provider (buffer-safe) ===================== */
 
-    private static float getPrevHeadYawSafe(RisenZombieEntity risen, float fallback) {
-        try {
-            Field f = LivingEntity.class.getDeclaredField("prevHeadYaw");
-            f.setAccessible(true);
-            return f.getFloat(risen);
-        } catch (Throwable ignored) {
-            return fallback;
+    private static final class TintProvider implements VertexConsumerProvider {
+        private final VertexConsumerProvider parent;
+        private final float rm, gm, bm, am;
+
+        TintProvider(VertexConsumerProvider parent, float rm, float gm, float bm, float am) {
+            this.parent = parent;
+            this.rm = rm; this.gm = gm; this.bm = bm; this.am = am;
+        }
+
+        @Override
+        public VertexConsumer getBuffer(RenderLayer layer) {
+            return new TintConsumer(parent.getBuffer(layer), rm, gm, bm, am);
         }
     }
 
-    private static void trySetFloatField(Object obj, Class<?> owner, String name, float value) {
-        try {
-            Field f = owner.getDeclaredField(name);
-            f.setAccessible(true);
-            f.setFloat(obj, value);
-        } catch (Throwable ignored) {}
-    }
+    private static final class TintConsumer implements VertexConsumer {
+        private final VertexConsumer d;
+        private final float rm, gm, bm, am;
 
-    private static void trySetIntField(Object obj, Class<?> owner, String name, int value) {
-        try {
-            Field f = owner.getDeclaredField(name);
-            f.setAccessible(true);
-            f.setInt(obj, value);
-        } catch (Throwable ignored) {}
-    }
-
-    private void tryRunWalkIdle(Entity dummy, RisenZombieEntity risen) {
-        Vec3d v = risen.getVelocity();
-        double h2 = v.x * v.x + v.z * v.z;
-
-        byte state;
-        if (h2 > 0.06) state = 2;        // run
-        else if (h2 > 0.0025) state = 1; // walk
-        else state = 0;                  // idle
-
-        int key = risen.getId();
-        byte prev = lastMoveState.getOrDefault(key, (byte)-1);
-        if (prev == state) return;
-        lastMoveState.put(key, state);
-
-        Method m;
-        try { m = dummy.getClass().getMethod("triggerAnim", String.class, String.class); }
-        catch (Throwable ignored) { return; }
-
-        String[] controllers = new String[] { "controller", "main", "movement", "move" };
-
-        if (state == 2) {
-            if (tryTrigger(m, dummy, controllers, "run")) return;
-            if (tryTrigger(m, dummy, controllers, "walk")) return;
-            tryTrigger(m, dummy, controllers, "idle");
-            return;
+        TintConsumer(VertexConsumer d, float rm, float gm, float bm, float am) {
+            this.d = d;
+            this.rm = rm; this.gm = gm; this.bm = bm; this.am = am;
         }
-        if (state == 1) {
-            if (tryTrigger(m, dummy, controllers, "walk")) return;
-            tryTrigger(m, dummy, controllers, "idle");
-            return;
-        }
-        tryTrigger(m, dummy, controllers, "idle");
-    }
 
-    private static boolean tryTrigger(Method m, Entity dummy, String[] controllers, String anim) {
-        for (String c : controllers) {
-            try { m.invoke(dummy, c, anim); return true; }
-            catch (Throwable ignored) {}
+        private static int clamp255(int v) { return v < 0 ? 0 : Math.min(255, v); }
+
+        @Override public VertexConsumer vertex(double x, double y, double z) { d.vertex(x, y, z); return this; }
+
+        @Override
+        public VertexConsumer color(int r, int g, int b, int a) {
+            int rr = clamp255(Math.round(r * rm));
+            int gg = clamp255(Math.round(g * gm));
+            int bb = clamp255(Math.round(b * bm));
+            int aa = clamp255(Math.round(a * am));
+            d.color(rr, gg, bb, aa);
+            return this;
         }
-        return false;
+
+        @Override public VertexConsumer texture(float u, float v) { d.texture(u, v); return this; }
+        @Override public VertexConsumer overlay(int u, int v) { d.overlay(u, v); return this; }
+        @Override public VertexConsumer light(int u, int v) { d.light(u, v); return this; }
+        @Override public VertexConsumer normal(float x, float y, float z) { d.normal(x, y, z); return this; }
+        @Override public void next() { d.next(); }
+
+        @Override
+        public void fixedColor(int r, int g, int b, int a) {
+            int rr = clamp255(Math.round(r * rm));
+            int gg = clamp255(Math.round(g * gm));
+            int bb = clamp255(Math.round(b * bm));
+            int aa = clamp255(Math.round(a * am));
+            d.fixedColor(rr, gg, bb, aa);
+        }
+
+        @Override
+        public void unfixColor() {
+            d.unfixColor();
+        }
     }
 }

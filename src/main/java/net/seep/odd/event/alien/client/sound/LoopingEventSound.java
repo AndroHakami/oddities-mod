@@ -5,7 +5,7 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.math.random.Random;
 
-public final class LoopingEventSound extends AbstractSoundInstance {
+public class LoopingEventSound extends AbstractSoundInstance {
 
     public LoopingEventSound(SoundEvent event, SoundCategory category) {
         super(event, category, Random.create());

@@ -232,7 +232,7 @@ public final class ConquerPower implements Power {
 
             player.getWorld().playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.ENTITY_HORSE_AMBIENT, SoundCategory.PLAYERS, 0.8f, 0.7f);
-            player.sendMessage(Text.literal("Milo: DISMISSED"), true);
+
             return;
         }
 
@@ -273,7 +273,7 @@ public final class ConquerPower implements Power {
 
         player.getWorld().playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.ENTITY_HORSE_SADDLE, SoundCategory.PLAYERS, 0.9f, 0.9f);
-        player.sendMessage(Text.literal("Milo: SUMMONED"), true);
+
     }
 
     /* =========================
@@ -301,12 +301,12 @@ public final class ConquerPower implements Power {
 
         LivingEntity target = findCorruptTarget(player, 5.0);
         if (target == null) {
-            player.sendMessage(Text.literal("No Villager or Iron Golem in sight."), true);
+
             return;
         }
 
         if (target.hasStatusEffect(ModStatusEffects.CORRUPTION)) {
-            player.sendMessage(Text.literal("Already corrupted."), true);
+
             return;
         }
 
@@ -329,7 +329,7 @@ public final class ConquerPower implements Power {
                 10, 0.35, 0.35, 0.35, 0.01);
 
         sw.playSound(null, target.getBlockPos(), SoundEvents.BLOCK_SCULK_SPREAD, SoundCategory.PLAYERS, 0.9f, 0.7f);
-        player.sendMessage(Text.literal("Corruption applied."), true);
+
     }
 
     /** Ability 3: Capture a corrupted Iron Golem into an item (stores full NBT except UUID/pos). */
@@ -338,7 +338,7 @@ public final class ConquerPower implements Power {
 
         IronGolemEntity golem = findCorruptedGolemTarget(player, 6.0);
         if (golem == null) {
-            player.sendMessage(Text.literal("Sneak+Secondary: look at a CORRUPTED Iron Golem to capture it."), true);
+;
             return false;
         }
 
@@ -373,7 +373,7 @@ public final class ConquerPower implements Power {
             player.dropItem(spawn, false);
         }
 
-        player.sendMessage(Text.literal("Captured: Metalic Frost Spawn"), true);
+
         return true;
     }
 

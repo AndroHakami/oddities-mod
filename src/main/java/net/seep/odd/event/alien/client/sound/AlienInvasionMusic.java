@@ -4,8 +4,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.client.sound.SoundManager;
 import net.minecraft.world.World;
+import net.seep.odd.client.audio.DistantIslesLoopingEventSound;
 import net.seep.odd.sound.ModSounds;
-import net.seep.odd.sound.OddSoundCategories;
 
 public final class AlienInvasionMusic {
     private AlienInvasionMusic() {}
@@ -20,13 +20,16 @@ public final class AlienInvasionMusic {
         SoundManager sm = mc.getSoundManager();
         if (current != null && sm.isPlaying(current)) return;
 
-        current = new LoopingEventSound(ModSounds.ALIEN_INVASION, OddSoundCategories.distantIslesOrMusic());
+        mc.getMusicTracker().stop();
+
+        current = new DistantIslesLoopingEventSound(ModSounds.ALIEN_INVASION, 1.0f);
         sm.play(current);
     }
 
     public static void stop() {
         MinecraftClient mc = MinecraftClient.getInstance();
         if (mc == null) return;
+
         SoundManager sm = mc.getSoundManager();
         if (current != null) {
             sm.stop(current);

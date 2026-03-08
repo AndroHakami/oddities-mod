@@ -34,6 +34,19 @@ public class ModSounds {
     public static final SoundEvent TELEKINESIS_GRAB = registerSoundEvent("glitch_telekinesis_grab");
     public static final SoundEvent TELEKINESIS_EN = registerSoundEvent("glitch_telekinesis_end");
     public static final SoundEvent ACCELERATE = registerSoundEvent("accelerate");
+    public static final SoundEvent GAMBLE_FIRE = registerSoundEvent("gamble_fire");
+    public static final SoundEvent LOOKER_INVIS = registerSoundEvent("looker_invis");
+    public static final SoundEvent OWL_SONAR = registerSoundEvent("owl_sonar");
+    public static final SoundEvent SNIPER_SHOT = registerSoundEvent("sniper_shot");
+    public static final SoundEvent SNIPER_LAND = registerSoundEvent("sniper_land");
+    public static final SoundEvent SUPERCHARGE_THROW_HOLD = registerSoundEvent("supercharge_throw_hold");
+    public static final SoundEvent SUPERCHARGE_THROW = registerSoundEvent("supercharge_throw");
+    public static final SoundEvent SUPERCHARGE_READY = registerSoundEvent("supercharge_ready");
+    public static final SoundEvent SUPERCHARGE_CANCEL = registerSoundEvent("supercharge_cancel");
+    public static final SoundEvent SHADOW_KUNAI_THROW = registerSoundEvent("shadow_kunai_throw");
+    public static final SoundEvent SHADOW_KUNAI_TP    = registerSoundEvent("shadow_kunai_tp");
+    public static final SoundEvent SHADOW_KUNAI_SWAP  = registerSoundEvent("shadow_kunai_swap");
+    public static final SoundEvent UMBRA_SHADOW_SHIFT  = registerSoundEvent("umbra_shadow_shift");
 
 
     // UFO SHIT
@@ -43,10 +56,15 @@ public class ModSounds {
     public static final SoundEvent SAUCER_TRACTOR = registerSoundEvent("saucer_tractor");
     public static final SoundEvent SAUCER_HURT = registerSoundEvent("saucer_hurt");
     public static final SoundEvent SAUCER_DEATH = registerSoundEvent("saucer_death");
+    public static final SoundEvent JETPACK_ACTIVATE = registerSoundEvent("jetpack_activate");
+    public static final SoundEvent JETPACK_FLYING = registerSoundEvent("jetpack_flying");
+
 
     // Rider Car
     public static final SoundEvent CAR_START = registerSoundEvent("car_start");
     public static final SoundEvent CAR_ACC = registerSoundEvent("car_acc");
+    public static final SoundEvent ROCKET_FLY = registerSoundEvent("rocket_fly");
+    public static final SoundEvent ROCKET_FIRE = registerSoundEvent("rocket_fire");
 
 
     //Rider Car Radio
@@ -85,6 +103,7 @@ public class ModSounds {
 
     // Shop
     public static final SoundEvent SHOP_MUSIC = registerSoundEvent("shop_music");
+    public static final SoundEvent GLITTER_MUSIC_DISC = registerSoundEvent("glitter_music_disc");
 
     // Cultist
     public static final SoundEvent SHY_GUY_AMBIENT = registerSoundEvent("shy_guy_ambient");

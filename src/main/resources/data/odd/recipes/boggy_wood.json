@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["##","##"],
+  "key": { "#": { "item": "odd:boggy_log" } },
+  "result": { "item": "odd:boggy_wood", "count": 3 }
+}

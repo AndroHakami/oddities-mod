@@ -1,0 +1,15 @@
+{
+  "targets": [ "zb_charge" ],
+  "passes": [
+    {
+      "name": "odd:zero_blast_charge",
+      "intarget": "minecraft:main",
+      "outtarget": "zb_charge"
+    },
+    {
+      "name": "blit",
+      "intarget": "zb_charge",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -2,14 +2,16 @@ package net.seep.odd.expeditions.rottenroots;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import net.minecraft.command.CommandRegistryAccess;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.Heightmap;
+import net.minecraft.world.World;
 import net.seep.odd.expeditions.Expeditions;
 import net.seep.odd.expeditions.portal.ExpeditionPortalEntity;
 
@@ -32,14 +34,32 @@ public final class RottenRootsCommands {
                 .then(CommandManager.literal("tp")
                         .executes(ctx -> tpToDimension(ctx.getSource()))
                 )
+
+                // /rottenroots return
+                .then(CommandManager.literal("return")
+                        .executes(ctx -> returnToOverworld(ctx.getSource()))
+                )
+
+                // /rottenroots overworld
+                .then(CommandManager.literal("overworld")
+                        .executes(ctx -> returnToOverworld(ctx.getSource()))
+                )
         );
     }
 
     private static int tpToDimension(ServerCommandSource src) {
         ServerPlayerEntity p = src.getPlayer();
-        if (p == null) { src.sendError(Text.literal("Player-only command.")); return 0; }
+        if (p == null) {
+            src.sendError(Text.literal("Player-only command."));
+            return 0;
+        }
 
         MinecraftServer server = p.getServer();
+        if (server == null) {
+            src.sendError(Text.literal("Server unavailable."));
+            return 0;
+        }
+
         ServerWorld dst = server.getWorld(Expeditions.ROTTEN_ROOTS_WORLD);
         if (dst == null) {
             src.sendError(Text.literal("Rotten Roots world is not loaded / missing JSON."));
@@ -52,9 +72,45 @@ public final class RottenRootsCommands {
         return 1;
     }
 
+    private static int returnToOverworld(ServerCommandSource src) {
+        ServerPlayerEntity p = src.getPlayer();
+        if (p == null) {
+            src.sendError(Text.literal("Player-only command."));
+            return 0;
+        }
+
+        MinecraftServer server = p.getServer();
+        if (server == null) {
+            src.sendError(Text.literal("Server unavailable."));
+            return 0;
+        }
+
+        ServerWorld overworld = server.getWorld(World.OVERWORLD);
+        if (overworld == null) {
+            src.sendError(Text.literal("Overworld is not loaded."));
+            return 0;
+        }
+
+        BlockPos spawn = overworld.getSpawnPos();
+        int x = spawn.getX();
+        int z = spawn.getZ();
+
+        int y = Math.max(
+                spawn.getY(),
+                overworld.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z)
+        );
+
+        p.teleport(overworld, x + 0.5, y + 0.1, z + 0.5, p.getYaw(), p.getPitch());
+        src.sendFeedback(() -> Text.literal("Returned to the Overworld."), true);
+        return 1;
+    }
+
     private static int spawnPortal(ServerCommandSource src, int seconds) {
         ServerPlayerEntity p = src.getPlayer();
-        if (p == null) { src.sendError(Text.literal("Player-only command.")); return 0; }
+        if (p == null) {
+            src.sendError(Text.literal("Player-only command."));
+            return 0;
+        }
 
         var world = p.getWorld();
         Vec3d eye = p.getEyePos();
@@ -63,7 +119,6 @@ public final class RottenRootsCommands {
 
         ExpeditionPortalEntity portal = new ExpeditionPortalEntity(ExpeditionPortalEntity.TYPE, world);
         portal.setPosition(pos.x, pos.y, pos.z);
-
 
         if (world.spawnEntity(portal)) {
             src.sendFeedback(() -> Text.literal("Spawned portal for " + seconds + "s."), true);

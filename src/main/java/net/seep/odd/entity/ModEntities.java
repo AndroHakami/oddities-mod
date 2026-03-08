@@ -38,10 +38,17 @@ import net.seep.odd.entity.cultist.CentipedeEntity;
 import net.seep.odd.entity.cultist.ShyGuyEntity;
 import net.seep.odd.entity.cultist.SightseerEntity;
 import net.seep.odd.entity.cultist.WeepingAngelEntity;
+import net.seep.odd.entity.eggasaur.EggasaurEntity;
 import net.seep.odd.entity.firefly.FireflyEntity;
+import net.seep.odd.entity.flyingwitch.FlyingWitchEntity;
+import net.seep.odd.entity.flyingwitch.HexProjectileEntity;
 import net.seep.odd.entity.misty.MistyBubbleEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
+import net.seep.odd.entity.rotten_roots.ElderShroomEntity;
+import net.seep.odd.entity.rotten_roots.ShroomEntity;
+import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileEntity;
 import net.seep.odd.entity.seal.SealEntity;
+import net.seep.odd.entity.skitter.SkitterEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
@@ -52,6 +59,9 @@ import net.seep.odd.entity.spotted.PhantomBuddyEntity;
 import net.seep.odd.abilities.fallingsnow.HealingSnowballEntity;
 import net.seep.odd.abilities.fallingsnow.BigSnowballEntity;
 
+import net.seep.odd.entity.whiskers.WhiskersEntity;
+import net.seep.odd.entity.windwitch.TornadoProjectileEntity;
+import net.seep.odd.entity.windwitch.WindWitchEntity;
 import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 
 // ===== NEW: Necromancer corpses =====
@@ -61,6 +71,8 @@ import net.seep.odd.entity.necromancer.SkeletonCorpseEntity;
 // ===== NEW: Sniper grapple =====
 import net.seep.odd.abilities.sniper.entity.SniperGrappleAnchorEntity;
 import net.seep.odd.abilities.sniper.entity.SniperGrappleShotEntity;
+import net.seep.odd.expeditions.rottenroots.boggy.BoggyBoatEntity;
+import net.seep.odd.expeditions.rottenroots.boggy.BoggyChestBoatEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -149,6 +161,17 @@ public final class ModEntities {
     // Ice Statue
     public static final Identifier ICE_STATUE_ID = new Identifier(Oddities.MOD_ID, "ice_statue");
 
+    // Rotten Roots
+    // Rotten Roots: Shrooms
+    public static final Identifier SHROOM_ID       = new Identifier(Oddities.MOD_ID, "shroom");
+    public static final Identifier ELDER_SHROOM_ID = new Identifier(Oddities.MOD_ID, "elder_shroom");
+    public static final Identifier SKITTER_ID = new Identifier(Oddities.MOD_ID, "skitter");
+    public static final Identifier WHISKERS_ID = new Identifier(Oddities.MOD_ID, "whiskers");
+    public static final Identifier SPORE_MUSHROOM_PROJECTILE_ID = new Identifier(Oddities.MOD_ID, "spore_mushroom_projectile");
+    public static final Identifier WIND_WITCH_ID = new Identifier(Oddities.MOD_ID, "wind_witch");
+    public static final Identifier TORNADO_PROJECTILE_ID = new Identifier(Oddities.MOD_ID, "tornado_projectile");
+
+
 
 
 
@@ -156,8 +179,112 @@ public final class ModEntities {
     /* =========================================================
        EntityType registration — “static final” style
        ========================================================= */
+
     // ADD TO ModEntities
+    public static final EntityType<WindWitchEntity> WIND_WITCH = Registry.register(
+            Registries.ENTITY_TYPE,
+            WIND_WITCH_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, WindWitchEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.9f, 2.55f))
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+
+    public static final EntityType<TornadoProjectileEntity> TORNADO_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            TORNADO_PROJECTILE_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, TornadoProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.4f, 3.0f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<FlyingWitchEntity> FLYING_WITCH = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "flying_witch"),
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, FlyingWitchEntity::new)
+                    .dimensions(EntityDimensions.fixed(1f, 1.7f))
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    public static final EntityType<HexProjectileEntity> HEX_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "hex_projectile"),
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, HexProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.50f, 0.50f))
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    public static final EntityType<EggasaurEntity> EGGASAUR = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "eggasaur"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, EggasaurEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.7f, 0.8f))
+                    .trackRangeBlocks(8)
+                    .build()
+    );
+    public static final EntityType<WhiskersEntity> WHISKERS = Registry.register(
+            Registries.ENTITY_TYPE,
+            WHISKERS_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, WhiskersEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 0.7f))
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
+    public static final EntityType<SkitterEntity> SKITTER = Registry.register(
+            Registries.ENTITY_TYPE,
+            SKITTER_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, SkitterEntity::new)
+                    .dimensions(EntityDimensions.fixed(1f, 2f)) // roughly “bug/spider-ish”
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
+    public static final EntityType<ShroomEntity> SHROOM = Registry.register(
+            Registries.ENTITY_TYPE,
+            SHROOM_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.CREATURE,
+                            (EntityType<ShroomEntity> type, World world) -> new ShroomEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.65f, 1f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    public static final EntityType<SporeMushroomProjectileEntity> SPORE_MUSHROOM_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            SPORE_MUSHROOM_PROJECTILE_ID,
+            FabricEntityTypeBuilder.<SporeMushroomProjectileEntity>create(
+                            SpawnGroup.MISC,
+                            (EntityType<SporeMushroomProjectileEntity> t, World w) -> new SporeMushroomProjectileEntity(t, w)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.25f, 0.25f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(10)
+                    .build()
+    );
+
+    // Rotten Roots: Elder Shroom (merchant)
+    public static final EntityType<ElderShroomEntity> ELDER_SHROOM = Registry.register(
+            Registries.ENTITY_TYPE,
+            ELDER_SHROOM_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.CREATURE,
+                            (EntityType<ElderShroomEntity> type, World world) -> new ElderShroomEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(1f, 1.35f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
 // Ice Statue entity type
+
     public static final EntityType<IceStatueEntity> ICE_STATUE = Registry.register(
             Registries.ENTITY_TYPE,
             ICE_STATUE_ID,
@@ -470,11 +597,11 @@ public final class ModEntities {
     public static final EntityType<ZeroSuitMissileEntity> ZERO_SUIT_MISSILE = Registry.register(
             Registries.ENTITY_TYPE,
             ZERO_SUIT_MISSILE_ID,
-            FabricEntityTypeBuilder.<ZeroSuitMissileEntity>create(SpawnGroup.MONSTER, ZeroSuitMissileEntity::new)
-                    .dimensions(EntityDimensions.fixed(1.1f, 0.25f))
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, ZeroSuitMissileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.5f, 0.5f))
                     .trackRangeBlocks(200)
-                    .trackedUpdateRate(1)
-                    .forceTrackedVelocityUpdates(true)
+                    .trackedUpdateRate(1)                 // ✅ send updates every tick (smooth)
+                    .forceTrackedVelocityUpdates(true)    // ✅ helps keep motion consistent
                     .build()
     );
 
@@ -833,6 +960,14 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(BOOKLET, BookletEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(CAPYBARA_FAMILIAR, CapybaraFamiliarEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(ICE_STATUE, IceStatueEntity.createAttributes());
+        // Rotten Roots: Shrooms
+        FabricDefaultAttributeRegistry.register(SHROOM, ShroomEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(ELDER_SHROOM, ElderShroomEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(SKITTER, SkitterEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(WHISKERS, WhiskersEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(ModEntities.EGGASAUR, EggasaurEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(FLYING_WITCH, FlyingWitchEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(WIND_WITCH, WindWitchEntity.createAttributes());
 
 
 

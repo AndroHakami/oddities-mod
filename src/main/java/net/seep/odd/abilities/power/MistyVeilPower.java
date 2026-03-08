@@ -1,16 +1,20 @@
+// FILE: src/main/java/net/seep/odd/abilities/power/MistyVeilPower.java
 package net.seep.odd.abilities.power;
 
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.projectile.PersistentProjectileEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.entity.mob.Angerable;
+import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.EntityHitResult;
@@ -18,27 +22,35 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.abilities.net.MistyNet; // ✅ hover overlay sync
+import net.seep.odd.status.ModStatusEffects;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.UUID;
 
 public final class MistyVeilPower implements Power {
     @Override public String id() { return "misty_veil"; }
 
-    @Override public boolean hasSlot(String slot) {
+    @Override
+    public boolean hasSlot(String slot) {
         return "primary".equals(slot) || "secondary".equals(slot);
     }
 
-    // Primary is toggle (no cooldown). Secondary keeps 30s CD.
     @Override public long cooldownTicks()          { return 0; }
-    @Override public long secondaryCooldownTicks() { return 30L * 20L; }
+    @Override public long secondaryCooldownTicks() { return 10L * 20L; }
+
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
-            case "primary"   -> new Identifier("odd", "textures/gui/abilities/mist_steps.png");
-            case "secondary" -> new Identifier("odd", "textures/gui/abilities/mist_bubble.png"); // set this texture
+            case "primary"   -> new Identifier("odd", "textures/gui/abilities/misty_steps.png");
+            case "secondary" -> new Identifier("odd", "textures/gui/abilities/misty_bubble.png");
             default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
+
     @Override public String slotTitle(String slot) {
         return switch (slot) {
             case "primary" -> "RAINY STEPS";
@@ -46,151 +58,368 @@ public final class MistyVeilPower implements Power {
             default -> Power.super.slotTitle(slot);
         };
     }
+
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary" -> "Condense a mist to glide through the air by holding space mid-air [Press abiltiy button to toggle ON/OFF]";
-            case "secondary" -> "Condense a swifty and regenerative bubble on an ally, protecting them from the dangerous prey for 20 seconds";
-            case "overview" -> "Mist Veil passively protects you by hiding you from dangerous entities, glide with mist steps or protect someone else with your Mist bubble!";
-            default -> "Snow-caster brings ice-cold abilities to the fight: explosives and teleports at your fingertips.";
+            case "primary" -> "Condense a mist to glide through the air by holding space mid-air [Press ability button to toggle ON/OFF]";
+            case "secondary" -> "Condense a swifty and regenerative bubble on an ally, protecting them from dangerous prey for 20 seconds.";
+            case "overview" -> "Mist Veil hides you from hostile entities. Glide with Mist Steps or protect someone with your Mist Bubble!";
+            default -> "Misty Veil";
         };
     }
+
     @Override
     public String longDescription() {
         return """
-           Mist Veil passively protects you by hiding you from dangerous entities.
-           Glide with mist steps or protect someone else with your Mist bubble!
+           Mist Veil hides you from hostile entities (as a status effect).
+           Glide with mist steps or protect someone else with your Mist Bubble!
            """;
     }
 
     /* ===================== FEEL CONFIG ===================== */
-    // Vertical-only “low-grav” (momentum-preserving)
-    private static final double BASE_FALL_MULT      = 0.92;   // subtle when not hovering
-    private static final double HOVER_FALL_MULT     = 0.50;   // stronger low-grav while hovering
-    private static final double HOVER_GLIDE_MIN_VY  = -0.02;  // don't fall faster than this when hovering
-    private static final double DOWNWARD_THRESH     = -0.08;  // only modify when clearly falling
 
-    // Hover horizontal flow (keys-based): accelerate + steer toward WASD intent, capped
-    private static final double HOVER_XZ_ACCEL      = 0.030;  // per-tick speed gain
-    private static final double HOVER_XZ_MAX_SPEED  = 1.00;   // max horizontal speed while hovering
-    private static final double HOVER_XZ_STEER      = 0.12;   // turn rate toward intent [0..1]
+    private static final double BASE_FALL_MULT      = 0.92;
+    private static final double HOVER_FALL_MULT     = 0.50;
+    private static final double HOVER_GLIDE_MIN_VY  = -0.02;
+    private static final double DOWNWARD_THRESH     = -0.08;
 
-    // Slight constant speed so it doesn't feel sluggish overall
-    private static final int    ALWAYS_SPEED_AMPL   = 0;      // Speed I
-    private static final int    ALWAYS_SPEED_T      = 12;     // refresh cadence (ticks)
+    private static final double HOVER_XZ_ACCEL      = 0.030;
+    private static final double HOVER_XZ_MAX_SPEED  = 1.00;
+    private static final double HOVER_XZ_STEER      = 0.12;
 
-    // Aggro masking
-    private static final int    PASSIVE_CLEAR_RAD   = 48;
-    private static final int    AGGRESSIVE_TAG_T    = 60;     // 3s after you attack
+    private static final int    ALWAYS_SPEED_AMPL   = 0;
+    private static final int    ALWAYS_SPEED_T      = 12;
 
-    // Bubble secondary
     private static final int    BUBBLE_TIME         = 20 * 20;
-    private static final int    BUBBLE_REGEN_LVL    = 0;      // Regeneration I
+    private static final int    BUBBLE_REGEN_LVL    = 0;
 
-    // Client -> server input bits
-    public static final int MASK_JUMP_HELD    = 1; // jump currently held
-    public static final int MASK_JUMP_PRESSED = 2; // jump edge this tick
+    public static final int MASK_JUMP_HELD    = 1;
+    public static final int MASK_JUMP_PRESSED = 2;
 
-    // Sensitivity gates (less trigger-happy midair)
-    private static final int HELD_FRESH_WINDOW_T        = 6; // ticks to consider "held" fresh
-    private static final int PRESSED_FRESH_WINDOW_T     = 2; // ticks to consider "pressed" fresh
-    private static final int MIN_AIR_TICKS_FOR_HOLD_ARM = 6; // must be this long in air before hold can arm
-    private static final int MIN_TICKS_AFTER_AIR_FOR_PRESS_ARM = 3; // press must be this long after takeoff
+    private static final int HELD_FRESH_WINDOW_T        = 6;
+    private static final int PRESSED_FRESH_WINDOW_T     = 2;
+    private static final int MIN_AIR_TICKS_FOR_HOLD_ARM = 6;
+    private static final int MIN_TICKS_AFTER_AIR_FOR_PRESS_ARM = 3;
 
-    // Close-quarters suppress + arrow nullify
-    private static final double CLOSE_SUPPRESS_RANGE = 2.5;  // meters
-    private static final double ARROW_RADIUS         = 3.5;
-    private static final double ARROW_DOT_MIN        = 0.7;  // arrow roughly flying toward player
+    /* ===================== POWERLESS override helpers ===================== */
+
+    private static final Map<UUID, Long> WARN_UNTIL = new HashMap<>();
+
+    public static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnPowerlessOncePerSec(ServerPlayerEntity p) {
+        if (p == null) return;
+        long now = p.getWorld().getTime();
+        long next = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < next) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(net.minecraft.text.Text.literal("§cYou are powerless."), true);
+    }
 
     /* ===================== STATE ===================== */
+
     private static final class State {
         int  lastInputMask = 0;
-        int  lastInputAt   = 0;       // world time of last C2S input
+        int  lastInputAt   = 0;
         int  tickCounter   = 0;
 
-        // movement intent from client (local player-space: strafe X, forward Z)
-        float intentX = 0f;           // [-1..1] A/D
-        float intentZ = 0f;           // [-1..1] S/W
-        int   intentAt = 0;           // time intent was last updated
+        float intentX = 0f;
+        float intentZ = 0f;
+        int   intentAt = 0;
 
-        // stealth window
-        boolean flaggedAggressive = false;
-        int     aggressiveTicksLeft = 0;
-
-        // hover on/off (primary toggles this)
         boolean hoverEnabled = true;
 
-        // hover gating (midair-arm)
-        boolean wasOnGround   = true; // previous tick
-        int     airTicks      = 0;    // ticks since leaving ground
-        int     leftGroundAt  = -1;   // world time we left ground
+        boolean wasOnGround   = true;
+        int     airTicks      = 0;
+        int     leftGroundAt  = -1;
         boolean heldAtTakeoff = false;
-        boolean hoverActive   = false; // currently hovering (requires jump held)
+        boolean hoverActive   = false;
+
+        boolean lastSentEnabled = false;
+        boolean lastSentActive  = false;
+        int     lastSentAt      = -999999;
     }
+
     private static final Map<UUID, State> STATES = new HashMap<>();
     private static State S(ServerPlayerEntity p) { return STATES.computeIfAbsent(p.getUuid(), u -> new State()); }
 
-    // Secondary: bubbled targets with remaining ticks
-    private static final Map<UUID, Integer> BUBBLED = new HashMap<>();
+    private static void syncHoverOverlay(ServerPlayerEntity p, State st, boolean enabled, boolean active) {
+        int now = (int) p.getWorld().getTime();
+        boolean changed = (enabled != st.lastSentEnabled) || (active != st.lastSentActive);
+        boolean stale   = (now - st.lastSentAt) >= 20;
+        if (!changed && !stale) return;
 
-    /* ===================== PASSIVE HOOK ===================== */
+        st.lastSentEnabled = enabled;
+        st.lastSentActive  = active;
+        st.lastSentAt      = now;
+
+        MistyNet.sendHoverState(p, enabled, active);
+    }
+
+    /* ===================== BUBBLE AGGRO FIX (amp=1) ===================== */
+
+    private static final class BubbleAggro {
+        boolean wasBubble = false;          // last tick bubble state
+        int lastScanAt = -999999;           // tick throttling
+        final HashSet<UUID> mobs = new HashSet<>();
+    }
+
+    private static final Map<UUID, BubbleAggro> BUBBLE = new HashMap<>();
+    private static final int AGGRO_SCAN_PERIOD = 10;     // every 0.5s
+    private static final double AGGRO_SCAN_R = 24.0;     // radius to remember attackers
+    private static final double RESTORE_MAX_R = 40.0;    // only restore if still nearby-ish
+
+    private static boolean hasBubbleVeil(ServerPlayerEntity p) {
+        var mv = p.getStatusEffect(ModStatusEffects.MIST_VEIL);
+        return mv != null && mv.getAmplifier() == 1;
+    }
+
+    private static void rememberCurrentAggressors(ServerWorld sw, ServerPlayerEntity protectedPlayer) {
+        BubbleAggro st = BUBBLE.computeIfAbsent(protectedPlayer.getUuid(), u -> new BubbleAggro());
+        st.wasBubble = true;
+        st.lastScanAt = (int) sw.getTime();
+
+        Box box = protectedPlayer.getBoundingBox().expand(AGGRO_SCAN_R);
+        for (MobEntity mob : sw.getEntitiesByClass(MobEntity.class, box, m -> m != null && m.isAlive())) {
+            if (mob.getTarget() == protectedPlayer) {
+                st.mobs.add(mob.getUuid());
+            }
+        }
+    }
+
+    private static void rememberAggressorFromAttack(ServerPlayerEntity protectedPlayer, LivingEntity target) {
+        if (!(target instanceof MobEntity mob)) return;
+        BubbleAggro st = BUBBLE.computeIfAbsent(protectedPlayer.getUuid(), u -> new BubbleAggro());
+        st.mobs.add(mob.getUuid());
+    }
+
+    private static void restoreAggroOnce(ServerWorld sw, ServerPlayerEntity p, BubbleAggro st) {
+        if (st == null || st.mobs.isEmpty()) return;
+        if (!p.isAlive() || p.isSpectator() || p.isCreative()) return;
+
+        double maxD2 = RESTORE_MAX_R * RESTORE_MAX_R;
+
+        for (UUID id : st.mobs) {
+            Entity e = sw.getEntity(id);
+            if (!(e instanceof MobEntity mob) || !mob.isAlive()) continue;
+
+            if (mob.squaredDistanceTo(p) > maxD2) continue;
+
+            // If it already has a target, don't overwrite unless it was us
+            if (mob.getTarget() != null && mob.getTarget() != p) continue;
+
+            mob.setTarget(p);
+            mob.setAttacker(p);
+
+            if (mob instanceof Angerable ang) {
+                ang.setAngryAt(p.getUuid());
+                ang.chooseRandomAngerTime();
+            }
+        }
+    }
+
+    private static void bubbleAggroServerTick(MinecraftServer server) {
+        var players = server.getPlayerManager().getPlayerList();
+        HashSet<UUID> live = new HashSet<>();
+        for (ServerPlayerEntity p : players) {
+            live.add(p.getUuid());
+
+            boolean bubble = hasBubbleVeil(p);
+            BubbleAggro st = BUBBLE.get(p.getUuid());
+            boolean was = st != null && st.wasBubble;
+
+            // while bubble is active, keep remembering mobs targeting them (covers “was targeting before bubble” cases)
+            if (bubble && p.getWorld() instanceof ServerWorld sw) {
+                if (st == null) st = new BubbleAggro();
+                int now = (int) sw.getTime();
+                if (now - st.lastScanAt >= AGGRO_SCAN_PERIOD) {
+                    st.lastScanAt = now;
+                    Box box = p.getBoundingBox().expand(AGGRO_SCAN_R);
+                    for (MobEntity mob : sw.getEntitiesByClass(MobEntity.class, box, m -> m != null && m.isAlive())) {
+                        if (mob.getTarget() == p) st.mobs.add(mob.getUuid());
+                    }
+                }
+                st.wasBubble = true;
+                BUBBLE.put(p.getUuid(), st);
+                continue;
+            }
+
+            // bubble ended this tick -> restore aggro once
+            if (was && !bubble && p.getWorld() instanceof ServerWorld sw) {
+                restoreAggroOnce(sw, p, st);
+                st.mobs.clear();
+                st.wasBubble = false;
+            }
+
+            // cleanup
+            if (!bubble && st != null && !st.wasBubble && st.mobs.isEmpty()) {
+                BUBBLE.remove(p.getUuid());
+            }
+        }
+
+        // drop offline entries
+        Iterator<UUID> it = BUBBLE.keySet().iterator();
+        while (it.hasNext()) {
+            UUID id = it.next();
+            if (!live.contains(id)) it.remove();
+        }
+    }
+
+    /* ===================== hooks ===================== */
     static {
+        // ✅ Global server tick for bubble-aggro fix (covers bubbled allies too)
+        ServerTickEvents.END_SERVER_TICK.register(MistyVeilPower::bubbleAggroServerTick);
+
         AttackEntityCallback.EVENT.register((player, world, hand, target, hit) -> {
+            if (world.isClient) return ActionResult.PASS;
             if (!(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
-            Power current = Powers.get(PowerAPI.get(sp));
-            if (!(current instanceof MistyVeilPower)) return ActionResult.PASS;
-            State st = S(sp);
-            st.flaggedAggressive = true;
-            st.aggressiveTicksLeft = AGGRESSIVE_TAG_T;
+            if (!(target instanceof LivingEntity leTarget)) return ActionResult.PASS;
+
+            // If they have Mist Veil (amp 0 = normal/self), break it for 10s.
+            var mv = sp.getStatusEffect(ModStatusEffects.MIST_VEIL);
+            if (mv != null && mv.getAmplifier() == 0) {
+                sp.removeStatusEffect(ModStatusEffects.MIST_VEIL);
+                sp.addStatusEffect(new StatusEffectInstance(
+                        ModStatusEffects.MIST_VEIL_BROKEN,
+                        20 * 10,
+                        0,
+                        true,
+                        false,
+                        false
+                ));
+            }
+
+            // ✅ If they are bubbled (amp 1), remember what they hit so it can aggro after bubble ends
+            if (mv != null && mv.getAmplifier() == 1) {
+                rememberAggressorFromAttack(sp, leTarget);
+            }
+
             return ActionResult.PASS;
         });
     }
 
+    @Override
+    public void onAssigned(ServerPlayerEntity player) {
+        State st = S(player);
+        st.hoverActive = false;
+        st.wasOnGround = true;
+        syncHoverOverlay(player, st, st.hoverEnabled, false);
+    }
+
     /* ===================== PRIMARY (TOGGLE HOVER) ===================== */
+
     @Override
     public void activate(ServerPlayerEntity player) {
+        if (isPowerless(player)) {
+            warnPowerlessOncePerSec(player);
+            return;
+        }
+
         State st = S(player);
         st.hoverEnabled = !st.hoverEnabled;
-        st.hoverActive = false; // reset midair state immediately
-        player.sendMessage(Text.literal(st.hoverEnabled ? "Misty Hover: ON" : "Misty Hover: OFF"), true); // actionbar
+        st.hoverActive = false;
+
+        if (player.getWorld() instanceof ServerWorld sw) {
+            if (st.hoverEnabled) {
+                sw.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.BLOCK_AMETHYST_BLOCK_CHIME, SoundCategory.PLAYERS, 0.65f, 1.45f);
+            } else {
+                sw.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.BLOCK_BUBBLE_COLUMN_WHIRLPOOL_INSIDE, SoundCategory.PLAYERS, 0.55f, 0.75f);
+            }
+        }
+
+        syncHoverOverlay(player, st, st.hoverEnabled, false);
     }
 
     /* ===================== SECONDARY (bubble target) ===================== */
+
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
-        Entity target = raycastTarget(player, 20.0);
-        if (!(target instanceof LivingEntity le)) return;
+        if (isPowerless(player)) {
+            warnPowerlessOncePerSec(player);
+            return;
+        }
 
-        BUBBLED.put(le.getUuid(), BUBBLE_TIME);
+        Entity t = raycastTarget(player, 24.0);
+
+        if (!(t instanceof LivingEntity le) || le == player) {
+            if (player.getWorld() instanceof ServerWorld sw) {
+                sw.playSound(null, player.getX(), player.getY(), player.getZ(),
+                        SoundEvents.ENTITY_BOAT_PADDLE_WATER, SoundCategory.PLAYERS, 0.45f, 0.65f);
+            }
+            return;
+        }
 
         if (player.getWorld() instanceof ServerWorld sw) {
             var bubble = new net.seep.odd.entity.misty.MistyBubbleEntity(sw, le.getUuid(), BUBBLE_TIME);
             bubble.refreshPositionAndAngles(le.getX(), le.getY(), le.getZ(), 0, 0);
             sw.spawnEntity(bubble);
+
+            sw.playSound(null, le.getX(), le.getY(), le.getZ(),
+                    SoundEvents.BLOCK_BUBBLE_COLUMN_UPWARDS_AMBIENT,
+                    SoundCategory.PLAYERS, 0.9f, 1.15f);
+
+            sw.spawnParticles(ParticleTypes.SPLASH, le.getX(), le.getY() + 0.9, le.getZ(), 10, 0.35, 0.25, 0.35, 0.02);
+
+            // ✅ If bubbling a player, snapshot current aggressors immediately
+            if (le instanceof ServerPlayerEntity prot) {
+                rememberCurrentAggressors(sw, prot);
+            }
         }
 
-        le.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, BUBBLE_REGEN_LVL, true, true, true));
-        le.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 40, 0, true, true, true));
+        le.removeStatusEffect(ModStatusEffects.MIST_VEIL_BROKEN);
+        le.addStatusEffect(new StatusEffectInstance(ModStatusEffects.MIST_VEIL, BUBBLE_TIME, 1, true, false, true));
+        le.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, BUBBLE_TIME, BUBBLE_REGEN_LVL, true, true, true));
+        le.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED,        BUBBLE_TIME, 0,               true, true, true));
     }
 
-    /* ===================== SERVER TICK ===================== */
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        State st = STATES.get(player.getUuid());
+        if (st != null) st.hoverActive = false;
+
+        if (st != null) syncHoverOverlay(player, st, false, false);
+        else MistyNet.sendHoverState(player, false, false);
+
+        var mv = player.getStatusEffect(ModStatusEffects.MIST_VEIL);
+        if (mv != null && mv.getAmplifier() == 0) {
+            player.removeStatusEffect(ModStatusEffects.MIST_VEIL);
+        }
+    }
+
+    /* ===================== SERVER TICK (movement only for power owners) ===================== */
+
     public static void serverTick(ServerPlayerEntity p) {
         World w = p.getWorld();
         if (!(w instanceof ServerWorld sw)) return;
+
         if (!PowerAPI.has(p) || !(Powers.get(PowerAPI.get(p)) instanceof MistyVeilPower)) return;
 
         State st = S(p);
         int now = (int) sw.getTime();
         st.tickCounter++;
 
+        if (isPowerless(p)) {
+            st.hoverActive = false;
+            syncHoverOverlay(p, st, false, false);
+
+            var mv = p.getStatusEffect(ModStatusEffects.MIST_VEIL);
+            if (mv != null && mv.getAmplifier() == 0) p.removeStatusEffect(ModStatusEffects.MIST_VEIL);
+
+            st.wasOnGround = p.isOnGround();
+            return;
+        }
+
         boolean onGround = p.isOnGround();
 
-        // --- input ---
-        boolean jumpHeld      = (st.lastInputMask & MASK_JUMP_HELD)    != 0 && (now - st.lastInputAt) <= HELD_FRESH_WINDOW_T;
-        boolean jumpPressed   = (st.lastInputMask & MASK_JUMP_PRESSED) != 0 && (now - st.lastInputAt) <= PRESSED_FRESH_WINDOW_T;
-        boolean intentFresh   = (now - st.intentAt) <= 8;
+        boolean jumpHeld    = (st.lastInputMask & MASK_JUMP_HELD)    != 0 && (now - st.lastInputAt) <= HELD_FRESH_WINDOW_T;
+        boolean jumpPressed = (st.lastInputMask & MASK_JUMP_PRESSED) != 0 && (now - st.lastInputAt) <= PRESSED_FRESH_WINDOW_T;
+        boolean intentFresh = (now - st.intentAt) <= 8;
 
-        // --- track air state ---
         if (onGround) {
             st.airTicks = 0;
             st.leftGroundAt = -1;
@@ -200,57 +429,58 @@ public final class MistyVeilPower implements Power {
                 st.airTicks = 1;
                 st.leftGroundAt = now;
                 st.heldAtTakeoff = jumpHeld;
-                st.hoverActive = false; // must arm in-air
+                st.hoverActive = false;
             } else {
                 st.airTicks++;
             }
         }
 
-        // --- midair-only hover arming (if enabled) ---
         if (st.hoverEnabled && !onGround) {
             boolean pressMidair = jumpPressed && st.leftGroundAt >= 0 && st.lastInputAt >= (st.leftGroundAt + MIN_TICKS_AFTER_AIR_FOR_PRESS_ARM);
             boolean holdMidair  = jumpHeld && !st.heldAtTakeoff && st.airTicks >= MIN_AIR_TICKS_FOR_HOLD_ARM;
 
             if (!st.hoverActive && (pressMidair || holdMidair)) st.hoverActive = true;
-            if (st.hoverActive && !jumpHeld) st.hoverActive = false; // release when you let go
+            if (st.hoverActive && !jumpHeld) st.hoverActive = false;
         } else {
             st.hoverActive = false;
         }
 
-        // ===== Movement: low-grav + keys-flow (only when enabled) =====
+        syncHoverOverlay(p, st, st.hoverEnabled, st.hoverActive);
+
+        if (!p.hasStatusEffect(ModStatusEffects.MIST_VEIL_BROKEN)) {
+            ensureMistVeil(p, 0);
+        } else {
+            var mv = p.getStatusEffect(ModStatusEffects.MIST_VEIL);
+            if (mv != null && mv.getAmplifier() == 0) p.removeStatusEffect(ModStatusEffects.MIST_VEIL);
+        }
+
         if (st.hoverEnabled && !onGround && !p.isClimbing() && !p.isTouchingWater() && !p.isInLava() && !p.isFallFlying()) {
             Vec3d v = p.getVelocity();
             boolean hover = st.hoverActive;
 
             double vx = v.x, vz = v.z, vy = v.y;
 
-            // Vertical — scale only downward motion (momentum-preserving)
             if (vy < DOWNWARD_THRESH) {
                 vy = vy * (hover ? HOVER_FALL_MULT : BASE_FALL_MULT);
             } else if (hover && vy < 0) {
-                vy = Math.max(vy, HOVER_GLIDE_MIN_VY); // soft glide floor
+                vy = Math.max(vy, HOVER_GLIDE_MIN_VY);
             }
 
-            // Horizontal — WASD intent (if fresh) while hovering
             if (hover && intentFresh && !p.horizontalCollision) {
-                // Local to world: forward/left on XZ from yaw
                 Vec3d look = p.getRotationVec(1.0f);
                 Vec3d fwd = new Vec3d(look.x, 0, look.z);
                 double flen = fwd.length();
                 if (flen < 1e-6) fwd = new Vec3d(0, 0, 1); else fwd = fwd.multiply(1.0 / flen);
                 Vec3d left = new Vec3d(-fwd.z, 0, fwd.x);
 
-                // Intent in world space (normalized)
                 Vec3d intent = left.multiply(st.intentX).add(fwd.multiply(st.intentZ));
                 double ilen = intent.length();
                 if (ilen > 1e-6) intent = intent.multiply(1.0 / ilen);
 
-                // Current horizontal
                 Vec3d vXZ = new Vec3d(vx, 0, vz);
                 double speed = vXZ.length();
                 Vec3d dir = speed > 1e-6 ? vXZ.multiply(1.0 / speed) : intent;
 
-                // Steer + speed gain up to cap
                 dir = dir.lerp(intent, HOVER_XZ_STEER);
                 double dlen = dir.length();
                 if (dlen > 1e-6) dir = dir.multiply(1.0 / dlen);
@@ -260,117 +490,52 @@ public final class MistyVeilPower implements Power {
                 vx = vXZnew.x; vz = vXZnew.z;
             }
 
-            // Apply
             if (vy != v.y || vx != v.x || vz != v.z) {
                 p.setVelocity(vx, vy, vz);
                 p.velocityModified = true;
                 p.fallDistance = 0;
             }
 
-            // Blue rain while hovering
             if (hover) {
                 for (int i = 0; i < 6; i++) {
                     double ox = (p.getRandom().nextDouble() - 0.5) * 0.7;
                     double oz = (p.getRandom().nextDouble() - 0.5) * 0.7;
                     double y  = p.getY() - 0.1 - p.getRandom().nextDouble() * 0.6;
                     sw.spawnParticles(ParticleTypes.DRIPPING_WATER, p.getX() + ox, y, p.getZ() + oz, 1, 0, 0, 0, 0.0);
-                    sw.spawnParticles(ParticleTypes.FALLING_WATER,  p.getX() + ox, y, p.getZ() + oz, 0, 0, 0, 0, 0.0);
                 }
             }
         }
 
-        // ===== Always-on slight speed =====
         if ((st.tickCounter % ALWAYS_SPEED_T) == 0) {
             p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, ALWAYS_SPEED_T + 2, ALWAYS_SPEED_AMPL, true, false, false));
-        }
-
-        // ===== Passive stealth unless recently aggressive =====
-        if (st.aggressiveTicksLeft > 0) {
-            st.aggressiveTicksLeft--;
-            if (st.aggressiveTicksLeft == 0) st.flaggedAggressive = false;
-        }
-        if (!st.flaggedAggressive) {
-            // Clear targets in a big radius
-            Box big = p.getBoundingBox().expand(PASSIVE_CLEAR_RAD);
-            for (HostileEntity mob : sw.getEntitiesByClass(HostileEntity.class, big, m -> m.isAlive())) {
-                if (mob.getTarget() == p) {
-                    mob.setTarget(null);
-                    mob.setAttacking(false);
-                }
-            }
-
-            // Close-quarters: fully suppress attacks (no nudging)
-            Box close = p.getBoundingBox().expand(CLOSE_SUPPRESS_RANGE);
-            for (HostileEntity mob : sw.getEntitiesByClass(HostileEntity.class, close, m -> m.isAlive())) {
-                mob.setAttacking(false);
-                if (mob.getNavigation() != null) mob.getNavigation().stop();
-                if (mob.getTarget() == p) mob.setTarget(null);
-
-                // wipe brain memories so they don't instantly re-acquire
-                var brain = mob.getBrain();
-                if (brain != null) {
-                    brain.forget(net.minecraft.entity.ai.brain.MemoryModuleType.ATTACK_TARGET);
-                    brain.forget(net.minecraft.entity.ai.brain.MemoryModuleType.ANGRY_AT);
-                    brain.forget(net.minecraft.entity.ai.brain.MemoryModuleType.HURT_BY);
-                }
-            }
-
-            // Nullify hostile arrows clearly flying toward the player
-            Box arrowBox = p.getBoundingBox().expand(ARROW_RADIUS);
-            for (PersistentProjectileEntity proj : sw.getEntitiesByClass(PersistentProjectileEntity.class, arrowBox, e -> e.isAlive())) {
-                Entity owner = proj.getOwner();
-                if (!(owner instanceof HostileEntity)) continue;
-
-                Vec3d toPlayer = p.getPos().add(0, p.getStandingEyeHeight() * 0.5, 0).subtract(proj.getPos());
-                Vec3d vel = proj.getVelocity();
-                double vlen = vel.length();
-                if (vlen <= 1e-6) continue;
-                double dot = vel.normalize().dotProduct(toPlayer.normalize());
-                if (dot >= ARROW_DOT_MIN) {
-                    proj.discard(); // poof
-                }
-            }
-        }
-
-        // ===== Secondary: tick bubbles =====
-        if (!BUBBLED.isEmpty()) {
-            List<UUID> toRemove = new ArrayList<>();
-            for (var e : BUBBLED.entrySet()) {
-                UUID id = e.getKey();
-                int left = e.getValue();
-                Entity ent = sw.getEntity(id);
-                if (!(ent instanceof LivingEntity le) || left <= 0) {
-                    toRemove.add(id); continue;
-                }
-                if ((left % 10) == 0) {
-                    le.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 12, BUBBLE_REGEN_LVL, true, true, true));
-                    le.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, 12, 1, true, true, true));
-                }
-                if (!(ent instanceof ServerPlayerEntity)) {
-                    Box b = ent.getBoundingBox().expand(32);
-                    for (HostileEntity mob : sw.getEntitiesByClass(HostileEntity.class, b, m -> true)) {
-                        if (mob.getTarget() == le) {
-                            mob.setTarget(null);
-                            mob.setAttacking(false);
-                        }
-                    }
-                }
-                e.setValue(left - 1);
-            }
-            for (UUID r : toRemove) BUBBLED.remove(r);
         }
 
         st.wasOnGround = onGround;
     }
 
+    private static void ensureMistVeil(ServerPlayerEntity p, int amp) {
+        var cur = p.getStatusEffect(ModStatusEffects.MIST_VEIL);
+        if (cur != null && cur.getAmplifier() > amp) return;
+
+        if (cur == null || cur.getAmplifier() != amp || cur.getDuration() < 25) {
+            p.addStatusEffect(new StatusEffectInstance(
+                    ModStatusEffects.MIST_VEIL,
+                    60,
+                    amp,
+                    true,
+                    false,
+                    false
+            ));
+        }
+    }
+
     /* ===================== INPUT (from client) ===================== */
-    // New: include movement intent (strafeX, forwardZ) in player-space, clamped [-1..1]
+
     public static void onClientInput(ServerPlayerEntity player, int mask, float strafe, float forward) {
         State st = S(player);
         st.lastInputMask = mask;
         st.lastInputAt   = (int) player.getWorld().getTime();
 
-        // clamp + normalize to length 1
         float ix = Math.max(-1f, Math.min(1f, strafe));
         float iz = Math.max(-1f, Math.min(1f, forward));
         float len = (float)Math.sqrt(ix*ix + iz*iz);
@@ -381,21 +546,22 @@ public final class MistyVeilPower implements Power {
         st.intentAt = st.lastInputAt;
     }
 
-    // Back-compat (mask-only packet)
     public static void onClientInput(ServerPlayerEntity player, int mask) {
         onClientInput(player, mask, 0f, 0f);
     }
 
-    /* ===================== Helpers ===================== */
+    /* ===================== target helper ===================== */
+
     private static Entity raycastTarget(ServerPlayerEntity p, double range) {
         Vec3d eye  = p.getCameraPosVec(1.0f);
         Vec3d look = p.getRotationVec(1.0f);
         Vec3d end  = eye.add(look.multiply(range));
-        Box box = p.getBoundingBox().stretch(look.multiply(range)).expand(1.0D);
+
+        Box box = p.getBoundingBox().stretch(look.multiply(range)).expand(2.0D);
 
         EntityHitResult hit = net.minecraft.entity.projectile.ProjectileUtil.raycast(
                 p, eye, end, box,
-                e -> e instanceof LivingEntity && e.isAlive() && !e.isSpectator() && e != p,
+                e -> e instanceof LivingEntity le && le.isAlive() && !e.isSpectator() && e != p,
                 range * range
         );
         return hit != null ? hit.getEntity() : null;

@@ -1,0 +1,1 @@
+{ "parent": "minecraft:block/door_top_right_open", "textures": { "bottom": "odd:block/boggy_door_bottom", "top": "odd:block/boggy_door_top" } }

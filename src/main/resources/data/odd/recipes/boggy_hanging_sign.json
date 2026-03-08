@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["# #","###","C C"],
+  "key": {
+    "#": { "item": "odd:stripped_boggy_log" },
+    "C": { "item": "minecraft:chain" }
+  },
+  "result": { "item": "odd:boggy_hanging_sign", "count": 6 }
+}

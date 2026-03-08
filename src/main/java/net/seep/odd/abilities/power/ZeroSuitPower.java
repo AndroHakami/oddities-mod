@@ -1,33 +1,19 @@
-// src/main/java/net/seep/odd/abilities/power/ZeroSuitPower.java
 package net.seep.odd.abilities.power;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.BufferBuilder;
-import net.minecraft.client.render.GameRenderer;
-import net.minecraft.client.render.Tessellator;
-import net.minecraft.client.render.VertexFormat;
-import net.minecraft.client.render.VertexFormats;
-import net.minecraft.client.sound.MovingSoundInstance;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.damage.DamageType;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.PacketByteBuf;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -35,7 +21,6 @@ import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.explosion.Explosion;
@@ -48,13 +33,18 @@ import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.zerosuit.ZeroBeamEntity;
 import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.*;
 
 public final class ZeroSuitPower implements Power {
 
-    private static final int MISSILE_MAX_TICKS = 20 * 12;
+    /* ======================= PRIMARY: simple missile ======================= */
+    private static final int   MISSILE_COOLDOWN_T = 16;     // 0.8s
+    private static final float MISSILE_SPEED      = 1.65f;  // blocks/tick (fast)
+    private static final float MISSILE_VOL        = 1.0f;
 
+    /* ======================= SECONDARY: blast ======================= */
     private static final int   BLAST_CHARGE_MAX_T  = 20 * 8;
     private static final float BLAST_MAX_DAMAGE    = 3.0f;
     private static final int   BLAST_RANGE_BLOCKS  = 48;
@@ -73,145 +63,40 @@ public final class ZeroSuitPower implements Power {
     private static final double SELF_RECOIL_BASE    = 0.18;
     private static final double SELF_RECOIL_MAX_ADD = 0.65;
 
-
-    // Beam victims: prevent fall damage (long enough to land)
+    /**
+     * ✅ Now used as: "how long after getting blasted you are immune to FALL damage"
+     * (instead of slow-falling / gravity changes)
+     */
     private static final int BEAM_NOFALL_TICKS = 20 * 12;
 
-    private static final int HUD_SYNC_EVERY = 2;
+    private static final int HUD_SYNC_EVERY   = 2;
 
-    // === Third ability (orbital pillar) ===
-    public static final Identifier S2C_ZERO_ORBITAL_STRIKE =
-            new Identifier(Oddities.MOD_ID, "zero_orbital_strike");
+    /* ======================= THIRD: jetpack ======================= */
+    private static final int JETPACK_FUEL_MAX          = 50;
+    private static final int JETPACK_DRAIN_PER_TICK    = 2;   // while holding space
+    private static final int JETPACK_RECHARGE_PER_TICK = 1;   // while not thrusting
+    private static final double JETPACK_IMPULSE        = 0.12; // velocity add per tick
+    private static final double JETPACK_MAX_SPEED      = 1.55; // clamp speed
+    private static final int JETPACK_HUD_SYNC_EVERY    = 2;
+    private static final int JETPACK_FLY_SOUND_EVERY   = 5;
 
-    // === Third ability (radiation charge) ===
-    public static final Identifier S2C_ZERO_RADIATION_BEGIN =
-            new Identifier(Oddities.MOD_ID, "zero_radiation_begin");
-    public static final Identifier S2C_ZERO_RADIATION_CANCEL =
-            new Identifier(Oddities.MOD_ID, "zero_radiation_cancel");
+    /* ========================= POWERLESS gating ========================= */
+    private static final Object2LongOpenHashMap<UUID> LAST_POWERLESS_MSG = new Object2LongOpenHashMap<>();
 
-    // How long the pillar shader stays alive
-    private static final int ORBITAL_FX_TICKS = 20 * 7;
-
-    // Radiation charge timeline
-    private static final int ORBITAL_CHARGE_TICKS = 20 * 20;   // 20 seconds
-    private static final float ORBITAL_MAX_RADIUS = 45.0f;     // blocks at 20s
-
-    private static final double ORBITAL_RAYCAST_RANGE = 20.0;
-    private static final double ORBITAL_BROADCAST_RANGE = 160.0;
-
-    // ===== NEW: Pillar damage zone (NO MIXINS) =====
-    private static final float  ORBITAL_PILLAR_DAMAGE_HP = 2.0f;       // 1 heart per tick (2 HP)
-    private static final double ORBITAL_PILLAR_HEIGHT    = 400.0;      // “height above it”
-    private static final double ORBITAL_PILLAR_RADIUS    = ORBITAL_MAX_RADIUS;
-
-    private static final RegistryKey<DamageType> ORBITAL_BEAM_DAMAGE =
-            RegistryKey.of(RegistryKeys.DAMAGE_TYPE, new Identifier(Oddities.MOD_ID, "orbital_beam"));
-
-
-    private static final class ActivePillar {
-        final net.minecraft.registry.RegistryKey<net.minecraft.world.World> dim;
-        final Vec3d pos;
-        final UUID owner;
-        int ticksLeft;
-
-        ActivePillar(net.minecraft.registry.RegistryKey<net.minecraft.world.World> dim, Vec3d pos, int ticksLeft, UUID owner) {
-            this.dim = dim;
-            this.pos = pos;
-            this.ticksLeft = ticksLeft;
-            this.owner = owner;
-        }
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
     }
 
-    private static final List<ActivePillar> ACTIVE_PILLARS = new ArrayList<>();
-    private static final Map<net.minecraft.registry.RegistryKey<net.minecraft.world.World>, Long> LAST_PILLAR_TICK = new HashMap<>();
+    private static boolean blockIfPowerless(ServerPlayerEntity p) {
+        if (!isPowerless(p)) return false;
 
-    private static void startPillarDamage(ServerWorld sw, Vec3d hit, ServerPlayerEntity owner) {
-        ACTIVE_PILLARS.add(new ActivePillar(sw.getRegistryKey(), hit, ORBITAL_FX_TICKS, owner.getUuid()));
-    }
-
-    /**
-     * Ticked from serverTick(...) but guarded to only run once per world tick.
-     * This does TRUE "per tick" drain (no mixins) by draining absorption + health directly.
-     * Creative + spectators are ignored.
-     */
-    private static void tickPillarDamage(ServerWorld sw) {
-        if (ACTIVE_PILLARS.isEmpty()) return;
-
-        var key = sw.getRegistryKey();
-        long now = sw.getTime();
-
-        Long last = LAST_PILLAR_TICK.put(key, now);
-        if (last != null && last == now) return;
-
-        // Iterate and tick only pillars in this world
-        for (Iterator<ActivePillar> it = ACTIVE_PILLARS.iterator(); it.hasNext(); ) {
-            ActivePillar ap = it.next();
-
-            if (ap.dim != key) continue;
-
-            ap.ticksLeft--;
-            if (ap.ticksLeft <= 0) {
-                it.remove();
-                continue;
-            }
-
-            double r = ORBITAL_PILLAR_RADIUS;
-            double r2 = r * r;
-
-            double y0 = ap.pos.y - 2.0;
-            double y1 = Math.min(ap.pos.y + ORBITAL_PILLAR_HEIGHT, sw.getTopY() + 64.0);
-
-            Box box = new Box(
-                    ap.pos.x - r, y0, ap.pos.z - r,
-                    ap.pos.x + r, y1, ap.pos.z + r
-            );
-
-            List<LivingEntity> victims = sw.getEntitiesByClass(LivingEntity.class, box, e -> {
-                if (!e.isAlive()) return false;
-                if (e instanceof PlayerEntity pe) {
-                    if (pe.isSpectator()) return false;
-                    if (pe.getAbilities().creativeMode) return false;
-                }
-                return true;
-            });
-
-            ServerPlayerEntity owner = sw.getServer().getPlayerManager().getPlayer(ap.owner);
-
-            for (LivingEntity e : victims) {
-                double dx = e.getX() - ap.pos.x;
-                double dz = e.getZ() - ap.pos.z;
-                if ((dx * dx + dz * dz) > r2) continue;
-
-                // "True per tick" without mixins: drain absorption first, then health
-                float dmg = ORBITAL_PILLAR_DAMAGE_HP;
-
-                float abs = e.getAbsorptionAmount();
-                float hp  = e.getHealth();
-
-                float total = abs + hp;
-
-                // If this tick would kill, do a real damage hit so death attribution is sane.
-                if (dmg >= total - 1e-4f) {
-                    if (owner != null) {
-                        e.damage(sw.getDamageSources().create(ORBITAL_BEAM_DAMAGE, owner), total + 1.0f);
-                    } else {
-                        e.damage(sw.getDamageSources().create(ORBITAL_BEAM_DAMAGE), total + 1.0f);
-                    }
-                    continue;
-                }
-
-
-                // Otherwise: manual drain
-                if (abs > 0f) {
-                    float use = Math.min(abs, dmg);
-                    e.setAbsorptionAmount(abs - use);
-                    dmg -= use;
-                }
-                if (dmg > 0f) {
-                    e.setHealth(hp - dmg);
-                }
-            }
+        long now = p.getServerWorld().getTime();
+        long last = LAST_POWERLESS_MSG.getOrDefault(p.getUuid(), Long.MIN_VALUE);
+        if (now - last >= 20) {
+            LAST_POWERLESS_MSG.put(p.getUuid(), now);
+            p.sendMessage(Text.literal("§cYou are powerless."), true);
         }
+        return true;
     }
 
     @Override public String id() { return "zero_suit"; }
@@ -221,8 +106,8 @@ public final class ZeroSuitPower implements Power {
         return "primary".equals(slot) || "secondary".equals(slot) || "third".equals(slot);
     }
 
-    @Override public long cooldownTicks() { return 0; }
-    @Override public long secondaryCooldownTicks() { return 0; }
+    @Override public long cooldownTicks() { return 20 * 4; }
+    @Override public long secondaryCooldownTicks() { return 20 * 15 ; }
     @Override public long thirdCooldownTicks() { return 0; }
 
     @Override
@@ -235,17 +120,17 @@ public final class ZeroSuitPower implements Power {
         };
     }
 
-    @Override public String longDescription() { return "Remote missile control + a chargeable piercing beam + annihilation."; }
+    @Override public String longDescription() { return "Simple missile + charge beam + jetpack toggle."; }
 
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Missile: Launch a controllable missile. Camera follows it. Left click detonates. (No pickup/grab.)";
+                    "Missile: Fire a simple missile projectile. No camera, no boost. Reduced damage.";
             case "secondary" ->
-                    "Blast: Hold to charge (up to 8s). HUD circle shows %. LMB to fire a piercing beam that primarily launches targets back.";
+                    "Blast: Hold to charge (up to 8s). HUD shows %. LMB to fire a piercing beam that launches targets.";
             case "third" ->
-                    "Orbital: Place an expanding radiation symbol for 20s (cancels on damage). At max radius, call down the pillar.";
+                    "Jetpack: Toggle on/off. While ON, holding SPACE burns fuel and bursts you in your movement direction.";
             default -> "";
         };
     }
@@ -255,26 +140,78 @@ public final class ZeroSuitPower implements Power {
         return new Identifier(Oddities.MOD_ID, "textures/gui/overview/zero_suit.png");
     }
 
-    private static final class St {
-        int missileId = -1;
-        int missileTicks = 0;
+    /* ======================= FALL DAMAGE CANCEL (blast victims) ======================= */
 
-        float targetYaw = 0f;
-        float targetPitch = 0f;
-        float targetRoll = 0f;
+    private static final Object2LongOpenHashMap<UUID> NOFALL_UNTIL_TICK = new Object2LongOpenHashMap<>();
+    private static boolean NOFALL_HOOK_INIT = false;
+
+    private static boolean isFallDamage(DamageSource src) {
+        if (src == null) return false;
+        try {
+            return src.isOf(DamageTypes.FALL);
+        } catch (Throwable ignored) {}
+        try {
+            return "fall".equals(src.getName());
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    private static void ensureNoFallHook() {
+        if (NOFALL_HOOK_INIT) return;
+        NOFALL_HOOK_INIT = true;
+
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
+            if (entity == null) return true;
+            if (!(entity.getWorld() instanceof ServerWorld sw)) return true;
+
+            if (!isFallDamage(source)) return true;
+
+            UUID id = entity.getUuid();
+            long until = NOFALL_UNTIL_TICK.getOrDefault(id, Long.MIN_VALUE);
+            if (until == Long.MIN_VALUE) return true;
+
+            long now = sw.getTime();
+            if (now <= until) {
+                entity.fallDistance = 0f; // extra safety
+                return false; // ✅ cancel fall damage
+            }
+
+            // expired -> cleanup
+            NOFALL_UNTIL_TICK.removeLong(id);
+            return true;
+        });
+    }
+
+    private static void grantNoFall(LivingEntity e, ServerWorld sw, int ticks) {
+        if (e == null || sw == null) return;
+        ensureNoFallHook();
+
+        long until = sw.getTime() + Math.max(1, ticks);
+        UUID id = e.getUuid();
+
+        long cur = NOFALL_UNTIL_TICK.getOrDefault(id, Long.MIN_VALUE);
+        if (until > cur) NOFALL_UNTIL_TICK.put(id, until);
+
+        e.fallDistance = 0f;
+    }
+
+    /* ======================= SERVER STATE ======================= */
+
+    private static final class St {
+        int missileCd = 0;
 
         boolean charging;
-        int     chargeTicks;
+        int chargeTicks;
         int lastHudCharge = -1;
         boolean lastHudActive = false;
 
-        // === Orbital charge state ===
-        boolean orbitalCharging = false;
-        int orbitalTicks = 0;
-        Vec3d orbitalHit = null;
+        boolean jetpackEnabled = false;
+        int jetpackFuel = JETPACK_FUEL_MAX;
 
-        // damage detection without events (tracks health+absorption)
-        float lastEffectiveHealth = -1f;
+        long lastJetpackThrustTick = Long.MIN_VALUE;
+        int lastJetpackHudFuel = -9999;
+        boolean lastJetpackHudEnabled = false;
+        boolean lastJetpackHudThrusting = false;
     }
 
     private static final Map<UUID, St> DATA = new Object2ObjectOpenHashMap<>();
@@ -285,113 +222,59 @@ public final class ZeroSuitPower implements Power {
         return pow instanceof ZeroSuitPower;
     }
 
-    private static ZeroSuitMissileEntity findMissile(ServerWorld w, int id) {
-        if (id == -1) return null;
-        Entity e = w.getEntityById(id);
-        return (e instanceof ZeroSuitMissileEntity zm && zm.isAlive()) ? zm : null;
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        if (player == null) return;
+        St st = S(player);
+        if (st.charging) stopCharge(player, st, false);
+        if (st.jetpackEnabled) {
+            st.jetpackEnabled = false;
+            ZeroSuitNet.sendJetpackHud(player, false, st.jetpackFuel, JETPACK_FUEL_MAX, false);
+        }
     }
 
-    private static void sendMissileBeginCompat(ServerPlayerEntity to, ZeroSuitMissileEntity missile) {
-        PacketByteBuf out = PacketByteBufs.create();
-        out.writeVarInt(missile.getId());
-        out.writeFloat(missile.getYaw());
-        out.writeFloat(missile.getPitch());
-        ServerPlayNetworking.send(to, ZeroSuitNet.S2C_MISSILE_BEGIN, out);
-    }
+    /* ======================= PRIMARY: simple missile ======================= */
 
-    private static void spawnMissile(ServerPlayerEntity p, St st) {
+    private static void fireMissile(ServerPlayerEntity p, St st) {
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
+
+        if (st.missileCd > 0) return;
+        st.missileCd = MISSILE_COOLDOWN_T;
 
         Vec3d eye = p.getEyePos();
         Vec3d look = p.getRotationVector().normalize();
-        Vec3d spawnPos = eye.add(look.multiply(1.8));
+        Vec3d spawnPos = eye.add(look.multiply(1.2));
 
         ZeroSuitMissileEntity missile = ModEntities.ZERO_SUIT_MISSILE.create(sw);
         if (missile == null) return;
 
         missile.refreshPositionAndAngles(spawnPos.x, spawnPos.y, spawnPos.z, p.getYaw(), p.getPitch());
         missile.setOwner(p);
-        missile.initFromOwner(p);
+        missile.initFromOwner(p, MISSILE_SPEED);
 
         sw.spawnEntity(missile);
 
-        st.missileId = missile.getId();
-        st.missileTicks = 0;
-
-        st.targetYaw = p.getYaw();
-        st.targetPitch = MathHelper.clamp(p.getPitch(), -80f, 80f);
-        st.targetRoll = 0f;
-
-        missile.serverSetRotation(st.targetYaw, st.targetPitch, st.targetRoll);
-        ZeroSuitNet.broadcastMissileSteer(missile, st.targetYaw, st.targetPitch, st.targetRoll);
-
-        sendMissileBeginCompat(p, missile);
-
         sw.playSound(null, p.getX(), p.getY(), p.getZ(),
-                SoundEvents.ENTITY_FIREWORK_ROCKET_LAUNCH, SoundCategory.PLAYERS, 0.7f, 1.2f);
-    }
-
-    private static void detonateMissile(ServerPlayerEntity p, St st) {
-        if (!(p.getWorld() instanceof ServerWorld sw)) return;
-
-        ZeroSuitMissileEntity missile = findMissile(sw, st.missileId);
-        st.missileId = -1;
-        st.missileTicks = 0;
-
-        if (missile != null) missile.detonate();
-        ZeroSuitNet.sendMissileEnd(p);
-    }
-
-    public static void onClientRequestedMissileDetonate(ServerPlayerEntity p) {
-        if (!isCurrent(p)) return;
-        St st = S(p);
-        if (st.missileId == -1) return;
-        detonateMissile(p, st);
-    }
-
-    public static void onClientRequestedMissileSteer(ServerPlayerEntity p, int entityId, float yaw, float pitch, float roll) {
-        if (!isCurrent(p)) return;
-        if (!(p.getWorld() instanceof ServerWorld sw)) return;
-
-        St st = S(p);
-        ZeroSuitMissileEntity missile = findMissile(sw, st.missileId);
-        if (missile == null) {
-            st.missileId = -1;
-            st.missileTicks = 0;
-            ZeroSuitNet.sendMissileEnd(p);
-            return;
-        }
-
-        if (missile.getId() != entityId) return;
-        if (missile.getOwner() != p) return;
-
-        st.targetYaw = yaw;
-        st.targetPitch = MathHelper.clamp(pitch, -80f, 80f);
-        st.targetRoll = MathHelper.clamp(roll, -55f, 55f);
-
-        missile.serverSetRotation(st.targetYaw, st.targetPitch, st.targetRoll);
-        ZeroSuitNet.broadcastMissileSteer(missile, st.targetYaw, st.targetPitch, st.targetRoll);
+                ModSounds.ROCKET_FIRE, SoundCategory.PLAYERS, MISSILE_VOL, 1.0f);
     }
 
     @Override
     public void activate(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
+        if (blockIfPowerless(p)) return;
+
         St st = S(p);
-
-        if (st.missileId != -1) {
-            detonateMissile(p, st);
-            return;
-        }
-
-        spawnMissile(p, st);
+        fireMissile(p, st);
     }
+
+    /* ======================= SECONDARY: blast ======================= */
 
     @Override
     public void activateSecondary(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
-        St st = S(p);
+        if (blockIfPowerless(p)) return;
 
-        if (st.missileId != -1) return;
+        St st = S(p);
 
         if (!st.charging) {
             st.charging = true;
@@ -404,192 +287,11 @@ public final class ZeroSuitPower implements Power {
         }
     }
 
-    @Override
-    public void activateThird(ServerPlayerEntity p) {
+    public static void onClientRequestedFire(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
-        if (!(p.getWorld() instanceof ServerWorld sw)) return;
-
+        if (blockIfPowerless(p)) return;
         St st = S(p);
-
-        // If already charging, pressing again cancels
-        if (st.orbitalCharging) {
-            cancelOrbital(sw, st, st.orbitalHit);
-            p.sendMessage(Text.literal("ORBITAL CANCELLED"), true);
-            return;
-        }
-
-        // Raycast a block (server authoritative)
-        Vec3d eye = p.getEyePos();
-        Vec3d dir = p.getRotationVector().normalize();
-        Vec3d end = eye.add(dir.multiply(ORBITAL_RAYCAST_RANGE));
-
-        BlockHitResult bhr = sw.raycast(new RaycastContext(
-                eye, end,
-                RaycastContext.ShapeType.COLLIDER,
-                RaycastContext.FluidHandling.NONE,
-                p
-        ));
-
-        if (bhr.getType() == HitResult.Type.MISS) {
-            p.sendMessage(Text.literal("No block in sight."), true);
-            return;
-        }
-
-        Vec3d hit = Vec3d.ofCenter(bhr.getBlockPos()).add(0, 0.01, 0);
-
-        // Start 20s radiation expansion
-        st.orbitalCharging = true;
-        st.orbitalTicks = 0;
-        st.orbitalHit = hit;
-
-        // Broadcast "radiation begin"
-        broadcastNear(sw, hit, ORBITAL_BROADCAST_RANGE, S2C_ZERO_RADIATION_BEGIN, out -> {
-            out.writeDouble(hit.x);
-            out.writeDouble(hit.y);
-            out.writeDouble(hit.z);
-            out.writeVarInt(ORBITAL_CHARGE_TICKS);
-            out.writeFloat(ORBITAL_MAX_RADIUS);
-        });
-
-        sw.playSound(null, hit.x, hit.y, hit.z, SoundEvents.BLOCK_BEACON_AMBIENT, SoundCategory.PLAYERS, 0.9f, 0.8f);
-        p.sendMessage(Text.literal("ORBITAL CHARGING..."), true);
-    }
-
-    public static void serverTick(ServerPlayerEntity p) {
-        if (!isCurrent(p)) return;
-        if (!(p.getWorld() instanceof ServerWorld sw)) return;
-
-        St st = S(p);
-
-        if (st.missileId != -1) {
-            ZeroSuitMissileEntity missile = findMissile(sw, st.missileId);
-            if (missile == null) {
-                st.missileId = -1;
-                st.missileTicks = 0;
-                ZeroSuitNet.sendMissileEnd(p);
-            } else {
-                st.missileTicks++;
-                if (st.missileTicks >= MISSILE_MAX_TICKS) {
-                    detonateMissile(p, st);
-                } else {
-                    p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 6, 10, true, false, false));
-                    p.setVelocity(Vec3d.ZERO);
-                    p.velocityModified = true;
-                    p.fallDistance = 0f;
-
-                    missile.serverSetRotation(st.targetYaw, st.targetPitch, st.targetRoll);
-                }
-            }
-        }
-
-        if (st.charging) {
-            if (st.chargeTicks < BLAST_CHARGE_MAX_T) st.chargeTicks++;
-
-            if ((p.age % 15) == 0) {
-                p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 0, true, false, false));
-            }
-
-            if ((p.age % 10) == 0) {
-                float r = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
-                float vol = 0.35f + 0.45f * r;
-                float pit = MathHelper.lerp(r, 1.20f, 0.95f);
-                sw.playSound(p, p.getX(), p.getY(), p.getZ(), ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS, vol, pit);
-            }
-
-            if ((p.age % HUD_SYNC_EVERY) == 0) {
-                if (st.lastHudCharge != st.chargeTicks || !st.lastHudActive) {
-                    st.lastHudCharge = st.chargeTicks;
-                    st.lastHudActive = true;
-                    ZeroSuitNet.sendHud(p, true, st.chargeTicks, BLAST_CHARGE_MAX_T);
-                }
-            }
-        } else if ((p.age % HUD_SYNC_EVERY) == 0 && st.lastHudActive) {
-            st.lastHudActive = false;
-            ZeroSuitNet.sendHud(p, false, 0, BLAST_CHARGE_MAX_T);
-        }
-
-        // === Orbital charge timeline + cancel-on-damage ===
-        float effHealth = p.getHealth() + p.getAbsorptionAmount();
-        if (st.lastEffectiveHealth < 0f) st.lastEffectiveHealth = effHealth;
-
-        if (st.orbitalCharging) {
-            // cancel if hit
-            if (effHealth + 1e-4f < st.lastEffectiveHealth) {
-                cancelOrbital(sw, st, st.orbitalHit);
-                p.sendMessage(Text.literal("ORBITAL INTERRUPTED"), true);
-            } else {
-                st.orbitalTicks++;
-
-                // strong slow while charging
-                if ((p.age % 2) == 0) {
-                    p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 8, 4, true, false, true));
-                }
-
-                if (st.orbitalTicks >= ORBITAL_CHARGE_TICKS && st.orbitalHit != null) {
-                    Vec3d hit = st.orbitalHit;
-
-                    st.orbitalCharging = false;
-                    st.orbitalTicks = 0;
-                    st.orbitalHit = null;
-
-                    // Start pillar visuals
-                    broadcastNear(sw, hit, ORBITAL_BROADCAST_RANGE, S2C_ZERO_ORBITAL_STRIKE, out -> {
-                        out.writeDouble(hit.x);
-                        out.writeDouble(hit.y);
-                        out.writeDouble(hit.z);
-                        out.writeVarInt(ORBITAL_FX_TICKS);
-                    });
-
-                    // ===== NEW: Start pillar damage zone (server) =====
-                    startPillarDamage(sw, hit, p);
-
-                    sw.playSound(null, hit.x, hit.y, hit.z, SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.PLAYERS, 2.5f, 0.75f);
-                    sw.playSound(null, hit.x, hit.y, hit.z, SoundEvents.BLOCK_BEACON_ACTIVATE, SoundCategory.PLAYERS, 1.2f, 1.0f);
-                    sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLASH, hit.x, hit.y, hit.z, 1, 0, 0, 0, 0);
-                }
-            }
-        }
-
-        st.lastEffectiveHealth = effHealth;
-
-        // ===== NEW: tick damage zones once per world tick =====
-        tickPillarDamage(sw);
-    }
-
-    private static void cancelOrbital(ServerWorld sw, St st, Vec3d hit) {
-        if (hit == null) {
-            st.orbitalCharging = false;
-            st.orbitalTicks = 0;
-            st.orbitalHit = null;
-
-            return;
-        }
-
-        st.orbitalCharging = false;
-        st.orbitalTicks = 0;
-        st.orbitalHit = null;
-
-        broadcastNear(sw, hit, ORBITAL_BROADCAST_RANGE, S2C_ZERO_RADIATION_CANCEL, out -> {
-            out.writeDouble(hit.x);
-            out.writeDouble(hit.y);
-            out.writeDouble(hit.z);
-        });
-    }
-
-    private static void broadcastNear(ServerWorld sw, Vec3d pos, double range, Identifier id, java.util.function.Consumer<PacketByteBuf> writer) {
-        double r2 = range * range;
-        for (ServerPlayerEntity sp : sw.getPlayers()) {
-            double dx = sp.getX() - pos.x;
-            double dy = (sp.getY() + sp.getStandingEyeHeight()) - pos.y;
-            double dz = sp.getZ() - pos.z;
-            if ((dx*dx + dy*dy + dz*dz) <= r2) {
-                if (ServerPlayNetworking.canSend(sp, id)) {
-                    PacketByteBuf out = PacketByteBufs.create();
-                    writer.accept(out);
-                    ServerPlayNetworking.send(sp, id, out);
-                }
-            }
-        }
+        if (st.charging) fireBlast(p, st);
     }
 
     private static void stopCharge(ServerPlayerEntity p, St st, boolean fired) {
@@ -647,9 +349,7 @@ public final class ZeroSuitPower implements Power {
             if (dist > hitRadius) continue;
             if (!hitOnce.add(e.getUuid())) continue;
 
-            if (dmg > 0.001f) {
-                e.damage(src.getDamageSources().playerAttack(src), dmg);
-            }
+            if (dmg > 0.001f) e.damage(src.getDamageSources().playerAttack(src), dmg);
 
             double falloff = MathHelper.clamp(1.0 - (dist / hitRadius), 0.0, 1.0);
             double kb = BLAST_KB_BASE + (BLAST_KB_MAX_ADD * ratio);
@@ -664,7 +364,9 @@ public final class ZeroSuitPower implements Power {
             e.addVelocity(kbVec.x, kbVec.y, kbVec.z);
             e.velocityModified = true;
 
-            e.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOW_FALLING, BEAM_NOFALL_TICKS, 0, true, false, true));
+            // ✅ NO gravity-changing effects
+            // ✅ No fall damage after landing:
+            grantNoFall(e, sw, BEAM_NOFALL_TICKS);
         }
 
         if (hitDist > 0.1) {
@@ -698,176 +400,162 @@ public final class ZeroSuitPower implements Power {
         sw.playSound(null, src.getX(), src.getY(), src.getZ(),
                 ModSounds.ZERO_BLAST, SoundCategory.PLAYERS, 1.0f, pitchForBlast(ratio));
 
+        ZeroSuitNet.sendBlastFireShake(src, ratio);
+
         ZeroSuitCPM.playBlastFire(src);
         stopCharge(src, st, true);
     }
 
-    public static void onClientRequestedFire(ServerPlayerEntity p) {
+    /* ======================= THIRD: jetpack toggle + thrust ======================= */
+
+    @Override
+    public void activateThird(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
+        if (blockIfPowerless(p)) return;
+
         St st = S(p);
-        if (st.charging) fireBlast(p, st);
+        st.jetpackEnabled = !st.jetpackEnabled;
+
+        float pitch = st.jetpackEnabled ? 1.0f : 0.65f;
+        p.getWorld().playSound(null, p.getX(), p.getY(), p.getZ(),
+                ModSounds.JETPACK_ACTIVATE, SoundCategory.PLAYERS, 1.0f, pitch);
+
+        ZeroSuitNet.sendJetpackHud(p, st.jetpackEnabled, st.jetpackFuel, JETPACK_FUEL_MAX, false);
+        p.sendMessage(Text.literal(st.jetpackEnabled ? "§6JETPACK ON" : "§7Jetpack off"), true);
     }
 
-    /* ======================= CLIENT HUD (unchanged) ======================= */
+    /** C2S: called every tick while SPACE is held (client sends movement direction). */
+    public static void onClientJetpackThrust(ServerPlayerEntity p, float dx, float dy, float dz) {
+        if (!isCurrent(p)) return;
+        if (blockIfPowerless(p)) return;
+        if (!(p.getWorld() instanceof ServerWorld sw)) return;
+
+        St st = S(p);
+        if (!st.jetpackEnabled) return;
+        if (st.jetpackFuel <= 0) return;
+
+        Vec3d dir = new Vec3d(dx, dy, dz);
+        if (dir.lengthSquared() < 1.0e-6) return;
+        dir = dir.normalize();
+
+        st.jetpackFuel = Math.max(0, st.jetpackFuel - JETPACK_DRAIN_PER_TICK);
+        st.lastJetpackThrustTick = sw.getTime();
+
+        Vec3d vel = p.getVelocity().add(dir.multiply(JETPACK_IMPULSE));
+        double sp = vel.length();
+        if (sp > JETPACK_MAX_SPEED) vel = vel.multiply(JETPACK_MAX_SPEED / sp);
+
+        p.setVelocity(vel);
+        p.velocityModified = true;
+        p.fallDistance = 0f;
+
+        // play to everyone EXCEPT the pilot (pilot uses local loop)
+        if ((p.age % JETPACK_FLY_SOUND_EVERY) == 0) {
+            sw.playSound(p, p.getX(), p.getY(), p.getZ(),
+                    ModSounds.JETPACK_FLYING, SoundCategory.PLAYERS, 0.75f, 1.0f);
+        }
+
+        if ((p.age & 1) == 0) {
+            Vec3d back = p.getRotationVector().multiply(-0.35);
+            Vec3d pos = p.getPos().add(0, 0.9, 0).add(back);
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.FLAME,
+                    pos.x, pos.y, pos.z, 2, 0.06, 0.06, 0.06, 0.01);
+            sw.spawnParticles(net.minecraft.particle.ParticleTypes.SMOKE,
+                    pos.x, pos.y, pos.z, 1, 0.06, 0.06, 0.06, 0.005);
+        }
+    }
+
+    /* ======================= SERVER TICK ======================= */
+
+    public static void serverTick(ServerPlayerEntity p) {
+        if (!isCurrent(p)) return;
+        if (!(p.getWorld() instanceof ServerWorld sw)) return;
+
+        // ensure hook exists even if first interaction is "landing"
+        ensureNoFallHook();
+
+        St st = S(p);
+
+        if (st.missileCd > 0) st.missileCd--;
+
+        if (isPowerless(p)) {
+            if (st.charging) stopCharge(p, st, false);
+            if (st.jetpackEnabled) {
+                st.jetpackEnabled = false;
+                ZeroSuitNet.sendJetpackHud(p, false, st.jetpackFuel, JETPACK_FUEL_MAX, false);
+            }
+        }
+
+        if (st.charging) {
+            if (st.chargeTicks < BLAST_CHARGE_MAX_T) st.chargeTicks++;
+
+            if ((p.age % 15) == 0) {
+                p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 0, true, false, false));
+            }
+
+            if ((p.age % 10) == 0) {
+                float r = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
+                float vol = 0.35f + 0.45f * r;
+                float pit = MathHelper.lerp(r, 1.20f, 0.95f);
+                sw.playSound(p, p.getX(), p.getY(), p.getZ(), ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS, vol, pit);
+            }
+
+            if ((p.age % HUD_SYNC_EVERY) == 0) {
+                if (st.lastHudCharge != st.chargeTicks || !st.lastHudActive) {
+                    st.lastHudCharge = st.chargeTicks;
+                    st.lastHudActive = true;
+                    ZeroSuitNet.sendHud(p, true, st.chargeTicks, BLAST_CHARGE_MAX_T);
+                }
+            }
+        } else if ((p.age % HUD_SYNC_EVERY) == 0 && st.lastHudActive) {
+            st.lastHudActive = false;
+            ZeroSuitNet.sendHud(p, false, 0, BLAST_CHARGE_MAX_T);
+        }
+
+        boolean thrusting = (sw.getTime() - st.lastJetpackThrustTick) <= 1;
+
+        if (!thrusting && st.jetpackFuel < JETPACK_FUEL_MAX) {
+            int add = JETPACK_RECHARGE_PER_TICK;
+            if (p.isOnGround()) add += 1;
+            st.jetpackFuel = Math.min(JETPACK_FUEL_MAX, st.jetpackFuel + add);
+        }
+
+        if ((p.age % JETPACK_HUD_SYNC_EVERY) == 0) {
+            if (st.lastJetpackHudFuel != st.jetpackFuel
+                    || st.lastJetpackHudEnabled != st.jetpackEnabled
+                    || st.lastJetpackHudThrusting != thrusting) {
+                st.lastJetpackHudFuel = st.jetpackFuel;
+                st.lastJetpackHudEnabled = st.jetpackEnabled;
+                st.lastJetpackHudThrusting = thrusting;
+                ZeroSuitNet.sendJetpackHud(p, st.jetpackEnabled, st.jetpackFuel, JETPACK_FUEL_MAX, thrusting);
+            }
+        }
+    }
+
+    /* ======================= CLIENT HUD hooks (blast only) ======================= */
     @Environment(EnvType.CLIENT)
     public static final class ClientHud {
         private ClientHud() {}
 
+        private static boolean lastAttackDown = false;
+
         public static boolean consumeAttackEdge() {
-            boolean now = MinecraftClient.getInstance().options.attackKey.isPressed();
+            boolean now = net.minecraft.client.MinecraftClient.getInstance().options.attackKey.isPressed();
             boolean edge = now && !lastAttackDown;
             lastAttackDown = now;
             return edge;
         }
 
-        private static boolean show;
-        private static int charge;
-        private static int max;
-
-        private static final Identifier HUD_TEX_BASE  =
-                new Identifier(Oddities.MOD_ID, "textures/gui/hud/zero_ring_base.png");
-        private static final Identifier HUD_TEX_FILL  =
-                new Identifier(Oddities.MOD_ID, "textures/gui/hud/zero_ring_fill.png");
-        private static final int TEX_W = 64, TEX_H = 64;
-        private static final int HUD_SIZE = 64;
-
-        private static ChargeLoopSound loop;
-        private static boolean lastAttackDown = false;
-
-        public static void onHud(boolean s, int c, int m) {
-            show = s; charge = c; max = m;
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc.player == null || mc.getSoundManager() == null) return;
-
-            if (show && (loop == null || loop.isDone())) {
-                loop = new ChargeLoopSound(mc.player);
-                mc.getSoundManager().play(loop);
-            } else if (!show && loop != null) {
-                loop.stopNow();
-            }
+        public static void onHud(boolean active, int charge, int max) {
+            net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.onHud(active, charge, max);
         }
 
-        public static void stopLoopNow() { if (loop != null) loop.stopNow(); }
-        public static boolean isCharging() { return show; }
-
-        private static final class ScreenShake {
-            private static float strength;
-            private static int   ticks;
-            private static long  seed = 1337L;
-
-            static void kick(float s, int dur) {
-                strength = Math.max(strength, s);
-                ticks = Math.max(ticks, dur);
-                seed ^= (System.nanoTime() + dur);
-            }
-
-            static boolean active() { return ticks > 0 && strength > 0f; }
-
-            private static float noise(long n) {
-                n = (n << 13) ^ n;
-                return (1.0f - ((n * (n * n * 15731L + 789221L) + 1376312589L) & 0x7fffffff) / 1073741824.0f);
-            }
-
-            static void applyTransform(WorldRenderContext ctx) {
-                if (!active()) return;
-                float td = ctx.tickDelta();
-                var mc = MinecraftClient.getInstance();
-                long tBase = (mc != null && mc.player != null) ? mc.player.age : 0L;
-                long t = tBase + (long) td;
-                float n1 = noise(seed + t * 3L) * 0.5f;
-                float n2 = noise(seed ^ (t * 5L)) * 0.5f;
-                float s = strength * 0.015f;
-                ctx.matrixStack().translate(n1 * s, n2 * s, 0.0f);
-                ticks--;
-                strength *= 0.92f;
-                if (ticks <= 0 || strength < 0.02f) { ticks = 0; strength = 0f; }
-            }
+        public static boolean isCharging() {
+            return net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.isActive();
         }
 
         public static void init() {
-            HudRenderCallback.EVENT.register((DrawContext ctx, float tickDelta) -> {
-                if (!show || max <= 0) return;
-                MinecraftClient mc = MinecraftClient.getInstance();
-                int sw = mc.getWindow().getScaledWidth();
-                int sh = mc.getWindow().getScaledHeight();
-
-                float pct = MathHelper.clamp(charge / (float)max, 0f, 1f);
-
-                int size = HUD_SIZE;
-                int x = sw / 2 - size / 2;
-                int y = sh / 2 - size / 2;
-
-                ctx.drawTexture(HUD_TEX_BASE, x, y, 0, 0, size, size, TEX_W, TEX_H);
-                drawRadialFill(ctx, x + size / 2, y + size / 2, size / 2, pct);
-
-                String label = (int)(pct * 100) + "%";
-                int w = mc.textRenderer.getWidth(label);
-                ctx.drawText(mc.textRenderer, label, sw/2 - w/2, sh/2 - 4, 0xFFFFFFFF, true);
-            });
-            WorldRenderEvents.START.register(ScreenShake::applyTransform);
-        }
-
-        private static void drawRadialFill(DrawContext ctx, int cx, int cy, int radius, float pct) {
-            if (pct <= 0f) return;
-            pct = MathHelper.clamp(pct, 0f, 1f);
-
-            RenderSystem.enableBlend();
-            RenderSystem.defaultBlendFunc();
-            RenderSystem.disableDepthTest();
-            RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-            RenderSystem.setShader(GameRenderer::getPositionTexProgram);
-            RenderSystem.setShaderTexture(0, HUD_TEX_FILL);
-
-            float start = -90f * (float)(Math.PI/180.0);
-            float end   = start + pct * (float)(Math.PI * 2.0);
-
-            Tessellator tess = Tessellator.getInstance();
-            BufferBuilder bb = tess.getBuffer();
-            bb.begin(VertexFormat.DrawMode.TRIANGLE_FAN, VertexFormats.POSITION_TEXTURE);
-
-            var mat = ctx.getMatrices().peek().getPositionMatrix();
-
-            bb.vertex(mat, (float)cx, (float)cy, 0f).texture(0.5f, 0.5f).next();
-
-            int segs = Math.max(4, (int)Math.ceil(90 * pct));
-            for (int i = 0; i <= segs; i++) {
-                float a = MathHelper.lerp(i / (float)segs, start, end);
-                float px = cx + (float)Math.cos(a) * radius;
-                float py = cy + (float)Math.sin(a) * radius;
-
-                float ux = 0.5f + 0.5f * (float)Math.cos(a);
-                float uy = 0.5f + 0.5f * (float)Math.sin(a);
-
-                bb.vertex(mat, px, py, 0f).texture(ux, uy).next();
-            }
-            tess.draw();
-
-            RenderSystem.enableDepthTest();
-            RenderSystem.disableBlend();
-        }
-
-        private static final class ChargeLoopSound extends MovingSoundInstance {
-            private final net.minecraft.entity.player.PlayerEntity player;
-            private boolean stopped = false;
-
-            ChargeLoopSound(net.minecraft.entity.player.PlayerEntity player) {
-                super(ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS, net.minecraft.util.math.random.Random.create());
-                this.player = player;
-                this.repeat = true; this.repeatDelay = 0;
-                this.volume = 0.15f; this.pitch  = 0.95f;
-                this.x = player.getX(); this.y = player.getY(); this.z = player.getZ();
-            }
-
-            @Override public void tick() {
-                if (player == null || player.isRemoved() || !ClientHud.isCharging()) { stopped = true; return; }
-                this.x = player.getX(); this.y = player.getY(); this.z = player.getZ();
-                float pct = (max > 0) ? MathHelper.clamp(charge / (float)max, 0f, 1f) : 0f;
-                this.volume = 0.15f + 0.85f * pct;
-                this.pitch  = 0.95f + 0.35f * pct;
-            }
-
-            @Override public boolean isDone() { return stopped; }
-            void stopNow() { stopped = true; }
+            net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.init();
         }
     }
 }

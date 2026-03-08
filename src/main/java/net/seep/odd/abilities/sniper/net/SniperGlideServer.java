@@ -19,15 +19,15 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
 import net.seep.odd.Oddities;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.UUID;
 
 /**
- * Sniper "third ability":
+ * Sniper parachute glide (server-authoritative).
  * Hold SPACE while falling => hidden Slow Falling "parachute glide".
- * Uses an energy meter that only recharges on ground (very fast).
  *
- * Server-authoritative: denies fall damage and preserves full vanilla air control.
+ * NOW gated by an "ARMED" toggle (set by SniperPower primary).
  */
 public final class SniperGlideServer {
     private SniperGlideServer() {}
@@ -44,9 +44,12 @@ public final class SniperGlideServer {
     private static final float DRAIN_PER_TICK = 1.0f;        // drain while gliding
     private static final float RECHARGE_PER_TICK = 14.0f;    // fast ground recharge (~0.5s)
 
-    private static final Object2ByteOpenHashMap<UUID> INPUT = new Object2ByteOpenHashMap<>();
+    private static final Object2ByteOpenHashMap<UUID> INPUT  = new Object2ByteOpenHashMap<>();
     private static final Object2FloatOpenHashMap<UUID> ENERGY = new Object2FloatOpenHashMap<>();
     private static final Object2ByteOpenHashMap<UUID> ACTIVE = new Object2ByteOpenHashMap<>(); // 0/1
+
+    // ✅ NEW: toggle gate (0/1). Default = OFF unless set by SniperPower.
+    private static final Object2ByteOpenHashMap<UUID> ARMED = new Object2ByteOpenHashMap<>();
 
     // throttle S2C
     private static final Object2FloatOpenHashMap<UUID> LAST_SENT_E = new Object2FloatOpenHashMap<>();
@@ -71,14 +74,39 @@ public final class SniperGlideServer {
             INPUT.removeByte(id);
             ENERGY.removeFloat(id);
             ACTIVE.removeByte(id);
+            ARMED.removeByte(id);
             LAST_SENT_E.removeFloat(id);
             LAST_SENT_A.removeByte(id);
             LAST_SENT_T.removeInt(id);
         });
 
-        // ✅ IMPORTANT: run at START so the effect is present during the physics/move tick
+        // run at START so the effect is present during the physics/move tick
         ServerTickEvents.START_SERVER_TICK.register(SniperGlideServer::tickServer);
     }
+
+    /* ===================== PUBLIC API FOR SniperPower ===================== */
+
+    /** SniperPower primary toggle should call this. */
+    public static void setArmed(ServerPlayerEntity sp, boolean armed) {
+        if (sp == null) return;
+        UUID id = sp.getUuid();
+        if (armed) ARMED.put(id, (byte) 1);
+        else ARMED.removeByte(id);
+
+        // turning OFF should instantly cancel glide + clear our slow-fall
+        if (!armed) {
+            ACTIVE.removeByte(id);
+            removeOurSlowFalling(sp);
+            maybeSend(sp, energyNorm(id), false, true);
+        }
+    }
+
+    public static boolean isArmed(ServerPlayerEntity sp) {
+        if (sp == null) return false;
+        return ARMED.getOrDefault(sp.getUuid(), (byte)0) != 0;
+    }
+
+    /* ===================== ticking ===================== */
 
     private static void tickServer(MinecraftServer server) {
         serverTick++;
@@ -90,18 +118,36 @@ public final class SniperGlideServer {
         return "sniper".equals(current);
     }
 
+    private static boolean isPowerless(ServerPlayerEntity sp) {
+        return sp != null && sp.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static float energyNorm(UUID id) {
+        float e = ENERGY.getOrDefault(id, ENERGY_MAX);
+        return (ENERGY_MAX <= 0.001f) ? 0f : MathHelper.clamp(e / ENERGY_MAX, 0f, 1f);
+    }
+
     private static void tickPlayer(ServerPlayerEntity sp) {
         UUID id = sp.getUuid();
 
-        // If not sniper power, force off and remove any lingering slow-fall we applied
+        // Not sniper: hard reset
         if (!hasSniper(sp) || sp.isSpectator()) {
             INPUT.removeByte(id);
             ENERGY.removeFloat(id);
-            setActive(id, (byte)0);
+            ACTIVE.removeByte(id);
+            ARMED.removeByte(id);
 
-            sp.removeStatusEffect(StatusEffects.SLOW_FALLING);
-
+            removeOurSlowFalling(sp);
             maybeSend(sp, 0f, false, true);
+            return;
+        }
+
+        // POWERLESS: force off (but keep energy stored)
+        if (isPowerless(sp)) {
+            INPUT.removeByte(id);
+            ACTIVE.removeByte(id);
+            removeOurSlowFalling(sp);
+            maybeSend(sp, energyNorm(id), false, true);
             return;
         }
 
@@ -112,8 +158,12 @@ public final class SniperGlideServer {
         boolean onGround = sp.isOnGround();
         boolean falling = sp.getVelocity().y < -0.01;
 
+        // ✅ NEW: must be ARMED to glide
+        boolean armed = ARMED.getOrDefault(id, (byte)0) != 0;
+
         boolean canGlide =
-                !onGround
+                armed
+                        && !onGround
                         && !sp.isTouchingWater()
                         && !sp.isInLava()
                         && !sp.isFallFlying()
@@ -125,37 +175,47 @@ public final class SniperGlideServer {
         if (jumpHeld && canGlide && e > 0.0f) {
             glidingNow = true;
 
-            // ✅ Hidden slow falling = keeps full air-strafing control
-            // duration small but refreshed every tick while gliding
             sp.addStatusEffect(new StatusEffectInstance(
                     StatusEffects.SLOW_FALLING,
-                    6,   // ticks
-                    0,   // amp
+                    6,     // ticks
+                    0,     // amp
                     true,  // ambient
                     false, // showParticles
                     false  // showIcon
             ));
 
-            // deny fall damage while gliding
             sp.fallDistance = 0.0f;
-
             e = Math.max(0.0f, e - DRAIN_PER_TICK);
         } else {
-            // Recharge ONLY on ground
-            if (onGround) {
-                e = Math.min(ENERGY_MAX, e + RECHARGE_PER_TICK);
-            }
+            // If we were gliding but stopped, remove ONLY our tiny hidden slow-fall (snappy stop)
+            boolean wasActive = ACTIVE.getOrDefault(id, (byte)0) != 0;
+            if (wasActive && !glidingNow) removeOurSlowFalling(sp);
+
+            // Recharge only on ground
+            if (onGround) e = Math.min(ENERGY_MAX, e + RECHARGE_PER_TICK);
         }
 
         ENERGY.put(id, e);
-        setActive(id, (byte)(glidingNow ? 1 : 0));
+        ACTIVE.put(id, (byte)(glidingNow ? 1 : 0));
 
-        float norm = (ENERGY_MAX <= 0.001f) ? 0f : (e / ENERGY_MAX);
-        maybeSend(sp, norm, glidingNow, false);
+        maybeSend(sp, (ENERGY_MAX <= 0.001f) ? 0f : (e / ENERGY_MAX), glidingNow, false);
     }
 
-    private static void setActive(UUID id, byte a) {
-        ACTIVE.put(id, a);
+    /**
+     * Only remove OUR slow-fall (short duration, hidden icon/particles, ambient).
+     * Won't break legit potions / other mods.
+     */
+    private static void removeOurSlowFalling(ServerPlayerEntity sp) {
+        StatusEffectInstance inst = sp.getStatusEffect(StatusEffects.SLOW_FALLING);
+        if (inst == null) return;
+
+        boolean looksLikeOurs =
+                inst.getDuration() <= 6
+                        && inst.isAmbient()
+                        && !inst.shouldShowParticles()
+                        && !inst.shouldShowIcon();
+
+        if (looksLikeOurs) sp.removeStatusEffect(StatusEffects.SLOW_FALLING);
     }
 
     private static void maybeSend(ServerPlayerEntity sp, float energyNorm, boolean active, boolean force) {

@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "conditions": [
+        { "condition": "minecraft:block_state_property", "block": "odd:boggy_door", "properties": { "half": "lower" } }
+      ],
+      "entries": [
+        { "type": "minecraft:item", "name": "odd:boggy_door" }
+      ]
+    }
+  ]
+}

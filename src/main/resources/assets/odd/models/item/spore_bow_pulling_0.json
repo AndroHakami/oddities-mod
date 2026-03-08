@@ -1,0 +1,6 @@
+{
+  "parent": "item/bow",
+  "textures": {
+    "layer0": "odd:item/spore_bow_pulling_0"
+  }
+}

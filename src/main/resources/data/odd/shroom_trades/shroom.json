@@ -1,0 +1,22 @@
+{
+  "profile": "odd:shroom",
+  "rolls": 0,
+  "offers": [
+    {
+      "buy": { "item": "minecraft:emerald", "count": 3 },
+      "sell": { "item": "minecraft:red_mushroom", "count": 8 },
+      "maxUses": 16,
+      "xp": 2,
+      "priceMultiplier": 0.05,
+      "weight": 1
+    },
+    {
+      "buy": { "item": "minecraft:emerald", "count": 6 },
+      "sell": { "item": "minecraft:fermented_spider_eye", "count": 1 },
+      "maxUses": 8,
+      "xp": 4,
+      "priceMultiplier": 0.05,
+      "weight": 1
+    }
+  ]
+}

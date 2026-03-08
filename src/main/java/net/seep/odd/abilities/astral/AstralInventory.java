@@ -210,7 +210,7 @@ if (ASRALContains(p)) {
         if (p == null) return;
 
         // Bypass secondary cooldown gating and stop Astral directly on the power.
-        net.seep.odd.abilities.power.UmbraSoulPower.forceStopAstral(p);
+
     }
     /* ---------- Networking: HUD start/stop ---------- */
     private static void sendHudStart(ServerPlayerEntity p, GlobalPos anchor, int maxTicks) {

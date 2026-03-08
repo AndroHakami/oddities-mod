@@ -1,17 +1,24 @@
 // FILE: src/main/java/net/seep/odd/abilities/sniper/item/SniperItem.java
 package net.seep.odd.abilities.sniper.item;
 
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.fabricmc.fabric.api.event.player.AttackBlockCallback;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.OverlayTexture;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -24,10 +31,12 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.*;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.*;
+import net.minecraft.util.math.random.Random;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
@@ -36,6 +45,8 @@ import net.seep.odd.abilities.power.SniperPower;
 import net.seep.odd.abilities.sniper.client.SniperClientState;
 import net.seep.odd.abilities.sniper.client.SniperGlideClient;
 import net.seep.odd.abilities.sniper.client.SniperScopeFx;
+import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
@@ -50,18 +61,41 @@ import software.bernie.geckolib.renderer.GeoItemRenderer;
 import software.bernie.geckolib.util.GeckoLibUtil;
 import software.bernie.geckolib.util.RenderUtils;
 
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class SniperItem extends Item implements GeoItem {
 
+    // ✅ durability
+    private static final int MAX_DURABILITY = 256;
+
     public SniperItem(Settings s) {
-        super(s.maxCount(1));
+        super(s.maxCount(1).maxDamage(MAX_DURABILITY));
         SingletonGeoAnimatable.registerSyncedAnimatable(this);
     }
 
-    /* ===== Tunables ===== */
+    /* ===================== Power gate ===================== */
+
+    private static boolean canUseSniper(PlayerEntity player) {
+        if (!(player instanceof ServerPlayerEntity sp)) return true; // client: server authoritative
+        if (sp.hasStatusEffect(ModStatusEffects.POWERLESS)) return false;
+        return SniperPower.hasSniper(sp);
+    }
+
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+    private static void warnOncePerSec(ServerPlayerEntity sp, String msg) {
+        long now = sp.getWorld().getTime();
+        long next = WARN_UNTIL.getOrDefault(sp.getUuid(), 0L);
+        if (now < next) return;
+        WARN_UNTIL.put(sp.getUuid(), now + 20);
+        sp.sendMessage(Text.literal(msg), true);
+    }
+
+    /* ===================== Tunables ===================== */
+
     private static final double RANGE = 260.0;
     private static final float  BASE_DAMAGE = 8.0f;
     private static final double HIT_RADIUS = 0.30;
@@ -69,12 +103,15 @@ public class SniperItem extends Item implements GeoItem {
     private static final int FIRE_COOLDOWN_T = 20; // 2s @ 20 TPS
     private static final String NBT_LAST_FIRE_T = "sniper_lastFire";
 
-    // Zoom anim lengths: 0.1s = 2 ticks
+    private static final float UNSCOPED_SPREAD_DEG = 0.85f;
+
     private static final int ZOOM_IN_TICKS  = 2;
     private static final int ZOOM_OUT_TICKS = 2;
     private static final int FIRE_ANIM_TICKS = 7;
-    private static final Identifier PKT_HIT_CONFIRM = new Identifier(Oddities.MOD_ID, "sniper/hit_confirm"); // S->C
 
+    private static final Identifier PKT_HIT_CONFIRM = new Identifier(Oddities.MOD_ID, "sniper/hit_confirm"); // S->C
+    private static final Identifier PKT_TRACER      = new Identifier(Oddities.MOD_ID, "sniper/tracer");      // S->C
+    private static final int TRACER_HOLD_T = 16; // 0.8s
 
     /* ---------- Networking ---------- */
     private static final Identifier PKT_FIRE = new Identifier(Oddities.MOD_ID, "sniper/fire"); // C->S
@@ -82,25 +119,39 @@ public class SniperItem extends Item implements GeoItem {
     static {
         ServerPlayNetworking.registerGlobalReceiver(PKT_FIRE, (server, player, handler, buf, response) -> {
             final int handOrd = buf.readVarInt();
+            final boolean scoped = buf.isReadable() ? buf.readBoolean() : true;
             server.execute(() -> {
                 ServerPlayerEntity sp = player;
+
+                if (!canUseSniper(sp)) {
+                    warnOncePerSec(sp, "§cYou can't use that.");
+                    sp.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 0.6f, 0.6f);
+                    return;
+                }
+
                 Hand hand = (handOrd == Hand.OFF_HAND.ordinal()) ? Hand.OFF_HAND : Hand.MAIN_HAND;
                 ItemStack stack = sp.getStackInHand(hand);
-                if (stack.getItem() instanceof SniperItem item) item.tryFire(sp, stack);
+                if (stack.getItem() instanceof SniperItem item) item.tryFire(sp, stack, hand, scoped);
             });
         });
 
         AttackBlockCallback.EVENT.register((p, world, hand, pos, dir) -> {
             ItemStack s = p.getStackInHand(hand);
-            return s.getItem() instanceof SniperItem ? ActionResult.FAIL : ActionResult.PASS;
+            if (!(s.getItem() instanceof SniperItem)) return ActionResult.PASS;
+            if (!canUseSniper(p)) return ActionResult.PASS;
+            return ActionResult.FAIL;
         });
+
         AttackEntityCallback.EVENT.register((p, world, hand, target, hit) -> {
             ItemStack s = p.getStackInHand(hand);
-            return s.getItem() instanceof SniperItem ? ActionResult.FAIL : ActionResult.PASS;
+            if (!(s.getItem() instanceof SniperItem)) return ActionResult.PASS;
+            if (!canUseSniper(p)) return ActionResult.PASS;
+            return ActionResult.FAIL;
         });
     }
 
-    /* ---------- Client state ---------- */
+    /* ===================== Client state ===================== */
+
     @Environment(EnvType.CLIENT) private static boolean lastAttackDown = false;
     @Environment(EnvType.CLIENT) private static boolean lastUseDown = false;
 
@@ -112,6 +163,27 @@ public class SniperItem extends Item implements GeoItem {
     @Environment(EnvType.CLIENT) private static boolean initedClient = false;
     @Environment(EnvType.CLIENT) private static boolean s2cRegistered = false;
 
+    @Environment(EnvType.CLIENT) private static boolean forcedHud = false;
+    @Environment(EnvType.CLIENT) private static boolean prevHudHidden = false;
+
+    @Environment(EnvType.CLIENT)
+    private static void setHudHiddenForced(boolean on) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null) return;
+
+        if (on) {
+            if (!forcedHud) {
+                prevHudHidden = mc.options.hudHidden;
+                forcedHud = true;
+                mc.options.hudHidden = true;
+            }
+        } else {
+            if (forcedHud) {
+                mc.options.hudHidden = prevHudHidden;
+                forcedHud = false;
+            }
+        }
+    }
 
     @Environment(EnvType.CLIENT)
     public static void initClientHooks() {
@@ -121,17 +193,17 @@ public class SniperItem extends Item implements GeoItem {
         SniperClientState.init();
         SniperScopeFx.init();
         SniperGlideClient.initOnce();
+        TracerFx.initOnce();
+
         if (!s2cRegistered) {
             s2cRegistered = true;
             ClientPlayNetworking.registerGlobalReceiver(PKT_HIT_CONFIRM, (client, handler, buf, response) -> {
                 client.execute(() -> {
                     if (client.player == null) return;
-                    // any temp sound you want:
                     client.player.playSound(SoundEvents.UI_BUTTON_CLICK.value(), 0.9f, 1.8f);
                 });
             });
         }
-
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
@@ -144,35 +216,35 @@ public class SniperItem extends Item implements GeoItem {
             boolean holding = client.player.getMainHandStack().getItem() instanceof SniperItem
                     || client.player.getOffHandStack().getItem() instanceof SniperItem;
 
-            // If you stop holding, smoothly un-scope
             if (!holding) {
                 lastAttackDown = false;
                 lastUseDown = false;
                 SniperClientState.setScopedTarget(false);
+                setHudHiddenForced(false);
                 return;
             }
 
-            // ---- Scope target (hold RMB) ----
+            if (client.player.hasStatusEffect(ModStatusEffects.POWERLESS)) {
+                lastAttackDown = false;
+                lastUseDown = false;
+                SniperClientState.setScopedTarget(false);
+                setHudHiddenForced(false);
+                return;
+            }
+
             boolean useNow = client.options.useKey.isPressed() && client.currentScreen == null;
-
-            // Smooth camera zoom comes from SniperClientState.scopeAmount(tickDelta) via mixin.
             SniperClientState.setScopedTarget(useNow);
+            setHudHiddenForced(useNow);
 
-            // Edges only for playing animations
             boolean useEdgeOn  = useNow && !lastUseDown;
             boolean useEdgeOff = !useNow && lastUseDown;
             lastUseDown = useNow;
 
-            if (useEdgeOn) {
-                zoomInMainTicks = ZOOM_IN_TICKS;
-            } else if (useEdgeOff) {
-                zoomOutMainTicks = ZOOM_OUT_TICKS;
-            }
+            if (useEdgeOn) zoomInMainTicks = ZOOM_IN_TICKS;
+            else if (useEdgeOff) zoomOutMainTicks = ZOOM_OUT_TICKS;
 
-            // ---- Grapple cancel input (Space) to server ----
             trySendGrappleInput(client);
 
-            // ---- Fire (LMB edge) ----
             boolean atkNow = client.options.attackKey.isPressed() && client.currentScreen == null;
             boolean atkEdge = atkNow && !lastAttackDown;
             lastAttackDown = atkNow;
@@ -185,6 +257,7 @@ public class SniperItem extends Item implements GeoItem {
 
                 PacketByteBuf buf = PacketByteBufs.create();
                 buf.writeVarInt(hand.ordinal());
+                buf.writeBoolean(useNow); // scoped?
                 ClientPlayNetworking.send(PKT_FIRE, buf);
 
                 if (client.interactionManager != null) client.interactionManager.cancelBlockBreaking();
@@ -212,24 +285,36 @@ public class SniperItem extends Item implements GeoItem {
         ClientPlayNetworking.send(SniperPower.SNIPER_CTRL_C2S, out);
     }
 
-    /* ---------- Server: fire ---------- */
-    private void tryFire(ServerPlayerEntity sp, ItemStack stack) {
+    /* ===================== Server: fire ===================== */
+
+    private void tryFire(ServerPlayerEntity sp, ItemStack stack, Hand hand, boolean scoped) {
+        if (!canUseSniper(sp)) return;
+
         long now = sp.getWorld().getTime();
         long last = stack.getOrCreateNbt().getLong(NBT_LAST_FIRE_T);
         if (now - last < FIRE_COOLDOWN_T) return;
         stack.getOrCreateNbt().putLong(NBT_LAST_FIRE_T, now);
 
-        fire(sp, stack);
+        fire(sp, stack, scoped);
+
+        // ✅ ALWAYS consume durability per shot (hit or miss)
+        damageOnShot(sp, stack, hand);
     }
 
-    private void fire(ServerPlayerEntity sp, ItemStack stack) {
+    private static void damageOnShot(ServerPlayerEntity sp, ItemStack stack, Hand hand) {
+        if (!stack.isDamageable()) return;
+        if (sp.getAbilities().creativeMode) return;
+        stack.damage(1, sp, pl -> pl.sendToolBreakStatus(hand));
+    }
+
+    private void fire(ServerPlayerEntity sp, ItemStack stack, boolean scoped) {
         if (!(sp.getWorld() instanceof ServerWorld sw)) return;
 
         sw.playSound(null, sp.getX(), sp.getY(), sp.getZ(),
-                SoundEvents.ENTITY_GENERIC_EXPLODE, SoundCategory.PLAYERS, 0.35f, 2.0f);
+                ModSounds.SNIPER_SHOT, SoundCategory.PLAYERS, 1.0f, 1.0f);
 
         Vec3d eye = sp.getEyePos();
-        Vec3d look = sp.getRotationVec(1f).normalize();
+        Vec3d look = getShotDir(sw.random, sp, scoped).normalize();
         Vec3d end = eye.add(look.multiply(RANGE));
 
         BlockHitResult bhr = sw.raycast(new RaycastContext(
@@ -245,15 +330,15 @@ public class SniperItem extends Item implements GeoItem {
             DamageSource src = sw.getDamageSources().playerAttack(sp);
             boolean didDamage = target.damage(src, dmg);
 
-// ✅ hitmarker only for shooter (no one else hears it)
             if (didDamage) {
                 PacketByteBuf out = PacketByteBufs.create();
                 ServerPlayNetworking.send(sp, PKT_HIT_CONFIRM, out);
             }
 
-
             sw.playSound(null, target.getX(), target.getY(), target.getZ(),
                     SoundEvents.ENTITY_ARROW_HIT_PLAYER, SoundCategory.PLAYERS, 0.7f, 1.5f);
+            sw.playSound(null, target.getX(), target.getY(), target.getZ(),
+                    ModSounds.SNIPER_LAND, SoundCategory.PLAYERS, 1.2f, 1.0f);
 
             sw.spawnParticles(ParticleTypes.CRIT, impact.x, impact.y, impact.z, 10, 0.12, 0.12, 0.12, 0.02);
         } else {
@@ -263,20 +348,35 @@ public class SniperItem extends Item implements GeoItem {
             sw.spawnParticles(ParticleTypes.SMOKE, impact.x, impact.y, impact.z, 6, 0.06, 0.06, 0.06, 0.01);
         }
 
-        spawnTracer(sw, eye, impact);
+        sendTracer(sw, sp, eye, impact);
     }
 
-    private static void spawnTracer(ServerWorld sw, Vec3d from, Vec3d to) {
-        Vec3d d = to.subtract(from);
-        double len = d.length();
-        if (len < 0.01) return;
+    private static Vec3d getShotDir(Random rand, ServerPlayerEntity sp, boolean scoped) {
+        float yaw = sp.getYaw();
+        float pitch = sp.getPitch();
 
-        Vec3d step = d.normalize().multiply(2.0);
-        int n = (int)Math.ceil(len / 2.0);
-        Vec3d p = from;
-        for (int i = 0; i < n; i++) {
-            p = p.add(step);
-            sw.spawnParticles(ParticleTypes.END_ROD, p.x, p.y, p.z, 1, 0.0, 0.0, 0.0, 0.0);
+        if (!scoped) {
+            float dy = (float) (rand.nextGaussian() * UNSCOPED_SPREAD_DEG);
+            float dp = (float) (rand.nextGaussian() * UNSCOPED_SPREAD_DEG);
+            yaw += dy;
+            pitch += dp;
+            pitch = MathHelper.clamp(pitch, -89.9f, 89.9f);
+        }
+
+        return Vec3d.fromPolar(pitch, yaw);
+    }
+
+    private static void sendTracer(ServerWorld sw, ServerPlayerEntity shooter, Vec3d from, Vec3d to) {
+        HashSet<ServerPlayerEntity> targets = new HashSet<>();
+        for (ServerPlayerEntity sp : PlayerLookup.tracking(shooter)) targets.add(sp);
+        targets.add(shooter);
+
+        for (ServerPlayerEntity sp : targets) {
+            PacketByteBuf out = PacketByteBufs.create();
+            out.writeDouble(from.x); out.writeDouble(from.y); out.writeDouble(from.z);
+            out.writeDouble(to.x);   out.writeDouble(to.y);   out.writeDouble(to.z);
+            out.writeVarInt(TRACER_HOLD_T);
+            ServerPlayNetworking.send(sp, PKT_TRACER, out);
         }
     }
 
@@ -300,13 +400,135 @@ public class SniperItem extends Item implements GeoItem {
         return best;
     }
 
-    /* ---------- IMPORTANT: do NOT consume RMB (prevents use-hand loop) ---------- */
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         return TypedActionResult.pass(user.getStackInHand(hand));
     }
 
-    /* ---------- GeckoLib ---------- */
+    /* ===================== Tracer FX (client) ===================== */
+
+    @Environment(EnvType.CLIENT)
+    private static final class TracerFx {
+        private static boolean inited = false;
+
+        private static final java.util.ArrayList<Tracer> TRACERS = new java.util.ArrayList<>();
+        private static final Identifier WHITE_TEX = new Identifier("minecraft", "textures/misc/white.png");
+
+        private static final int COL_R = 255, COL_G = 45, COL_B = 45;
+        private static final float BASE_ALPHA = 0.70f;
+        private static final int FADE_T = 14;
+        private static final double HALF_WIDTH = 0.070;
+
+        private record Tracer(Vec3d a, Vec3d b, long startTick, int holdTicks, long endTick) {}
+
+        static void initOnce() {
+            if (inited) return;
+            inited = true;
+
+            ClientPlayNetworking.registerGlobalReceiver(PKT_TRACER, (client, handler, buf, response) -> {
+                double ax = buf.readDouble();
+                double ay = buf.readDouble();
+                double az = buf.readDouble();
+                double bx = buf.readDouble();
+                double by = buf.readDouble();
+                double bz = buf.readDouble();
+                int hold = buf.readVarInt();
+
+                client.execute(() -> {
+                    if (client.world == null) return;
+                    long now = client.world.getTime();
+                    int holdTicks = Math.max(1, hold);
+                    long end = now + holdTicks + FADE_T;
+                    TRACERS.add(new Tracer(new Vec3d(ax, ay, az), new Vec3d(bx, by, bz), now, holdTicks, end));
+                });
+            });
+
+            ClientTickEvents.END_CLIENT_TICK.register(client -> {
+                if (client.world == null) { TRACERS.clear(); return; }
+                long now = client.world.getTime();
+                TRACERS.removeIf(t -> now > t.endTick + 2);
+            });
+
+            WorldRenderEvents.AFTER_TRANSLUCENT.register(ctx -> {
+                var mc = MinecraftClient.getInstance();
+                if (mc == null || mc.world == null || TRACERS.isEmpty()) return;
+
+                float nowF = mc.world.getTime() + ctx.tickDelta();
+                Vec3d camPos = ctx.camera().getPos();
+
+                var matrices = ctx.matrixStack();
+                matrices.push();
+                matrices.translate(-camPos.x, -camPos.y, -camPos.z);
+
+                var entry = matrices.peek();
+                var posMat = entry.getPositionMatrix();
+
+                VertexConsumer vc = ctx.consumers().getBuffer(RenderLayer.getEntityTranslucent(WHITE_TEX));
+
+                for (Tracer t : TRACERS) {
+                    float age = nowF - t.startTick;
+                    if (age < 0f) age = 0f;
+
+                    float alphaMul;
+                    if (age <= t.holdTicks) alphaMul = 1f;
+                    else {
+                        float f = (age - t.holdTicks) / (float) FADE_T;
+                        alphaMul = 1f - MathHelper.clamp(f, 0f, 1f);
+                    }
+
+                    int a = MathHelper.clamp(Math.round(255f * BASE_ALPHA * alphaMul), 0, 255);
+                    if (a <= 0) continue;
+
+                    Vec3d A = t.a;
+                    Vec3d B = t.b;
+
+                    Vec3d line = B.subtract(A);
+                    if (line.lengthSquared() < 1.0e-6) continue;
+                    Vec3d lineDir = line.normalize();
+
+                    Vec3d mid = A.add(B).multiply(0.5);
+                    Vec3d viewDir = camPos.subtract(mid);
+                    if (viewDir.lengthSquared() < 1.0e-6) viewDir = new Vec3d(0, 1, 0);
+                    else viewDir = viewDir.normalize();
+
+                    Vec3d right = lineDir.crossProduct(viewDir);
+                    if (right.lengthSquared() < 1.0e-6) right = lineDir.crossProduct(new Vec3d(0, 1, 0));
+                    if (right.lengthSquared() < 1.0e-6) right = new Vec3d(1, 0, 0);
+                    else right = right.normalize();
+
+                    Vec3d off = right.multiply(HALF_WIDTH);
+
+                    Vec3d p0 = A.add(off);
+                    Vec3d p1 = A.subtract(off);
+                    Vec3d p2 = B.subtract(off);
+                    Vec3d p3 = B.add(off);
+
+                    v(vc, posMat, p0, 0f, 0f, a);
+                    v(vc, posMat, p1, 1f, 0f, a);
+                    v(vc, posMat, p2, 1f, 1f, a);
+
+                    v(vc, posMat, p0, 0f, 0f, a);
+                    v(vc, posMat, p2, 1f, 1f, a);
+                    v(vc, posMat, p3, 0f, 1f, a);
+                }
+
+                matrices.pop();
+            });
+        }
+
+        private static void v(VertexConsumer vc, org.joml.Matrix4f mat, Vec3d p, float u, float v, int alpha) {
+            vc.vertex(mat, (float)p.x, (float)p.y, (float)p.z)
+                    .color(COL_R, COL_G, COL_B, alpha)
+                    .texture(u, v)
+                    .overlay(OverlayTexture.DEFAULT_UV)
+                    .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
+                    .normal(0f, 1f, 0f)
+                    .next();
+        }
+    }
+
+    /* ===================== GeckoLib ===================== */
+
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private final Supplier<Object> renderProvider = GeoItem.makeRenderer(this);
 
@@ -335,17 +557,10 @@ public class SniperItem extends Item implements GeoItem {
                 }
             }
 
-            if (playFire) {
-                state.setAndContinue(FIRE);
-            } else if (playZoomOut) {
-                state.setAndContinue(ZOOM_OUT);
-            } else if (playZoomIn) {
-                state.setAndContinue(ZOOM_IN);
-            } else {
-                // While scoped, we don't loop zoom_in (prevents “repeating zoom_in”).
-                // Once fully scoped, the first-person model will be hidden anyway (via HeldItemRenderer mixin).
-                state.setAndContinue(IDLE);
-            }
+            if (playFire) state.setAndContinue(FIRE);
+            else if (playZoomOut) state.setAndContinue(ZOOM_OUT);
+            else if (playZoomIn) state.setAndContinue(ZOOM_IN);
+            else state.setAndContinue(IDLE);
 
             return PlayState.CONTINUE;
         }));

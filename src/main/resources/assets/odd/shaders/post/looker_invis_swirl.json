@@ -1,0 +1,7 @@
+{
+  "targets": [ "swap" ],
+  "passes": [
+    { "name": "odd:looker_invis_swirl", "intarget": "minecraft:main", "outtarget": "swap" },
+    { "name": "blit", "intarget": "swap", "outtarget": "minecraft:main" }
+  ]
+}

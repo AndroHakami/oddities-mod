@@ -17,6 +17,7 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
@@ -24,14 +25,16 @@ import net.minecraft.util.UseAction;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
+import net.seep.odd.abilities.PowerAPI;
+import net.seep.odd.abilities.lunar.client.LunarDrillPreview;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
@@ -57,18 +60,11 @@ public class LunarDrillItem extends Item implements GeoItem {
 
     public static final float MAX_HEAT = 100f;
 
-    // Heat gained per normal LMB block break
-    public static final float HEAT_PER_LMB_BLOCK = 6.25f;
-
-    // Heat gained by RMB burst: flat + per broken block
-    public static final float HEAT_BURST_FLAT = 4.0f;
-    public static final float HEAT_PER_BURST_BLOCK = 0.70f;
-
-    // Cooling rate (applies “lazily” when we next evaluate heat)
-    public static final float COOL_PER_TICK = 0.12f;
-
-    // Hard lock duration (ticks) - 30 seconds
-    public static final int HARD_LOCK_TICKS = 20 * 30;
+    public static final float HEAT_PER_LMB_BLOCK = 2.25f;
+    public static final float HEAT_BURST_FLAT = 3.0f;
+    public static final float HEAT_PER_BURST_BLOCK = 0.50f;
+    public static final float COOL_PER_TICK = 0.17f;
+    public static final int HARD_LOCK_TICKS = 20 * 15;
 
     /* ===================================================================================== */
     /* =============================  Pattern/Depth (5x5)  ================================= */
@@ -78,32 +74,41 @@ public class LunarDrillItem extends Item implements GeoItem {
     public static final int PATTERN_BITS = PATTERN_SIZE * PATTERN_SIZE; // 25
     public static final int PATTERN_CENTER = PATTERN_SIZE / 2; // 2
 
-    /* -------- NBT -------- */
     public static final String NBT_PATTERN = "LunarPattern64";
     public static final String NBT_DEPTH   = "lunar_depth";
 
     private static final String NBT_RAMP         = "lunar_ramp";
     private static final String NBT_LAST_BREAK_T = "lunar_lastBreakT";
 
-    // which hand started RMB use (server)
     private static final String NBT_HAND = "odd_drill_hand";
 
-    // overheat (server authoritative; written only on interactions — not every tick)
     private static final String NBT_HEAT         = "odd_heat";
     private static final String NBT_HARDLOCK_END = "odd_heatHardEnd";
     private static final String NBT_LAST_HEAT_T  = "odd_heatLastT";
 
-    /* -------- RMB charge tuning -------- */
     private static final int   MAX_USE_T          = 72000;
     private static final int   CHARGE_BASE_T      = 16;
     private static final float CHARGE_PER_BLOCK_T = 0.8f;
     private static final double PREVIEW_REACH     = 5.5;
 
-    /* -------- LMB ramp tuning -------- */
-    private static final float RAMP_ADD_PER_BREAK   = 0.35f;
-    private static final float RAMP_MAX             = 8.0f;
+    private static final float RAMP_ADD_PER_BREAK   = 1.5f;
+    private static final float RAMP_MAX             = 18.0f;
     private static final int   RAMP_IDLE_HALFLIFE_T = 30;
-    private static final float BASE_MINING_SPEED    = 4.0f;
+    private static final float BASE_MINING_SPEED    = 13.0f;
+
+    private static final String REQUIRED_POWER_ID = "lunar";
+
+    private static boolean canUseDrill(PlayerEntity player) {
+        if (!(player instanceof ServerPlayerEntity sp)) return true;
+        if (sp.hasStatusEffect(ModStatusEffects.POWERLESS)) return false;
+        return REQUIRED_POWER_ID.equals(PowerAPI.get(sp));
+    }
+
+    private static void denyUseServer(World world, ServerPlayerEntity sp, String msg) {
+        warnOncePerSec(world, sp, msg);
+        sp.playSound(SoundEvents.BLOCK_NOTE_BLOCK_BASS.value(), SoundCategory.PLAYERS, 0.6f, 0.6f);
+        sp.stopUsingItem();
+    }
 
     /* -------- GeckoLib -------- */
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
@@ -123,7 +128,6 @@ public class LunarDrillItem extends Item implements GeoItem {
     /* ==================================  SERVER STATE  =================================== */
     /* ===================================================================================== */
 
-    // Used to suppress LMB heat/ramp counting while we are doing the RMB burst break loop.
     private static final Map<UUID, Long> BURST_UNTIL = new HashMap<>();
     private static final Map<UUID, Long> WARN_UNTIL  = new HashMap<>();
 
@@ -145,7 +149,7 @@ public class LunarDrillItem extends Item implements GeoItem {
         long nextOk = WARN_UNTIL.getOrDefault(sp.getUuid(), 0L);
         if (now < nextOk) return;
         WARN_UNTIL.put(sp.getUuid(), now + 20);
-        sp.sendMessage(net.minecraft.text.Text.literal(msg), true);
+        sp.sendMessage(Text.literal(msg), true);
     }
 
     private static boolean isHardLocked(ItemStack stack, World world) {
@@ -153,11 +157,6 @@ public class LunarDrillItem extends Item implements GeoItem {
         return end > 0 && world.getTime() < end;
     }
 
-    /**
-     * Lazily apply cooling since last evaluation.
-     * IMPORTANT: Only runs when we "touch" the drill (break/use/stopUsing),
-     * not every tick -> prevents NBT spam and held-item wobble.
-     */
     private static void coolHeat(World world, ItemStack stack) {
         var nbt = stack.getOrCreateNbt();
         long now = world.getTime();
@@ -173,14 +172,12 @@ public class LunarDrillItem extends Item implements GeoItem {
                 heat = Math.max(0f, heat - COOL_PER_TICK * dt);
             }
         } else {
-            // While hard locked, keep it pegged at max
             heat = MAX_HEAT;
         }
 
         nbt.putFloat(NBT_HEAT, MathHelper.clamp(heat, 0f, MAX_HEAT));
         nbt.putLong(NBT_LAST_HEAT_T, now);
 
-        // clear hard end once time passed (cleanup)
         long hardEnd = nbt.getLong(NBT_HARDLOCK_END);
         if (hardEnd != 0 && now >= hardEnd) nbt.putLong(NBT_HARDLOCK_END, 0);
     }
@@ -226,18 +223,21 @@ public class LunarDrillItem extends Item implements GeoItem {
 
     private static boolean hooksRegistered = false;
 
-    /** call from common init */
     public static void registerHooks() {
         if (hooksRegistered) return;
         hooksRegistered = true;
 
-        // Cancel normal LMB block breaks if hard-overheated (but allow burst window)
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, be) -> {
             if (world.isClient) return true;
             if (!(player instanceof ServerPlayerEntity sp)) return true;
 
             ItemStack drill = getHeldDrill(sp);
             if (!(drill.getItem() instanceof LunarDrillItem)) return true;
+
+            if (!canUseDrill(sp)) {
+                denyUseServer(world, sp, "§cOnly Lunar can use this.");
+                return false;
+            }
 
             if (isBurstBreaking(sp, world)) return true;
 
@@ -254,7 +254,6 @@ public class LunarDrillItem extends Item implements GeoItem {
             return true;
         });
 
-        // Heat/ramp only for normal LMB breaks (not burst)
         PlayerBlockBreakEvents.AFTER.register((world, player, pos, state, be) -> {
             if (world.isClient) return;
             if (!(player instanceof ServerPlayerEntity sp)) return;
@@ -262,6 +261,7 @@ public class LunarDrillItem extends Item implements GeoItem {
             ItemStack drill = getHeldDrill(sp);
             if (!(drill.getItem() instanceof LunarDrillItem item)) return;
 
+            if (!canUseDrill(sp)) return;
             if (isBurstBreaking(sp, world)) return;
 
             addHeat(world, sp, drill, HEAT_PER_LMB_BLOCK);
@@ -277,25 +277,27 @@ public class LunarDrillItem extends Item implements GeoItem {
             nbt.putFloat(NBT_RAMP, ramp);
             nbt.putLong(NBT_LAST_BREAK_T, now);
 
-            // optional small pop on LMB mining
             item.triggerAnim(sp, Hand.MAIN_HAND.ordinal(), "main", "burst");
         });
     }
 
     /* ===================================================================================== */
-    /* =============================  RMB CHARGE + PREVIEW  ================================= */
+    /* =============================  RMB CHARGE + (SATIN) WORLD PREVIEW  =================== */
     /* ===================================================================================== */
 
     @Override
     public TypedActionResult<ItemStack> use(World world, PlayerEntity user, Hand hand) {
         ItemStack stack = user.getStackInHand(hand);
 
-        // Prevent using while hard locked
+        if (!world.isClient && user instanceof ServerPlayerEntity sp && !canUseDrill(sp)) {
+            denyUseServer(world, sp, "§cOnly Lunar can use this.");
+            return TypedActionResult.fail(stack);
+        }
+
         if (isHardLocked(stack, world)) return TypedActionResult.fail(stack);
         if (!world.isClient) coolHeat(world, stack);
 
         if (user.isSneaking()) {
-            // IMPORTANT: no client-class references here; delegate to client-only impl.
             if (world.isClient && FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
                 Client.openPatternScreen(hand);
             }
@@ -312,6 +314,11 @@ public class LunarDrillItem extends Item implements GeoItem {
         if (ctx.getPlayer() != null && !ctx.getPlayer().isSneaking()) {
             PlayerEntity p = ctx.getPlayer();
             ItemStack stack = ctx.getStack();
+
+            if (!ctx.getWorld().isClient && p instanceof ServerPlayerEntity sp && !canUseDrill(sp)) {
+                denyUseServer(ctx.getWorld(), sp, "§cOnly Lunar can use this.");
+                return ActionResult.FAIL;
+            }
 
             if (isHardLocked(stack, ctx.getWorld())) return ActionResult.FAIL;
 
@@ -331,7 +338,11 @@ public class LunarDrillItem extends Item implements GeoItem {
 
     @Override
     public void usageTick(World world, net.minecraft.entity.LivingEntity user, ItemStack stack, int remainingUseTicks) {
-        // Client-only preview/sfx/hud update lives in Client class (no client refs here).
+        if (!world.isClient && user instanceof ServerPlayerEntity sp && !canUseDrill(sp)) {
+            sp.stopUsingItem();
+            return;
+        }
+
         if (world.isClient && FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
             Client.usageTickClient(world, user, stack, remainingUseTicks);
         }
@@ -341,12 +352,14 @@ public class LunarDrillItem extends Item implements GeoItem {
     public void onStoppedUsing(ItemStack stack, World world, net.minecraft.entity.LivingEntity user, int remainingUseTicks) {
         if (world.isClient) {
             if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
-                Client.onStoppedUsingClient();
+                Client.onStoppedUsingClient(user); // ✅ fix: don’t let remote players clear your local preview
             }
             return;
         }
 
         if (!(user instanceof ServerPlayerEntity sp)) return;
+
+        if (!canUseDrill(sp)) return;
 
         coolHeat(world, stack);
         if (isHardLocked(stack, world)) return;
@@ -376,7 +389,6 @@ public class LunarDrillItem extends Item implements GeoItem {
         List<BlockPos> targets = layoutPatternWithDepth(origin, face, horiz, grid, depth);
         Set<BlockPos> unique = new LinkedHashSet<>(targets);
 
-        // Suppress the LMB AFTER hook while we do the burst loop
         setBurstWindow(sp, world, 6);
 
         int broke = 0;
@@ -399,8 +411,6 @@ public class LunarDrillItem extends Item implements GeoItem {
         }
     }
 
-    /* ---------------- ray + pattern helpers ---------------- */
-
     private static BlockHitResult rayToBlock(World w, PlayerEntity p, double reach) {
         Vec3d eye = p.getEyePos();
         Vec3d look = p.getRotationVec(1f);
@@ -409,7 +419,6 @@ public class LunarDrillItem extends Item implements GeoItem {
                 RaycastContext.FluidHandling.NONE, p));
     }
 
-    /** Force center bit on, and keep only lowest 25 bits. */
     public static long normalizeMask(long raw) {
         long mask25 = raw & ((1L << PATTERN_BITS) - 1L);
         int centerIdx = PATTERN_CENTER * PATTERN_SIZE + PATTERN_CENTER;
@@ -422,7 +431,6 @@ public class LunarDrillItem extends Item implements GeoItem {
         return MathHelper.clamp(d, 1, 6);
     }
 
-    /** 5x5 grid from 25-bit mask. */
     public static boolean[][] bitsToGrid(long bits) {
         boolean[][] g = new boolean[PATTERN_SIZE][PATTERN_SIZE];
         bits = normalizeMask(bits);
@@ -433,7 +441,6 @@ public class LunarDrillItem extends Item implements GeoItem {
         return g;
     }
 
-    /** Builds targets for the 5x5 pattern on the hit face, extruded inward by depth (1..6). */
     private static List<BlockPos> layoutPatternWithDepth(BlockPos origin, Direction face, Direction horizontal, boolean[][] grid, int depth) {
         depth = clampDepth(depth);
 
@@ -475,7 +482,6 @@ public class LunarDrillItem extends Item implements GeoItem {
     /* ============================  CLIENT STATE (primitives only)  ======================= */
     /* ===================================================================================== */
 
-    // These are primitives only (safe on server). Client class updates them.
     private static int chargeMainTicks = 0, chargeOffTicks = 0;
     private static int drillMainTicks  = 0, drillOffTicks  = 0;
 
@@ -523,7 +529,6 @@ public class LunarDrillItem extends Item implements GeoItem {
 
     @Override
     public void createRenderer(Consumer<Object> consumer) {
-        // No direct reference to client renderer class (reflective create) -> server-safe.
         consumer.accept(new RenderProvider() {
             private GeoItemRenderer<?> renderer;
 
@@ -541,10 +546,10 @@ public class LunarDrillItem extends Item implements GeoItem {
     /* ===============================  CLIENT ENTRY POINT  ================================= */
     /* ===================================================================================== */
 
-    /** call once from your ClientModInitializer */
     public static void initClientHooks() {
         if (FabricLoader.getInstance().getEnvironmentType() != EnvType.CLIENT) return;
         Client.initClientHooks();
+        net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.init();
     }
 
     /* ===================================================================================== */
@@ -558,14 +563,16 @@ public class LunarDrillItem extends Item implements GeoItem {
         private static boolean hooksInit = false;
         private static boolean hudInit   = false;
 
-        // continuous loop SFX
         private static LoopForPlayer chargeLoop = null;
         private static LoopForPlayer drillLoop  = null;
         private static boolean chargeReadyLatched = false;
 
-        // HUD smoothing (client-only)
         private static float hudHeatLatch = -1f;
         private static long  hudLatchT = -1L;
+
+        // ✅ NEW: who is currently “owning” the world preview on THIS client
+        private static UUID previewOwner = null;
+        private static final double OBS_PREVIEW_RANGE_SQ = 64.0 * 64.0;
 
         static void openPatternScreen(Hand hand) {
             final net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
@@ -587,14 +594,14 @@ public class LunarDrillItem extends Item implements GeoItem {
                 if (client.player == null || client.world == null) {
                     stopChargeLoop();
                     stopDrillLoop();
-                    net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
-                    net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(Collections.emptyList());
+                    LunarDrillPreview.setChargeProgress(0f);
+                    net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.clear();
+                    previewOwner = null;
                     chargeReadyLatched = false;
                     chargeMainTicks = chargeOffTicks = drillMainTicks = drillOffTicks = 0;
                     return;
                 }
 
-                // decay flags
                 if (chargeMainTicks > 0) chargeMainTicks--;
                 if (chargeOffTicks  > 0) chargeOffTicks--;
                 if (drillMainTicks  > 0) drillMainTicks--;
@@ -614,7 +621,14 @@ public class LunarDrillItem extends Item implements GeoItem {
                     else chargeOffTicks = 2;
                 } else {
                     stopChargeLoop();
-                    net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
+                    LunarDrillPreview.setChargeProgress(0f);
+
+                    // ✅ only clear preview if WE owned it (prevents remote-user stop from wiping local/remote)
+                    if (previewOwner != null && previewOwner.equals(p.getUuid())) {
+                        net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.clear();
+                        previewOwner = null;
+                    }
+
                     chargeReadyLatched = false;
                 }
 
@@ -627,7 +641,6 @@ public class LunarDrillItem extends Item implements GeoItem {
                     p.handSwingTicks = 0;
                 }
 
-                // drill loop sound (stop if hard locked)
                 ItemStack held = mainIsDrill ? main : (offIsDrill ? off : ItemStack.EMPTY);
                 boolean hard = !held.isEmpty() && (client.world.getTime() < held.getOrCreateNbt().getLong(NBT_HARDLOCK_END));
 
@@ -645,23 +658,31 @@ public class LunarDrillItem extends Item implements GeoItem {
         static void usageTickClient(World world, net.minecraft.entity.LivingEntity user, ItemStack stack, int remainingUseTicks) {
             if (!(user instanceof PlayerEntity p)) return;
 
-            // If hard locked client-side, don't do any preview/charge fx
             long hardEnd = stack.getOrCreateNbt().getLong(NBT_HARDLOCK_END);
             if (hardEnd > 0 && world.getTime() < hardEnd) {
-                net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
-                net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(Collections.emptyList());
+                // Only clear if this preview is owned by THIS user
+                if (previewOwner != null && previewOwner.equals(p.getUuid())) {
+                    net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.clear();
+                    previewOwner = null;
+                }
+                if (isLocalPlayer(p)) {
+                    LunarDrillPreview.setChargeProgress(0f);
+                    chargeReadyLatched = false;
+                }
                 return;
             }
 
-            // Keep charge loop alive + update progress every tick (client-only)
-            startOrUpdateChargeLoop((net.minecraft.client.network.ClientPlayerEntity) p, stack, remainingUseTicks);
-
+            // Ray from THIS player (works for remote players too because their yaw/pitch are synced)
             BlockHitResult bhr = rayToBlock(world, p, PREVIEW_REACH);
             if (bhr == null || bhr.getType() != HitResult.Type.BLOCK) {
-                net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(Collections.emptyList());
+                if (previewOwner != null && previewOwner.equals(p.getUuid())) {
+                    net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.clear();
+                    previewOwner = null;
+                }
                 return;
             }
 
+            // Compute parameters
             Direction face = bhr.getSide();
             BlockPos origin = bhr.getBlockPos();
             Direction horiz = p.getHorizontalFacing();
@@ -670,17 +691,68 @@ public class LunarDrillItem extends Item implements GeoItem {
             long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
             int depth = clampDepth(nbt.getInt(NBT_DEPTH));
 
-            boolean[][] grid = bitsToGrid(mask);
-            List<BlockPos> targets = layoutPatternWithDepth(origin, face, horiz, grid, depth);
+            boolean local = isLocalPlayer(p);
 
-            net.seep.odd.abilities.lunar.client.LunarDrillPreview.setTargets(targets);
+            // ✅ Local player: full experience (sounds + readiness latch + progress)
+            float pct;
+            if (local) {
+                net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+                if (mc == null || mc.player == null) return;
+
+                pct = startOrUpdateChargeLoop(mc.player, stack, remainingUseTicks);
+                previewOwner = p.getUuid();
+
+                net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.setPattern(origin, face, horiz, mask, depth, pct);
+                return;
+            }
+
+            // ✅ Remote player: DO NOT cast, DO NOT run local sounds/HUD,
+            // but DO render the SAME world preview for observers (range-limited).
+            net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            if (mc == null || mc.player == null) return;
+
+            if (mc.player.squaredDistanceTo(p) > OBS_PREVIEW_RANGE_SQ) return;
+
+            // Don’t override the local player’s own preview if they are using it
+            if (previewOwner != null && previewOwner.equals(mc.player.getUuid())) return;
+
+            pct = computeChargePct(stack, remainingUseTicks);
+
+            previewOwner = p.getUuid();
+            net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.setPattern(origin, face, horiz, mask, depth, pct);
         }
 
-        static void onStoppedUsingClient() {
-            stopChargeLoop();
-            net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(0f);
-            net.seep.odd.abilities.lunar.client.LunarDrillPreview.clear();
-            chargeReadyLatched = false;
+        static void onStoppedUsingClient(net.minecraft.entity.LivingEntity user) {
+            if (!(user instanceof PlayerEntity p)) return;
+
+            // Only clear the preview if THIS user owned it on this client
+            if (previewOwner != null && previewOwner.equals(p.getUuid())) {
+                net.seep.odd.abilities.lunar.client.LunarDrillPreviewFx.clear();
+                previewOwner = null;
+            }
+
+            // Only stop local sounds/progress if THIS was the local player
+            if (isLocalPlayer(p)) {
+                stopChargeLoop();
+                LunarDrillPreview.setChargeProgress(0f);
+                chargeReadyLatched = false;
+            }
+        }
+
+        private static boolean isLocalPlayer(PlayerEntity p) {
+            net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
+            return mc != null && mc.player != null && mc.player.getUuid().equals(p.getUuid());
+        }
+
+        private static float computeChargePct(ItemStack stack, int remainingUseTicks) {
+            var nbt = stack.getOrCreateNbt();
+            long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
+            int depth = clampDepth(nbt.getInt(NBT_DEPTH));
+
+            int targetedBlocks = Math.max(1, Long.bitCount(mask) * depth);
+            int need  = (int) Math.ceil(CHARGE_BASE_T + CHARGE_PER_BLOCK_T * targetedBlocks);
+            int used  = MAX_USE_T - remainingUseTicks;
+            return MathHelper.clamp(used / (float) need, 0f, 1f);
         }
 
         private static void renderOverheatHud(net.minecraft.client.gui.DrawContext ctx, float tickDelta) {
@@ -701,7 +773,6 @@ public class LunarDrillItem extends Item implements GeoItem {
 
             float rawHeat = nbt.getFloat(NBT_HEAT);
 
-            // latch + locally cool for smooth HUD without NBT writes
             if (hudHeatLatch < 0f || rawHeat != hudHeatLatch || hudLatchT < 0) {
                 hudHeatLatch = rawHeat;
                 hudLatchT = now;
@@ -755,10 +826,9 @@ public class LunarDrillItem extends Item implements GeoItem {
             ctx.drawTextWithShadow(mc.textRenderer, right, x + w - rw, y - 10, hard ? 0xFF5555 : 0xA0FFFFFF);
         }
 
-        /* ---------- charge loop control ---------- */
-        private static void startOrUpdateChargeLoop(net.minecraft.client.network.ClientPlayerEntity p, ItemStack stack, int remainingUseTicks) {
+        private static float startOrUpdateChargeLoop(net.minecraft.client.network.ClientPlayerEntity p, ItemStack stack, int remainingUseTicks) {
             final net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
-            if (mc == null) return;
+            if (mc == null) return 0f;
 
             var nbt = stack.getOrCreateNbt();
             long mask = normalizeMask(nbt.getLong(NBT_PATTERN));
@@ -769,7 +839,7 @@ public class LunarDrillItem extends Item implements GeoItem {
             int used  = MAX_USE_T - remainingUseTicks;
             float pct = MathHelper.clamp(used / (float) need, 0f, 1f);
 
-            net.seep.odd.abilities.lunar.client.LunarDrillPreview.setChargeProgress(pct);
+            LunarDrillPreview.setChargeProgress(pct);
 
             float pitch = 0.9f + pct * 0.5f;
             float vol   = 0.35f + pct * 0.25f;
@@ -786,13 +856,14 @@ public class LunarDrillItem extends Item implements GeoItem {
                 chargeReadyLatched = true;
                 p.playSound(ModSounds.DRILL_READY, 0.9f, 1.0f);
             }
+
+            return pct;
         }
 
         private static void stopChargeLoop() {
             if (chargeLoop != null) { chargeLoop.finish(); chargeLoop = null; }
         }
 
-        /* ---------- drill loop control ---------- */
         private static void startOrUpdateDrillLoop(net.minecraft.client.network.ClientPlayerEntity p, float pitch) {
             final net.minecraft.client.MinecraftClient mc = net.minecraft.client.MinecraftClient.getInstance();
             if (mc == null) return;
@@ -809,7 +880,6 @@ public class LunarDrillItem extends Item implements GeoItem {
             if (drillLoop != null) { drillLoop.finish(); drillLoop = null; }
         }
 
-        /* ---------- renderer creation (reflective to avoid server linkage) ---------- */
         @SuppressWarnings("unchecked")
         static GeoItemRenderer<?> createRendererReflective() {
             try {
@@ -817,12 +887,10 @@ public class LunarDrillItem extends Item implements GeoItem {
                 Object o = c.getDeclaredConstructor().newInstance();
                 return (GeoItemRenderer<?>) o;
             } catch (Throwable t) {
-                // If renderer fails to load, fall back to null (client will simply not render custom)
                 return null;
             }
         }
 
-        /* ---------- simple moving loop sound ---------- */
         private static final class LoopForPlayer extends net.minecraft.client.sound.MovingSoundInstance {
             private final net.minecraft.client.network.ClientPlayerEntity player;
             private boolean stopped = false;

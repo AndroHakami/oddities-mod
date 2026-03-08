@@ -1,10 +1,14 @@
-// FILE: net/seep.odd/abilities/power/IceWitchPower.java
+// FILE: net/seep/odd/abilities/power/IceWitchPower.java
 package net.seep.odd.abilities.power;
 
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.projectile.thrown.SnowballEntity;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -28,6 +32,7 @@ import net.seep.odd.abilities.tamer.projectile.EmeraldShurikenEntity;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
 import java.util.*;
 
@@ -39,6 +44,7 @@ public final class IceWitchPower implements Power {
     @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
     @Override public long cooldownTicks() { return 0; }
     @Override public long secondaryCooldownTicks() { return 2 * 20; }
+
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
@@ -55,8 +61,41 @@ public final class IceWitchPower implements Power {
             default          -> "Ice Witch";
         };
     }
+
     @Override public String longDescription() {
         return "Attacks freeze; you have a mana bar. Soar with Elytra physics without an elytra, and fire an ice bolt that plants a damaging frost circle on impact.";
+    }
+
+    /* =================== POWERLESS override =================== */
+
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnOncePerSec(ServerPlayerEntity p, String msg) {
+        long now = p.getWorld().getTime();
+        long nextOk = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < nextOk) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal(msg), true);
+    }
+
+    /** When POWERLESS, we only force soar OFF + stop fall flying. We do NOT cancel existing projectiles/sigils. */
+    private static void forceStopFlight(ServerPlayerEntity p) {
+        if (p == null) return;
+        try {
+            if (p.isFallFlying()) p.stopFallFlying();
+        } catch (Throwable ignore) {}
+        State s = st(p);
+        s.soarEnabled = false;
+    }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        forceStopFlight(player);
+        syncSoarToggle(player, false);
     }
 
     /* ===== flight tuning (augment vanilla elytra while active) ===== */
@@ -92,6 +131,13 @@ public final class IceWitchPower implements Power {
     }
     private static final Map<UUID, State> S = new HashMap<>();
     private static State st(ServerPlayerEntity p){ return S.computeIfAbsent(p.getUuid(), u->new State()); }
+    private static final Identifier S2C_SOAR_TOGGLE = new Identifier("odd", "icewitch_soar_toggle");
+
+    private static void syncSoarToggle(ServerPlayerEntity p, boolean on) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeBoolean(on);
+        ServerPlayNetworking.send(p, S2C_SOAR_TOGGLE, buf);
+    }
 
     /* ===== packets -> state ===== */
     public static void onClientInput(ServerPlayerEntity p, int mask, float strafe, float forward) {
@@ -112,18 +158,37 @@ public final class IceWitchPower implements Power {
         sw.spawnParticles(OddParticles.ICE_FLAKE, victim.getX(), victim.getY() + victim.getStandingEyeHeight()*0.6, victim.getZ(), 6, 0.2,0.2,0.2, 0.01);
     }
 
-
     /* ===== inputs ===== */
     @Override
     public void activate(ServerPlayerEntity player) {
+        if (isPowerless(player)) {
+            forceStopFlight(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            syncSoarToggle(player, false);
+            return;
+        }
+
         State s = st(player);
         s.soarEnabled = !s.soarEnabled;
-        s.outOfManaNotified = false; // reset notifier when user toggles
-        player.sendMessage(Text.literal(s.soarEnabled ? "Soar: ON" : "Soar: OFF"), true);
+        s.outOfManaNotified = false;
+
+
+        // ✅ tell client for subtle overlay
+        syncSoarToggle(player, s.soarEnabled);
+
+        if (!s.soarEnabled) {
+            try { if (player.isFallFlying()) player.stopFallFlying(); } catch (Throwable ignore) {}
+        }
     }
 
     @Override
     public void activateSecondary(ServerPlayerEntity player) {
+        if (isPowerless(player)) {
+            forceStopFlight(player); // requested: powerless toggles off flight
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
+
         State s = st(player);
         if (s.mana < 25f) return;
 
@@ -165,9 +230,22 @@ public final class IceWitchPower implements Power {
             LAST_PROJECTILE_TICK = now;
         }
 
-        // passive mana regen
+        // passive mana regen (keep this even while powerless)
         s.mana = Math.min(MAX_MANA, s.mana + 0.30f);
         if (s.mana > 5f) s.outOfManaNotified = false; // rearm notice once you substantially regen
+
+        // POWERLESS: force flight OFF + do not allow soaring logic
+        if (isPowerless(p)) {
+            forceStopFlight(p);
+
+            // still sync mana (throttle)
+            if (++s.syncTimer >= 5) {
+                s.syncTimer = 0;
+                IceWitchPackets.syncManaToClient(p, s.mana, MAX_MANA);
+                syncSoarToggle(p, s.soarEnabled);
+            }
+            return;
+        }
 
         // === Real Elytra flight, augmented ===
         boolean canSoar =
@@ -211,7 +289,7 @@ public final class IceWitchPower implements Power {
                 if (s.soarEnabled) s.soarEnabled = false;
                 if (!s.outOfManaNotified) {
                     s.outOfManaNotified = true;
-                    p.sendMessage(Text.literal("Soar: OFF (out of mana)"), true);
+
                 }
             }
         } else {

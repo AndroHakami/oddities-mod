@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:block/cube_column_horizontal",
+  "textures": { "side": "odd:block/stripped_boggy_log", "end": "odd:block/stripped_boggy_log_top" }
+}

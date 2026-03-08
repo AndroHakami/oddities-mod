@@ -12,11 +12,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.Perspective;
-import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.Entity.RemovalReason;
-import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
@@ -40,20 +36,16 @@ public final class ZeroSuitNet {
     public static final Identifier S2C_ANIM = new Identifier(Oddities.MOD_ID, "zero_suit_anim");
     public static final Identifier C2S_FIRE = new Identifier(Oddities.MOD_ID, "zero_suit_fire");
 
-    // === Missile control ===
-    public static final Identifier S2C_MISSILE_BEGIN    = new Identifier(Oddities.MOD_ID, "zero_suit_missile_begin");
-    public static final Identifier S2C_MISSILE_END      = new Identifier(Oddities.MOD_ID, "zero_suit_missile_end");
-    public static final Identifier C2S_MISSILE_DETONATE = new Identifier(Oddities.MOD_ID, "zero_suit_missile_detonate");
-    public static final Identifier C2S_MISSILE_STEER    = new Identifier(Oddities.MOD_ID, "zero_suit_missile_steer");
-    public static final Identifier S2C_MISSILE_STEER    = new Identifier(Oddities.MOD_ID, "zero_suit_missile_steer_s2c");
+    public static final Identifier S2C_BLAST_FIRE_SHAKE = new Identifier(Oddities.MOD_ID, "zero_blast_fire_shake");
+    public static final Identifier S2C_ANNIHILATION_FX  = new Identifier(Oddities.MOD_ID, "annihilation_fx");
 
-    // === Annihilation FX ===
-    public static final Identifier S2C_ANNIHILATION_FX   = new Identifier(Oddities.MOD_ID, "annihilation_fx");
+    // Jetpack
+    public static final Identifier C2S_JETPACK_THRUST = new Identifier(Oddities.MOD_ID, "zero_jetpack_thrust");
+    public static final Identifier S2C_JETPACK_HUD    = new Identifier(Oddities.MOD_ID, "zero_jetpack_hud");
 
     private static boolean INIT_COMMON = false;
     private static boolean INIT_CLIENT = false;
 
-    /* ============================ COMMON ============================ */
     public static void initCommon() {
         if (INIT_COMMON) return;
         INIT_COMMON = true;
@@ -65,23 +57,18 @@ public final class ZeroSuitNet {
             }
         });
 
+
         ServerPlayNetworking.registerGlobalReceiver(C2S_FIRE, (server, player, handler, buf, responseSender) ->
                 server.execute(() -> ZeroSuitPower.onClientRequestedFire(player)));
 
-        ServerPlayNetworking.registerGlobalReceiver(C2S_MISSILE_DETONATE, (server, player, handler, buf, responseSender) ->
-                server.execute(() -> ZeroSuitPower.onClientRequestedMissileDetonate(player)));
-
-        ServerPlayNetworking.registerGlobalReceiver(C2S_MISSILE_STEER, (server, player, handler, buf, responseSender) -> {
-            final int entityId = buf.readVarInt();
-            final float yaw = buf.readFloat();
-            final float pitch = buf.readFloat();
-            final float roll = buf.readFloat();
-            server.execute(() -> ZeroSuitPower.onClientRequestedMissileSteer(player, entityId, yaw, pitch, roll));
+        ServerPlayNetworking.registerGlobalReceiver(C2S_JETPACK_THRUST, (server, player, handler, buf, responseSender) -> {
+            final float dx = buf.readFloat();
+            final float dy = buf.readFloat();
+            final float dz = buf.readFloat();
+            server.execute(() -> ZeroSuitPower.onClientJetpackThrust(player, dx, dy, dz));
         });
 
-        ServerPlayConnectionEvents.DISCONNECT.register((ServerPlayNetworkHandler handler, MinecraftServer server) -> {
-            // optional cleanup
-        });
+        ServerPlayConnectionEvents.DISCONNECT.register((ServerPlayNetworkHandler handler, MinecraftServer server) -> {});
     }
 
     public static void sendHud(ServerPlayerEntity to, boolean active, int charge, int max) {
@@ -92,16 +79,10 @@ public final class ZeroSuitNet {
         ServerPlayNetworking.send(to, S2C_HUD, out);
     }
 
-    public static void sendMissileBegin(ServerPlayerEntity to, int missileEntityId, float yaw, float pitch) {
+    public static void sendBlastFireShake(ServerPlayerEntity to, float ratio) {
         PacketByteBuf out = PacketByteBufs.create();
-        out.writeVarInt(missileEntityId);
-        out.writeFloat(yaw);
-        out.writeFloat(pitch);
-        ServerPlayNetworking.send(to, S2C_MISSILE_BEGIN, out);
-    }
-
-    public static void sendMissileEnd(ServerPlayerEntity to) {
-        ServerPlayNetworking.send(to, S2C_MISSILE_END, PacketByteBufs.empty());
+        out.writeFloat(ratio);
+        ServerPlayNetworking.send(to, S2C_BLAST_FIRE_SHAKE, out);
     }
 
     public static void sendAnnihilationFx(ServerPlayerEntity to, int durationTicks) {
@@ -110,6 +91,16 @@ public final class ZeroSuitNet {
         ServerPlayNetworking.send(to, S2C_ANNIHILATION_FX, out);
     }
 
+    public static void sendJetpackHud(ServerPlayerEntity to, boolean enabled, int fuel, int max, boolean thrusting) {
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeBoolean(enabled);
+        out.writeInt(fuel);
+        out.writeInt(max);
+        out.writeBoolean(thrusting);
+        ServerPlayNetworking.send(to, S2C_JETPACK_HUD, out);
+    }
+
+    /** Kept: UUID + key (client MUST read UUID first). */
     public static void broadcastAnim(ServerPlayerEntity src, String key) {
         PacketByteBuf out = PacketByteBufs.create();
         out.writeUuid(src.getUuid());
@@ -120,54 +111,44 @@ public final class ZeroSuitNet {
         ServerPlayNetworking.send(src, S2C_ANIM, out);
     }
 
-    public static void broadcastMissileSteer(Entity missile, float yaw, float pitch, float roll) {
-        if (missile == null || missile.getWorld() == null || missile.getWorld().isClient) return;
-
-        PacketByteBuf out = PacketByteBufs.create();
-        out.writeVarInt(missile.getId());
-        out.writeFloat(yaw);
-        out.writeFloat(pitch);
-        out.writeFloat(roll);
-
-        for (ServerPlayerEntity p : PlayerLookup.tracking(missile)) {
-            ServerPlayNetworking.send(p, S2C_MISSILE_STEER, out);
-        }
-    }
-
     /* ============================ CLIENT ============================ */
     @Environment(EnvType.CLIENT)
     public static void initClient() {
         if (INIT_CLIENT) return;
         INIT_CLIENT = true;
 
-        // IMPORTANT: this is your "shader loader" init point
-        // (AnnihilationFx should register Satin callbacks internally)
         AnnihilationFx.init();
 
-        // HUD
+        // jetpack overlay + HUD + loop sound
+        net.seep.odd.abilities.zerosuit.client.ZeroJetpackFx.init();
+        net.seep.odd.abilities.zerosuit.client.ZeroJetpackHud.init();
+
+        // blast overlay
+        net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.init();
+
+        // blast charge HUD updates
         ClientPlayNetworking.registerGlobalReceiver(S2C_HUD, (client, handler, buf, sender) -> {
-            boolean active = buf.readBoolean();
-            int charge = buf.readInt();
-            int max = buf.readInt();
+            final boolean active = buf.readBoolean();
+            final int charge = buf.readInt();
+            final int max = buf.readInt();
             client.execute(() -> net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.onHud(active, charge, max));
         });
 
-        // Annihilation trigger
+        // blast fire shake
+        ClientPlayNetworking.registerGlobalReceiver(S2C_BLAST_FIRE_SHAKE, (client, handler, buf, sender) -> {
+            final float ratio = buf.readFloat();
+            client.execute(() -> net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.kickFireShake(ratio));
+        });
+
+        // annihilation
         ClientPlayNetworking.registerGlobalReceiver(S2C_ANNIHILATION_FX, (client, handler, buf, sender) -> {
             final int dur = buf.readVarInt();
             client.execute(() -> AnnihilationFx.trigger(dur));
         });
 
-        // Disconnect cleanup
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.onHud(false, 0, 1);
-            ClientMissileControl.forceEnd();
-            AnnihilationFx.stop();
-        });
-
-        // CPM anims
+        // ✅ CPM anims packet layout is (UUID + String)
         ClientPlayNetworking.registerGlobalReceiver(S2C_ANIM, (client, handler, buf, sender) -> {
-            final java.util.UUID who = buf.readUuid();
+            final java.util.UUID who = buf.readUuid(); // read (layout correctness)
             final String key = buf.readString(32);
             client.execute(() -> {
                 switch (key) {
@@ -183,328 +164,82 @@ public final class ZeroSuitNet {
             });
         });
 
-        // Missile camera begin/end
-        ClientPlayNetworking.registerGlobalReceiver(S2C_MISSILE_BEGIN, (client, handler, buf, sender) -> {
-            final int id = buf.readVarInt();
-            final float yaw = buf.readFloat();
-            final float pitch = buf.readFloat();
-            client.execute(() -> ClientMissileControl.begin(id, yaw, pitch));
+        // jetpack HUD sync (this also drives jetpack loop sound inside ZeroJetpackHud)
+        ClientPlayNetworking.registerGlobalReceiver(S2C_JETPACK_HUD, (client, handler, buf, sender) -> {
+            final boolean enabled = buf.readBoolean();
+            final int fuel = buf.readInt();
+            final int max = buf.readInt();
+            final boolean thrusting = buf.readBoolean();
+            client.execute(() -> net.seep.odd.abilities.zerosuit.client.ZeroJetpackHud.onHud(enabled, fuel, max, thrusting));
         });
 
-        ClientPlayNetworking.registerGlobalReceiver(S2C_MISSILE_END, (client, handler, buf, sender) ->
-                client.execute(ClientMissileControl::end));
+        // ✅ RESET on BOTH disconnect + join (Splash-style)
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> hardResetClientState());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> hardResetClientState());
 
-        // Optional: server forwarded steering (helps non-owner predict too)
-        ClientPlayNetworking.registerGlobalReceiver(S2C_MISSILE_STEER, (client, handler, buf, sender) -> {
-            final int entityId = buf.readVarInt();
-            final float yaw = buf.readFloat();
-            final float pitch = buf.readFloat();
-            final float roll = buf.readFloat();
-            client.execute(() -> {
-                if (client.world == null) return;
-                Entity e = client.world.getEntityById(entityId);
-                if (e instanceof net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity zm) {
-                    zm.clientSetDesiredRotation(yaw, pitch, roll);
-                    zm.clientSetVisualRoll(roll);
-                }
-            });
-        });
-
-        // INPUT: left click edge + missile steering, plus "death/respawn camera reset"
+        // input: fire blast + jetpack thrust
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.world == null) return;
+            if (client.world == null || client.player == null) return;
 
-            // hard safety: if player died / swapped player entity while controlling missile, reset camera
-            if (ClientMissileControl.active()) {
-                if (client.player == null || !client.player.isAlive()) {
-                    ClientMissileControl.forceEnd();
-                    return;
-                }
-
-                boolean edge = net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.consumeAttackEdge();
-                if (edge) ClientPlayNetworking.send(C2S_MISSILE_DETONATE, PacketByteBufs.create());
-                ClientMissileControl.tickControlAndSend();
-                return;
-            }
-
+            // blast firing while charging
             if (net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.isCharging()) {
                 boolean edge = net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.consumeAttackEdge();
                 if (edge) ClientPlayNetworking.send(C2S_FIRE, PacketByteBufs.create());
             }
+
+            // jetpack thrust while holding space (when enabled per S2C)
+            if (net.seep.odd.abilities.zerosuit.client.ZeroJetpackHud.isEnabled()) {
+                if (client.options.jumpKey.isPressed()) {
+                    Vec3d dir = computeMoveDirection(client);
+                    PacketByteBuf out = PacketByteBufs.create();
+                    out.writeFloat((float) dir.x);
+                    out.writeFloat((float) dir.y);
+                    out.writeFloat((float) dir.z);
+                    ClientPlayNetworking.send(C2S_JETPACK_THRUST, out);
+                }
+            }
         });
     }
 
-    /**
-     * Missile POV + raw mouse steering:
-     * - You "become the missile" camera-wise (FIRST_PERSON on a nose camera rig)
-     * - Your real body stays put (server freezes you)
-     * - Mouse controls steer targets even though camera isn't the player
-     */
     @Environment(EnvType.CLIENT)
-    private static final class ClientMissileControl {
-        private static int missileId = -1;
+    private static void hardResetClientState() {
+        net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.onHud(false, 0, 1);
+        net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.stop();
 
-        private static Entity prevCamera = null;
-        private static Perspective prevPerspective = null;
-        private static boolean prevSmoothCam = false;
+        // This call MUST happen so jetpack loop sound + overlay hard-stop.
+        net.seep.odd.abilities.zerosuit.client.ZeroJetpackHud.onHud(false, 0, 100, false);
 
-        private static ArmorStandEntity camRig = null;
-        private static int camRigId = 0;
+        AnnihilationFx.stop();
+    }
 
-        private static double rigX, rigY, rigZ;
-        private static boolean rigInit = false;
+    @Environment(EnvType.CLIENT)
+    private static Vec3d computeMoveDirection(MinecraftClient mc) {
+        if (mc == null || mc.player == null) return new Vec3d(0, 1, 0);
 
-        // Control targets (what we send to the server)
-        private static float ctrlYaw = 0f;
-        private static float ctrlPitch = 0f;
-        private static float ctrlRoll = 0f;
+        float fwdIn = 0f;
+        float strIn = 0f;
+        try {
+            fwdIn = mc.player.input.movementForward;
+            strIn = mc.player.input.movementSideways;
+        } catch (Throwable ignored) {}
 
-        // Raw mouse tracking
-        private static double lastMouseX = 0.0;
-        private static double lastMouseY = 0.0;
-        private static boolean mouseInit = false;
+        float yaw = mc.player.getYaw();
+        float yawRad = yaw * ((float)Math.PI / 180f);
 
-        // Restore player look when exiting control
-        private static float savedPlayerYaw = 0f;
-        private static float savedPlayerPitch = 0f;
+        Vec3d fwd = new Vec3d(-MathHelper.sin(yawRad), 0, MathHelper.cos(yawRad));
+        Vec3d right = new Vec3d(MathHelper.cos(yawRad), 0, MathHelper.sin(yawRad));
 
-        private static final float RIG_LERP = 0.35f;
-        private static final float CAM_ROT_LERP = 0.35f;
-
-        private static final float ROLL_STEP = 4.5f;
-        private static final float ROLL_RETURN = 0.82f;
-
-        // Nose camera offsets (first-person)
-        private static final double CAM_FWD = 0.25;
-        private static final double CAM_UP = 0.10;
-
-        static boolean active() { return missileId != -1; }
-
-        static void begin(int entityId, float initialYaw, float initialPitch) {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            ClientWorld cw = mc.world;
-            if (cw == null || mc.player == null) return;
-
-            missileId = entityId;
-            rigInit = false;
-
-            savedPlayerYaw = mc.player.getYaw();
-            savedPlayerPitch = mc.player.getPitch();
-
-            ctrlYaw = MathHelper.wrapDegrees(initialYaw);
-            ctrlPitch = MathHelper.clamp(initialPitch, -80f, 80f);
-            ctrlRoll = 0f;
-
-            lastMouseX = mc.mouse.getX();
-            lastMouseY = mc.mouse.getY();
-            mouseInit = true;
-
-            prevCamera = mc.getCameraEntity();
-            prevPerspective = mc.options.getPerspective();
-            prevSmoothCam = mc.options.smoothCameraEnabled;
-
-            mc.options.setPerspective(Perspective.FIRST_PERSON);
-            mc.options.smoothCameraEnabled = true;
-
-            Entity missile = cw.getEntityById(entityId);
-            if (missile != null) {
-                createRig(cw, missile);
-                setRigRotation(camRig, ctrlYaw, ctrlPitch);
-                mc.setCameraEntity(camRig);
-
-                if (missile instanceof net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity zm) {
-                    zm.clientSetDesiredRotation(ctrlYaw, ctrlPitch, ctrlRoll);
-                    zm.clientSetVisualRoll(ctrlRoll);
-                }
-            }
+        Vec3d dir;
+        if (Math.abs(fwdIn) > 1e-3 || Math.abs(strIn) > 1e-3) {
+            dir = fwd.multiply(fwdIn).add(right.multiply(strIn));
+        } else {
+            dir = new Vec3d(0, 1, 0);
         }
 
-        private static void setRigRotation(ArmorStandEntity rig, float yaw, float pitch) {
-            if (rig == null) return;
-            rig.refreshPositionAndAngles(rig.getX(), rig.getY(), rig.getZ(), yaw, pitch);
-            rig.setHeadYaw(yaw);
-            rig.setBodyYaw(yaw);
-        }
+        // bias upward (jetpack feel)
+        dir = dir.add(0, 0.85, 0);
 
-        private static void createRig(ClientWorld cw, Entity missile) {
-            if (camRig != null) {
-                try { cw.removeEntity(camRigId, RemovalReason.DISCARDED); } catch (Throwable ignored) {}
-                camRig = null;
-            }
-
-            camRigId = -2000000000 + (missileId & 0x0FFFFFFF);
-
-            camRig = new ArmorStandEntity(cw, missile.getX(), missile.getY(), missile.getZ());
-            camRig.setInvisible(true);
-            camRig.setNoGravity(true);
-            camRig.setSilent(true);
-            camRig.noClip = true;
-
-            cw.addEntity(camRigId, camRig);
-
-            rigX = missile.getX();
-            rigY = missile.getY();
-            rigZ = missile.getZ();
-            rigInit = true;
-        }
-
-        static void end() {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            ClientWorld cw = mc.world;
-            if (missileId == -1) return;
-
-            if (prevCamera != null) mc.setCameraEntity(prevCamera);
-            else if (mc.player != null) mc.setCameraEntity(mc.player);
-
-            if (prevPerspective != null) mc.options.setPerspective(prevPerspective);
-            mc.options.smoothCameraEnabled = prevSmoothCam;
-
-            if (mc.player != null) {
-                mc.player.setYaw(savedPlayerYaw);
-                mc.player.setPitch(savedPlayerPitch);
-            }
-
-            if (cw != null && camRig != null) {
-                try { cw.removeEntity(camRigId, RemovalReason.DISCARDED); } catch (Throwable ignored) {}
-            }
-
-            camRig = null;
-            prevCamera = null;
-            prevPerspective = null;
-
-            missileId = -1;
-            rigInit = false;
-            ctrlRoll = 0f;
-            mouseInit = false;
-        }
-
-        static void forceEnd() {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            ClientWorld cw = mc != null ? mc.world : null;
-
-            if (mc != null) {
-                mc.options.smoothCameraEnabled = prevSmoothCam;
-                if (prevPerspective != null) mc.options.setPerspective(prevPerspective);
-
-                if (mc.player != null) {
-                    mc.player.setYaw(savedPlayerYaw);
-                    mc.player.setPitch(savedPlayerPitch);
-                }
-
-                if (prevCamera != null) mc.setCameraEntity(prevCamera);
-                else if (mc.player != null) mc.setCameraEntity(mc.player);
-            }
-
-            if (cw != null && camRig != null) {
-                try { cw.removeEntity(camRigId, RemovalReason.DISCARDED); } catch (Throwable ignored) {}
-            }
-
-            missileId = -1;
-            camRig = null;
-            prevCamera = null;
-            prevPerspective = null;
-            rigInit = false;
-            ctrlRoll = 0f;
-            mouseInit = false;
-        }
-
-        private static double mouseFactor(MinecraftClient mc) {
-            double sens = mc.options.getMouseSensitivity().getValue();
-            double f = sens * 0.6 + 0.2;
-            return f * f * f * 8.0;
-        }
-
-        static void tickControlAndSend() {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            ClientWorld cw = mc.world;
-            if (cw == null || mc.player == null) return;
-            if (missileId == -1) return;
-
-            Entity missile = cw.getEntityById(missileId);
-
-            // IMPORTANT: don't end() just because entity isn't present yet.
-            if (missile == null) return;
-
-            double mx = mc.mouse.getX();
-            double my = mc.mouse.getY();
-
-            if (!mouseInit) {
-                lastMouseX = mx;
-                lastMouseY = my;
-                mouseInit = true;
-            }
-
-            double dx = mx - lastMouseX;
-            double dy = my - lastMouseY;
-
-            lastMouseX = mx;
-            lastMouseY = my;
-
-            double g = mouseFactor(mc);
-
-            ctrlYaw += (float)(dx * g);
-            ctrlPitch += (float)(dy * g);
-
-            try {
-                if (mc.options.getInvertYMouse().getValue()) {
-                    ctrlPitch -= (float)(2.0 * dy * g);
-                }
-            } catch (Throwable ignored) {}
-
-            ctrlPitch = MathHelper.clamp(ctrlPitch, -80f, 80f);
-
-            boolean w = mc.options.forwardKey.isPressed();
-            boolean s = mc.options.backKey.isPressed();
-            if (w) ctrlPitch = MathHelper.clamp(ctrlPitch - 2.5f, -80f, 80f);
-            if (s) ctrlPitch = MathHelper.clamp(ctrlPitch + 2.5f, -80f, 80f);
-
-            boolean a = mc.options.leftKey.isPressed();
-            boolean d = mc.options.rightKey.isPressed();
-            if (a) ctrlRoll -= ROLL_STEP;
-            if (d) ctrlRoll += ROLL_STEP;
-            if (!a && !d) ctrlRoll *= ROLL_RETURN;
-            ctrlRoll = MathHelper.clamp(ctrlRoll, -55f, 55f);
-
-            if (missile instanceof net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity zm) {
-                zm.clientSetDesiredRotation(ctrlYaw, ctrlPitch, ctrlRoll);
-                zm.clientSetVisualRoll(ctrlRoll);
-            }
-
-            if (camRig == null || camRig.isRemoved()) {
-                createRig(cw, missile);
-                mc.setCameraEntity(camRig);
-            }
-
-            if (!rigInit) {
-                rigX = missile.getX();
-                rigY = missile.getY();
-                rigZ = missile.getZ();
-                rigInit = true;
-            } else {
-                rigX = MathHelper.lerp(RIG_LERP, rigX, missile.getX());
-                rigY = MathHelper.lerp(RIG_LERP, rigY, missile.getY());
-                rigZ = MathHelper.lerp(RIG_LERP, rigZ, missile.getZ());
-            }
-
-            Vec3d fwd = Vec3d.fromPolar(missile.getPitch(), missile.getYaw()).normalize();
-            double cx = rigX + fwd.x * CAM_FWD;
-            double cy = rigY + fwd.y * CAM_FWD + CAM_UP;
-            double cz = rigZ + fwd.z * CAM_FWD;
-
-            camRig.setPos(cx, cy, cz);
-
-            float myaw = missile.getYaw();
-            float mpitch = missile.getPitch();
-            float ry = MathHelper.lerpAngleDegrees(CAM_ROT_LERP, camRig.getYaw(), myaw);
-            float rp = MathHelper.lerp(CAM_ROT_LERP, camRig.getPitch(), mpitch);
-            setRigRotation(camRig, ry, rp);
-
-            PacketByteBuf out = PacketByteBufs.create();
-            out.writeVarInt(missileId);
-            out.writeFloat(ctrlYaw);
-            out.writeFloat(ctrlPitch);
-            out.writeFloat(ctrlRoll);
-            ClientPlayNetworking.send(C2S_MISSILE_STEER, out);
-        }
+        if (dir.lengthSquared() < 1e-6) return new Vec3d(0, 1, 0);
+        return dir.normalize();
     }
 }

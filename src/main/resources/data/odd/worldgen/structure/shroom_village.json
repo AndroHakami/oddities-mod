@@ -1,0 +1,13 @@
+{
+  "type": "odd:shroom_village",
+  "biomes": "#odd:has_structure/shroom_village",
+  "step": "surface_structures",
+  "terrain_adaptation": "none",
+  "spawn_overrides": {},
+
+  "radius": 28,
+  "wall_thickness": 4,
+  "base_y": 40,
+  "height": 260,
+  "tilt_degrees": 15
+}

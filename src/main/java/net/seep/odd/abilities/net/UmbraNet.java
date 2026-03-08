@@ -10,7 +10,6 @@ import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 import net.seep.odd.abilities.client.ClientPowerHolder;
-import net.seep.odd.abilities.power.UmbraSoulPower;
 
 public final class UmbraNet {
     private UmbraNet(){}
@@ -42,7 +41,6 @@ public final class UmbraNet {
             });
         });
 
-        // (If you still use the built-in shadow bar, keep this; otherwise remove)
         HudRenderCallback.EVENT.register(UmbraNet::renderShadowBar);
     }
 
@@ -52,7 +50,10 @@ public final class UmbraNet {
 
     private static void renderShadowBar(DrawContext ctx, float tickDelta) {
         if (!"umbra_soul".equals(ClientPowerHolder.get())) return;
-        if (!cActive && cEnergy <= 0) return;
+
+        // ✅ Only show while actually in shadow form
+        if (!cActive) return;
+
         var mc = MinecraftClient.getInstance();
         if (mc.player == null || mc.isPaused()) return;
 
@@ -60,7 +61,9 @@ public final class UmbraNet {
         int h = ctx.getScaledWindowHeight();
 
         int barW = 140, barH = 10, gap = 8;
-        int y = h - 40 - barH;
+
+        // ✅ move it UP so it doesn't cover armor/bubbles
+        int y = h - 40 - barH - 18;
         int x = (w - barW) / 2;
 
         ctx.fill(x - 2, y - 2, x + barW + 2, y + barH + 2, 0x66000000);
@@ -76,20 +79,11 @@ public final class UmbraNet {
     }
 
     /* ============== ASTRAL INPUT (C2S) ============== */
-
     public static final Identifier ASTRAL_INPUT = new Identifier("odd", "astral_input");
 
     public static void clientSendAstralInput(int mask) {
         PacketByteBuf buf = PacketByteBufs.create();
         buf.writeVarInt(mask);
         ClientPlayNetworking.send(ASTRAL_INPUT, buf);
-    }
-
-    /** Call once from common init. */
-    public static void registerServerAstral() {
-        ServerPlayNetworking.registerGlobalReceiver(ASTRAL_INPUT, (server, player, handler, buf, rs) -> {
-            final int mask = buf.readVarInt();
-            server.execute(() -> UmbraSoulPower.onAstralInput(player, mask));
-        });
     }
 }

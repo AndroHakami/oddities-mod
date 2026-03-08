@@ -1,0 +1,1 @@
+{ "parent": "minecraft:block/pressure_plate_up", "textures": { "texture": "odd:block/boggy_planks" } }

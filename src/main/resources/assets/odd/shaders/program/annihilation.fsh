@@ -307,39 +307,39 @@ void main() {
 
     // ===================== MODE 0: Radiation =====================
     if (Mode < 0.5) {
-        float pctGrow = sat(Radius / RADIATION_MAX_R);
-        float power = mix(1.0, 2.0, pctGrow);
-        float aStage = sat(a * (0.60 + 0.70 * pctGrow));
+    float pctGrow = sat(Radius / RADIATION_MAX_R);
+    float sky = step(0.9995, depth);
+    float worldMask = 1.0 - sky;
 
-        col = applyApocalypseGrade(col, depth, ro, rd, maxDist, stageRange, aStage, power, 0.0, 0.0);
+    // NO apocalypse grade during charge (only on detonation)
+    vec2 p2 = rp.xz;
+    float R2 = max(Radius, 0.0);
 
-        vec2 p = rp.xz;
-        float R = max(Radius, 0.0);
+    float angle = pctGrow * TAU;
+    p2 = rot2(angle) * p2;
 
-        float angle = pctGrow * TAU;
-        p = rot2(angle) * p;
+    float sym = radiationSymbol(p2, R2);
 
-        float sym = radiationSymbol(p, R);
+    float pulse = 0.65 + 0.35 * (0.5 + 0.5 * sin(iTime * 5.2));
+    float shimmer = 0.75 + 0.25 * sin(iTime * 12.5 + p2.x * 0.18 + p2.y * 0.16);
 
-        float pulse = 0.65 + 0.35 * (0.5 + 0.5 * sin(iTime * 5.2));
-        float shimmer = 0.75 + 0.25 * sin(iTime * 12.5 + p.x * 0.18 + p.y * 0.16);
+    vec3 hotCore = vec3(1.00, 0.98, 0.90);
+    vec3 gold    = vec3(1.00, 0.78, 0.24);
+    vec3 orange  = vec3(1.00, 0.52, 0.10);
 
-        vec3 hotCore = vec3(1.00, 0.98, 0.90);
-        vec3 gold    = vec3(1.00, 0.78, 0.24);
-        vec3 orange  = vec3(1.00, 0.52, 0.10);
+    vec3 glowCol = (orange * 2.7 + gold * 2.1 + hotCore * 1.3) * pulse * shimmer;
 
-        vec3 glowCol = (orange * 2.7 + gold * 2.1 + hotCore * 1.3) * pulse * shimmer;
+    float rr2 = length(p2);
+    float edge = 1.0 - smoothstep(R2 - 0.45, R2 + 0.45, rr2);
+    edge *= smoothstep(R2 - 1.15, R2 - 0.15, rr2);
+    edge = sat(edge) * (0.70 + 0.30 * sin(iTime * 7.0 + pctGrow * 6.0));
 
-        float rr = length(p);
-        float edge = 1.0 - smoothstep(R - 0.45, R + 0.45, rr);
-        edge *= smoothstep(R - 1.15, R - 0.15, rr);
-        edge = sat(edge) * (0.70 + 0.30 * sin(iTime * 7.0 + pctGrow * 6.0));
+    // world-only (no sky tinting)
+    col += glowCol * sym * (a * 2.55) * worldMask;
+    col += (gold * 4.2 + hotCore * 2.2) * edge * a * worldMask;
 
-        col += glowCol * sym * (a * 2.55);
-        col += (gold * 4.2 + hotCore * 2.2) * edge * a;
-
-        float hard = sat(sym * (0.62 + 0.30 * pulse) * a);
-        col = mix(col, mix(gold, hotCore, 0.55), hard);
+    float hard = sat(sym * (0.62 + 0.30 * pulse) * a) * worldMask;
+    col = mix(col, mix(gold, hotCore, 0.55), hard);
 
         // ===== Pre-drop in the last 0.10s (19.90 -> 20.00) =====
         // 0.10 / 20.0 = 0.005, so start at pctGrow >= 0.995

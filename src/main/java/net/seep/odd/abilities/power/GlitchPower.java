@@ -1,6 +1,8 @@
-// src/main/java/net/seep/odd/abilities/power/GlitchPower.java
 package net.seep.odd.abilities.power;
 
+// src/main/java/net/seep/odd/abilities/power/GlitchPower.java
+
+import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -52,6 +54,7 @@ import net.seep.odd.abilities.PowerAPI;
 import net.seep.odd.block.ModBlocks;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.sound.ModSounds;
+import net.seep.odd.status.ModStatusEffects;
 
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWScrollCallbackI;
@@ -246,6 +249,34 @@ public final class GlitchPower implements Power, HoldReleasePower {
         return pow instanceof GlitchPower;
     }
 
+    /* =================== POWERLESS override =================== */
+
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+
+    private static boolean isPowerless(ServerPlayerEntity p) {
+        return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
+    }
+
+    private static void warnOncePerSec(ServerPlayerEntity p, String msg) {
+        long now = p.getWorld().getTime();
+        long nextOk = WARN_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (now < nextOk) return;
+        WARN_UNTIL.put(p.getUuid(), now + 20);
+        p.sendMessage(Text.literal(msg), true);
+    }
+
+    private static void exitModes(ServerPlayerEntity p) {
+        UUID id = p.getUuid();
+        if (TK.containsKey(id)) stopTK(p);
+        if (WALL_AIM.containsKey(id)) stopWallAim(p);
+    }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        // IMPORTANT: POWERLESS should kick you out of both modes immediately
+        exitModes(player);
+    }
+
     /* =================== lifecycle hooks =================== */
 
     static {
@@ -284,13 +315,19 @@ public final class GlitchPower implements Power, HoldReleasePower {
     public void activate(ServerPlayerEntity player) {
         if (!isCurrent(player)) return;
 
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
+
         if (TK.containsKey(player.getUuid())) {
             stopTK(player);
             return;
         }
 
         if (WALL_AIM.containsKey(player.getUuid())) {
-            player.sendMessage(Text.literal("Finish Glitch Wall first."), true);
+
             return;
         }
 
@@ -304,6 +341,12 @@ public final class GlitchPower implements Power, HoldReleasePower {
     public void activateSecondary(ServerPlayerEntity player) {
         if (!isCurrent(player)) return;
 
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
+
         WallAimState st = WALL_AIM.get(player.getUuid());
         if (st == null) {
             startWallAim(player, true);
@@ -314,7 +357,7 @@ public final class GlitchPower implements Power, HoldReleasePower {
             placeWallFromAim(player, st);
             stopWallAim(player);
         } else {
-            player.sendMessage(Text.literal("Hold secondary to place Glitch Wall."), true);
+
         }
     }
 
@@ -323,6 +366,12 @@ public final class GlitchPower implements Power, HoldReleasePower {
     @Override
     public void onHoldStart(ServerPlayerEntity player, String slot) {
         if (!isCurrent(player)) return;
+
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
 
         if ("primary".equals(slot)) {
             if (TK.containsKey(player.getUuid())) return;
@@ -336,7 +385,7 @@ public final class GlitchPower implements Power, HoldReleasePower {
         if ("secondary".equals(slot)) {
             if (WALL_AIM.containsKey(player.getUuid())) return;
             if (TK.containsKey(player.getUuid())) {
-                player.sendMessage(Text.literal("Finish Telekinesis first."), true);
+
                 return;
             }
             startWallAim(player, false);
@@ -346,6 +395,12 @@ public final class GlitchPower implements Power, HoldReleasePower {
     @Override
     public void onHoldTick(ServerPlayerEntity player, String slot, int heldTicks) {
         if (!isCurrent(player)) return;
+
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
 
         if ("primary".equals(slot)) {
             TKState st = TK.get(player.getUuid());
@@ -362,6 +417,12 @@ public final class GlitchPower implements Power, HoldReleasePower {
     @Override
     public void onHoldRelease(ServerPlayerEntity player, String slot, int heldTicks, boolean canceled) {
         if (!isCurrent(player)) return;
+
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
 
         if ("primary".equals(slot)) {
             TKState st = TK.get(player.getUuid());
@@ -383,13 +444,13 @@ public final class GlitchPower implements Power, HoldReleasePower {
     private static boolean startTK(ServerPlayerEntity player, boolean toggleMode) {
         float energy = getEnergy(player);
         if (energy <= 1.0f) {
-            player.sendMessage(Text.literal("Telekinesis exhausted."), true);
+
             return false;
         }
 
         Entity target = raycastEntity(player, RAYCAST_RANGE);
         if (target == null || target == player) {
-            player.sendMessage(Text.literal("No target."), true);
+
             return false;
         }
 
@@ -481,6 +542,12 @@ public final class GlitchPower implements Power, HoldReleasePower {
 
         Vec3d blended = ent.getVelocity().multiply(1.0 - VEL_BLEND).add(wantedVel.multiply(VEL_BLEND));
         ent.setVelocity(blended);
+
+        // ✅ FIX: players need velocity sync/flag (otherwise it “looks like nothing happens”)
+        ent.velocityModified = true;
+        if (ent instanceof ServerPlayerEntity grabbedPlayer) {
+            grabbedPlayer.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket(ent));
+        }
 
         if (ent instanceof LivingEntity le) le.fallDistance = 0.0f;
 
@@ -676,6 +743,17 @@ public final class GlitchPower implements Power, HoldReleasePower {
                 continue;
             }
 
+            // POWERLESS: immediately exit both modes and do not run ability logic
+            if (isPowerless(p)) {
+                exitModes(p);
+
+                // (optional but nice) still regen energy while powerless
+                float e2 = getEnergy(p);
+                if (e2 < ENERGY_MAX) setEnergy(p, e2 + ENERGY_REGEN_PER_TICK);
+
+                continue;
+            }
+
             // TK
             TKState tk = TK.get(uuid);
             if (tk != null) {
@@ -716,6 +794,12 @@ public final class GlitchPower implements Power, HoldReleasePower {
     private static void onScroll(ServerPlayerEntity player, float scrollY) {
         if (!isCurrent(player)) return;
 
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
+
         // Wall aim: scroll adjusts wall distance (1..16)
         WallAimState wa = WALL_AIM.get(player.getUuid());
         if (wa != null) {
@@ -743,12 +827,24 @@ public final class GlitchPower implements Power, HoldReleasePower {
         Vec3d look = player.getRotationVec(1.0f);
         Vec3d impulse = look.multiply(0.30 * clamped);
         ent.addVelocity(impulse.x, impulse.y, impulse.z);
+
+        // keep player sync happy too
+        ent.velocityModified = true;
+        if (ent instanceof ServerPlayerEntity grabbedPlayer) {
+            grabbedPlayer.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket(ent));
+        }
     }
 
     /* =================== wall orient handling =================== */
 
     private static void onWallOrient(ServerPlayerEntity player, int dYawSteps, int dPitchSteps) {
         if (!isCurrent(player)) return;
+
+        if (isPowerless(player)) {
+            exitModes(player);
+            warnOncePerSec(player, "§cYou are powerless.");
+            return;
+        }
 
         WallAimState wa = WALL_AIM.get(player.getUuid());
         if (wa == null) return;
@@ -838,6 +934,10 @@ public final class GlitchPower implements Power, HoldReleasePower {
 
     private static void applySlowOnly(Entity ent) {
         ent.setVelocity(ent.getVelocity().multiply(0.55));
+        ent.velocityModified = true;
+        if (ent instanceof ServerPlayerEntity grabbedPlayer) {
+            grabbedPlayer.networkHandler.sendPacket(new net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket(ent));
+        }
         if (ent instanceof LivingEntity le) {
             le.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 10, 3, false, false, true));
         }
