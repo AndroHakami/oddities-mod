@@ -47,6 +47,8 @@ public class ModSounds {
     public static final SoundEvent SHADOW_KUNAI_TP    = registerSoundEvent("shadow_kunai_tp");
     public static final SoundEvent SHADOW_KUNAI_SWAP  = registerSoundEvent("shadow_kunai_swap");
     public static final SoundEvent UMBRA_SHADOW_SHIFT  = registerSoundEvent("umbra_shadow_shift");
+    public static final SoundEvent WITCH_BOSS = registerSoundEvent("witch_boss");
+    public static final SoundEvent WITCH_BOSS_2 = registerSoundEvent("witch_boss_2");
 
 
     // UFO SHIT

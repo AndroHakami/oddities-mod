@@ -29,10 +29,13 @@ import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.booklet.item.BookletSpawnEggItem;
 import net.seep.odd.entity.eggasaur.item.EggasaurSpawnEggItem;
 import net.seep.odd.entity.seal.item.SealSpawnEggItem;
+import net.seep.odd.entity.skull_bird.item.SkullBirdSpawnEggItem;
 import net.seep.odd.entity.whiskers.item.WhiskersSpawnEggItem;
 import net.seep.odd.expeditions.rottenroots.boggy.BoggyBoatItem;
 import net.seep.odd.expeditions.rottenroots.item.SporeBowItem;
+import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.item.custom.CosmicKatanaItem;
+import net.seep.odd.item.custom.DeviceItem;
 import net.seep.odd.item.custom.MetalDetectorItem;
 import net.seep.odd.item.custom.TooltipItem;
 import net.seep.odd.item.ghost.GhostHandItem;
@@ -90,6 +93,10 @@ public class ModItems {
             new Identifier(Oddities.MOD_ID, "shadow_kunai"),
             new Item(new FabricItemSettings().maxCount(1))
     );
+    public static final Item SKULL_BIRD_SPAWN_EGG = registerItem(
+            "skull_bird_spawn_egg",
+            new SkullBirdSpawnEggItem(new FabricItemSettings().maxCount(1))
+    );
     public static final Item WALKING_STICK = registerItem("walking_stick", new WalkingStickItem(new FabricItemSettings().maxCount(1)));
     public static final Item WIZARD_FIRE_PROJECTILE_ITEM = registerItem("wizard_fire_projectile", new Item(new FabricItemSettings()));
     public static final Item WIZARD_WATER_PROJECTILE_ITEM = registerItem("wizard_water_projectile", new Item(new FabricItemSettings()));
@@ -100,6 +107,15 @@ public class ModItems {
             ModBoats.BOGGY_BOAT_ID,
             ModBoats.BOGGY_BOAT_KEY,
             false
+    );
+    public static final Item POISON_BUCKET = registerItem(
+            "poison_bucket",
+            new BucketItem(
+                    ModFluids.STILL_POISON,
+                    new FabricItemSettings()
+                            .recipeRemainder(Items.BUCKET)
+                            .maxCount(1)
+            )
     );
 
     public static final Item BOGGY_CHEST_BOAT = TerraformBoatItemHelper.registerBoatItem(
@@ -144,6 +160,7 @@ public class ModItems {
                     191
             )
     );
+    public static final Item DEVICE = registerItem("device", new DeviceItem(new Item.Settings().maxCount(1)));
 
     /* =========================
        ✅ CHEF FOODS (from your PNGs)

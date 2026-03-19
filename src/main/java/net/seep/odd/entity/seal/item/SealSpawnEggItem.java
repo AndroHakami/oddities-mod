@@ -1,3 +1,4 @@
+// FILE: src/main/java/net/seep/odd/entity/seal/item/SealSpawnEggItem.java
 package net.seep.odd.entity.seal.item;
 
 import net.minecraft.block.BlockState;
@@ -27,7 +28,6 @@ public final class SealSpawnEggItem extends Item {
         Direction side = context.getSide();
         BlockState state = world.getBlockState(pos);
 
-        // Spawn on the face you clicked (or inside if non-solid)
         BlockPos spawnPos = state.getCollisionShape(world, pos).isEmpty() ? pos : pos.offset(side);
 
         SealEntity seal = ModEntities.SEAL.create(world);
@@ -48,7 +48,8 @@ public final class SealSpawnEggItem extends Item {
             seal.setInSittingPose(false);
         }
 
-        seal.setPersistent(); // don't despawn
+        seal.ensureVariantPicked();
+        seal.setPersistent();
         world.spawnEntity(seal);
 
         ItemStack stack = context.getStack();

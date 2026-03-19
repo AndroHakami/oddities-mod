@@ -35,6 +35,7 @@ import net.seep.odd.block.cultist.CentipedeSpawnBlock;
 import net.seep.odd.block.cultist.CentipedeSpawnBlockEntity;
 
 import net.seep.odd.block.custom.CrappyBlock;
+import net.seep.odd.block.custom.PoisonFluidBlock;
 import net.seep.odd.block.custom.SoundBlock;
 
 import net.seep.odd.block.grandanvil.GrandAnvilBlock;
@@ -42,6 +43,7 @@ import net.seep.odd.block.grandanvil.GrandAnvilBlockEntity;
 
 import net.seep.odd.block.rotten_roots.BlueMushroomPlantBlock;
 import net.seep.odd.block.rotten_roots.BlueMushroomTrampolineBlock;
+import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.sound.ModSounds;
 
 // False Flower
@@ -156,6 +158,9 @@ public class ModBlocks {
             Registries.ITEM, id("used_dabloon_bookshelf"),
             new BlockItem(USED_DABLOON_BOOKSHELF, new Item.Settings())
     );
+
+    // posion fluid
+    public static Block POISON;
 
     /* ---------------- Cultist: Centipede Spawn ---------------- */
     public static Block CENTIPEDE_SPAWN;
@@ -272,6 +277,20 @@ public class ModBlocks {
         BLUE_MUSHROOM_ITEM = Registry.register(
                 Registries.ITEM, id("blue_mushroom"),
                 new BlockItem(BLUE_MUSHROOM, new FabricItemSettings())
+        );
+        POISON = Registry.register(
+                Registries.BLOCK, id("poison"),
+                new PoisonFluidBlock(
+                        ModFluids.STILL_POISON,
+                        AbstractBlock.Settings.copy(Blocks.WATER)
+                                .noCollision()
+                                .strength(100.0f)
+                                .dropsNothing()
+                                .replaceable()
+                                .liquid()
+                                .nonOpaque()
+                                .luminance(state -> 15)
+                )
         );
 
         BLUE_MUSHROOM_BLOCK = Registry.register(

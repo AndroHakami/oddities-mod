@@ -32,6 +32,7 @@ import net.seep.odd.abilities.tamer.projectile.TameBallEntity;
 import net.seep.odd.abilities.vampire.entity.BloodCrystalProjectileEntity;
 import net.seep.odd.abilities.wizard.entity.*;
 import net.seep.odd.entity.booklet.BookletEntity;
+import net.seep.odd.entity.bosswitch.*;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.creepy.CreepyEntity;
 import net.seep.odd.entity.cultist.CentipedeEntity;
@@ -49,6 +50,7 @@ import net.seep.odd.entity.rotten_roots.ShroomEntity;
 import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileEntity;
 import net.seep.odd.entity.seal.SealEntity;
 import net.seep.odd.entity.skitter.SkitterEntity;
+import net.seep.odd.entity.skull_bird.SkullBirdEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
@@ -170,6 +172,12 @@ public final class ModEntities {
     public static final Identifier SPORE_MUSHROOM_PROJECTILE_ID = new Identifier(Oddities.MOD_ID, "spore_mushroom_projectile");
     public static final Identifier WIND_WITCH_ID = new Identifier(Oddities.MOD_ID, "wind_witch");
     public static final Identifier TORNADO_PROJECTILE_ID = new Identifier(Oddities.MOD_ID, "tornado_projectile");
+    public static final Identifier BOSS_WITCH_ID       = new Identifier(Oddities.MOD_ID, "boss_witch");
+    public static final Identifier FLAMING_SKULL_ID    = new Identifier(Oddities.MOD_ID, "flaming_skull");
+    public static final Identifier ROTTEN_SPIKE_ID     = new Identifier(Oddities.MOD_ID, "rotten_spike");
+    public static final Identifier BOSS_WITCH_SNARE_ID = new Identifier(Oddities.MOD_ID, "boss_witch_snare");
+    public static final Identifier BOSS_GOLEM_ID = new Identifier(Oddities.MOD_ID, "boss_golem");
+    public static final Identifier SKULL_BIRD_ID = new Identifier(Oddities.MOD_ID, "skull_bird");
 
 
 
@@ -181,6 +189,66 @@ public final class ModEntities {
        ========================================================= */
 
     // ADD TO ModEntities
+    public static final EntityType<SkullBirdEntity> SKULL_BIRD = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "skull_bird"),
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, SkullBirdEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.8f, 0.95f))
+                    .trackRangeBlocks(10)
+                    .trackedUpdateRate(3)
+                    .build()
+    );
+
+    public static final EntityType<BossGolemEntity> BOSS_GOLEM = Registry.register(
+            Registries.ENTITY_TYPE,
+            BOSS_GOLEM_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, BossGolemEntity::new)
+                    .dimensions(EntityDimensions.fixed(4.6f, 5.2f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    public static final EntityType<BossWitchEntity> BOSS_WITCH = Registry.register(
+            Registries.ENTITY_TYPE,
+            BOSS_WITCH_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, BossWitchEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.1f, 2.4f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+
+    public static final EntityType<FlamingSkullEntity> FLAMING_SKULL = Registry.register(
+            Registries.ENTITY_TYPE,
+            FLAMING_SKULL_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, FlamingSkullEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.45f, 0.45f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
+    public static final EntityType<RottenSpikeEntity> ROTTEN_SPIKE = Registry.register(
+            Registries.ENTITY_TYPE,
+            ROTTEN_SPIKE_ID,
+            FabricEntityTypeBuilder.<RottenSpikeEntity>create(SpawnGroup.MISC, RottenSpikeEntity::new)
+                    .dimensions(EntityDimensions.fixed(3.0f, 3.0f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
+    public static final EntityType<BossWitchSnareEntity> BOSS_WITCH_SNARE = Registry.register(
+            Registries.ENTITY_TYPE,
+            BOSS_WITCH_SNARE_ID,
+            FabricEntityTypeBuilder.<BossWitchSnareEntity>create(SpawnGroup.MISC, BossWitchSnareEntity::new)
+                    .dimensions(EntityDimensions.fixed(6.2f, 0.2f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
     public static final EntityType<WindWitchEntity> WIND_WITCH = Registry.register(
             Registries.ENTITY_TYPE,
             WIND_WITCH_ID,
@@ -836,6 +904,26 @@ public final class ModEntities {
                     .trackedUpdateRate(10)
                     .build()
     );
+    public static final EntityType<net.seep.odd.entity.fatwitch.FatWitchEntity> FAT_WITCH =
+            Registry.register(
+                    Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "fat_witch"),
+                    FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, net.seep.odd.entity.fatwitch.FatWitchEntity::new)
+                            .dimensions(EntityDimensions.fixed(1.1f, 2.3f))
+                            .trackRangeBlocks(10)
+                            .build()
+            );
+
+    public static final EntityType<net.seep.odd.entity.fatwitch.FatWitchSigilEntity> FAT_WITCH_SIGIL =
+            Registry.register(
+                    Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "fat_witch_sigil"),
+                    FabricEntityTypeBuilder.<net.seep.odd.entity.fatwitch.FatWitchSigilEntity>create(SpawnGroup.MISC, net.seep.odd.entity.fatwitch.FatWitchSigilEntity::new)
+                            .dimensions(EntityDimensions.fixed(1.0f, 0.05f))
+                            .trackRangeBlocks(8)
+                            .trackedUpdateRate(1)
+                            .build()
+            );
 
     // Rotten Roots: False Frog
     public static final EntityType<net.seep.odd.entity.falsefrog.FalseFrogEntity> FALSE_FROG = Registry.register(
@@ -953,6 +1041,8 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(SHY_GUY, ShyGuyEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(WEEPING_ANGEL, WeepingAngelEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(CENTIPEDE, CentipedeEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(BOSS_WITCH, BossWitchEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(FLAMING_SKULL, FlamingSkullEntity.createAttributes());
 
         // Rise
         FabricDefaultAttributeRegistry.register(RISEN_ZOMBIE,
@@ -968,6 +1058,9 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(ModEntities.EGGASAUR, EggasaurEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(FLYING_WITCH, FlyingWitchEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(WIND_WITCH, WindWitchEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(BOSS_GOLEM, BossGolemEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(SKULL_BIRD, SkullBirdEntity.createSkullBirdAttributes());
+        FabricDefaultAttributeRegistry.register(ModEntities.FAT_WITCH, net.seep.odd.entity.fatwitch.FatWitchEntity.createAttributes());
 
 
 

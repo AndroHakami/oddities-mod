@@ -1,3 +1,4 @@
+// FILE: src/main/java/net/seep/odd/entity/seal/client/SealRenderer.java
 package net.seep.odd.entity.seal.client;
 
 import net.minecraft.client.render.entity.EntityRendererFactory;

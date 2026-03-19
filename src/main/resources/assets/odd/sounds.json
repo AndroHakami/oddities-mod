@@ -18,6 +18,18 @@
       "odd:vacuum_essence"
     ]
   },
+  "witch_boss": {
+    "subtitle": "odd.witch_boss",
+    "sounds": [
+      "odd:witch_boss"
+    ]
+  },
+  "witch_boss_2": {
+    "subtitle": "odd.witch_boss_2",
+    "sounds": [
+      "odd:witch_boss_2"
+    ]
+  },
   "glitter_music_disc": {
     "subtitle": "odd.glitter_music_disc",
     "sounds": [

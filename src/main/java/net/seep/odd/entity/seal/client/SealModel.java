@@ -1,3 +1,4 @@
+// FILE: src/main/java/net/seep/odd/entity/seal/client/SealModel.java
 package net.seep.odd.entity.seal.client;
 
 import net.minecraft.util.Identifier;
@@ -17,10 +18,10 @@ public final class SealModel extends GeoModel<SealEntity> {
         return switch (seal.getVariantId()) {
             case 1 -> new Identifier(Oddities.MOD_ID, "textures/entity/seal/seal_pink.png");
             case 2 -> new Identifier(Oddities.MOD_ID, "textures/entity/seal/seal_blue.png");
+            case 3 -> new Identifier(Oddities.MOD_ID, "textures/entity/seal/seal_rare.png");
             default -> new Identifier(Oddities.MOD_ID, "textures/entity/seal/seal.png");
         };
     }
-
 
     @Override
     public Identifier getAnimationResource(SealEntity animatable) {

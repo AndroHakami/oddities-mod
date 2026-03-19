@@ -87,6 +87,7 @@ import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
 
 import net.seep.odd.commands.OddCooldownCommand;
+import net.seep.odd.device.social.SocialNetworking;
 import net.seep.odd.enchant.ItalianStompersHandler;
 import net.seep.odd.enchant.ModEnchantments;
 
@@ -107,6 +108,7 @@ import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
 import net.seep.odd.expeditions.Expeditions;
 import net.seep.odd.expeditions.rottenroots.RottenRootsCommands;
 
+import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
@@ -119,6 +121,7 @@ import net.seep.odd.sound.ModSounds;
 
 import net.seep.odd.status.ModStatusEffects;
 import net.seep.odd.worldgen.ModSpawns;
+import net.seep.odd.worldgen.structure.WitchlogDebugCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.bernie.geckolib.GeckoLib;
@@ -131,6 +134,7 @@ public final class Oddities implements ModInitializer {
 	public void onInitialize() {
 		// ---- content registration (common/server-safe) ----
 		ModItemGroups.registerItemGroups();
+		ModFluids.registerModFluids();
 		ModBlocks.registerModBlocks();
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
@@ -144,6 +148,13 @@ public final class Oddities implements ModInitializer {
 		});
 
 		net.seep.odd.worldgen.ModStructures.init();
+		WitchlogDebugCommand.register();
+
+
+		// DEVICE
+		SocialNetworking.init();
+		net.seep.odd.device.notes.NotesNetworking.init();
+		net.seep.odd.device.bank.DabloonBankNetworking.init();
 
 
 

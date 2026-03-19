@@ -83,6 +83,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.render.TexturedRenderLayers;
 
 import net.seep.odd.block.ModBlocks;
+import net.seep.odd.client.device.social.SocialClientCache;
 import net.seep.odd.entity.ModBoats;
 import net.seep.odd.entity.ModEntities;
 
@@ -162,6 +163,7 @@ import net.seep.odd.client.audio.RiderRadioClient;
 import net.seep.odd.client.render.SuperThrownItemEntityRenderer;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.booklet.client.BookletRenderer;
+import net.seep.odd.entity.bosswitch.client.*;
 import net.seep.odd.entity.car.RiderCarRenderer;
 import net.seep.odd.entity.client.IceStatueEntityRenderer;
 import net.seep.odd.entity.creepy.client.CreepyRenderer;
@@ -180,6 +182,7 @@ import net.seep.odd.entity.rotten_roots.ShroomRenderer;
 import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileRenderer;
 import net.seep.odd.entity.seal.client.SealRenderer;
 import net.seep.odd.entity.skitter.client.SkitterRenderer;
+import net.seep.odd.entity.skull_bird.client.SkullBirdRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
@@ -195,6 +198,7 @@ import net.seep.odd.event.alien.client.AlienInvasionSkyClient;
 import net.seep.odd.event.alien.client.AlienOverworldGradeClient;
 import net.seep.odd.expeditions.rottenroots.boggy.client.BoggyBoatRenderer;
 
+import net.seep.odd.fluid.ModFluidRendering;
 import net.seep.odd.item.ModItems;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.particles.client.OddParticlesClient;
@@ -231,6 +235,10 @@ public final class OdditiesClient implements ClientModInitializer {
                 net.seep.odd.shop.screen.ModScreenHandlers.DABLOONS_MACHINE,
                 net.seep.odd.shop.client.DabloonsMachineScreen::new
         );
+        // DEVICE
+        SocialClientCache.initClient();
+        net.seep.odd.client.device.notes.NotesClientCache.initClient();
+        net.seep.odd.client.device.bank.DabloonBankClientCache.initClient();
 
 
         // Keybinds + HUDs (client)
@@ -610,6 +618,11 @@ public final class OdditiesClient implements ClientModInitializer {
         net.seep.odd.event.alien.client.sky.AlienOverworldSkyCore.init();
         AlienOverworldGradeClient.init();
 
+        BossWitchMusicClient.init();
+        BossGolemCarryCameraClient.init();
+        BossGolemShockwaveClient.init();
+        ModFluidRendering.register();
+
 
 
 
@@ -730,6 +743,14 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.HEX_PROJECTILE, HexProjectileRenderer::new);
         EntityRendererRegistry.register(ModEntities.WIND_WITCH, WindWitchRenderer::new);
         EntityRendererRegistry.register(ModEntities.TORNADO_PROJECTILE, TornadoProjectileRenderer::new);
+        EntityRendererRegistry.register(ModEntities.BOSS_WITCH, BossWitchRenderer::new);
+        EntityRendererRegistry.register(ModEntities.FLAMING_SKULL, FlamingSkullRenderer::new);
+        EntityRendererRegistry.register(ModEntities.ROTTEN_SPIKE, RottenSpikeRenderer::new);
+        EntityRendererRegistry.register(ModEntities.BOSS_WITCH_SNARE, BossWitchSnareRenderer::new);
+        EntityRendererRegistry.register(ModEntities.BOSS_GOLEM, BossGolemRenderer::new);
+        EntityRendererRegistry.register(ModEntities.SKULL_BIRD, SkullBirdRenderer::new);
+        EntityRendererRegistry.register(ModEntities.FAT_WITCH, net.seep.odd.entity.fatwitch.client.FatWitchRenderer::new);
+        EntityRendererRegistry.register(ModEntities.FAT_WITCH_SIGIL, net.seep.odd.entity.fatwitch.client.FatWitchSigilRenderer::new);
 
 
 

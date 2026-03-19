@@ -1,12 +1,10 @@
 package net.seep.odd.particles;
 
 import net.fabricmc.fabric.api.particle.v1.FabricParticleTypes;
-import net.minecraft.particle.ParticleType;
-import net.minecraft.particle.DefaultParticleType; // use DefaultParticleType if your mappings say so
+import net.minecraft.particle.DefaultParticleType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
-
 
 public final class OddParticles {
     public static final DefaultParticleType SPECTRAL_BURST = FabricParticleTypes.simple();
@@ -19,6 +17,8 @@ public final class OddParticles {
     public static final DefaultParticleType SPLASH_BUBBLE_PINK  = FabricParticleTypes.simple();
     public static final DefaultParticleType FAIRY_SPARKLES  = FabricParticleTypes.simple();
 
+    public static final DefaultParticleType POISON = FabricParticleTypes.simple();
+
     public static void register() {
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "spectral_burst"), SPECTRAL_BURST);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "ice_flake"), ICE_FLAKE);
@@ -30,7 +30,7 @@ public final class OddParticles {
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "splash_bubble_pink"), SPLASH_BUBBLE_PINK);
         Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "fairy_sparkles"), FAIRY_SPARKLES);
 
-
+        Registry.register(Registries.PARTICLE_TYPE, new Identifier("odd", "poison"), POISON);
     }
 
     private OddParticles() {}
