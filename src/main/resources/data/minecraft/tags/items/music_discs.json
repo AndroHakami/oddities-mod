@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "odd:glitter_music_disc"
+    "odd:glitter_music_disc",
+    "odd:crater_music_disc"
   ]
 }

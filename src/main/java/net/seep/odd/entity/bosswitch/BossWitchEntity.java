@@ -1,5 +1,8 @@
 package net.seep.odd.entity.bosswitch;
 
+import net.fabricmc.api.EnvType;
+import net.fabricmc.api.Environment;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
@@ -10,6 +13,7 @@ import net.minecraft.entity.ai.goal.RevengeGoal;
 import net.minecraft.entity.ai.pathing.BirdNavigation;
 import net.minecraft.entity.ai.pathing.EntityNavigation;
 import net.minecraft.entity.attribute.DefaultAttributeContainer;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.boss.BossBar;
 import net.minecraft.entity.boss.ServerBossBar;
@@ -23,6 +27,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
@@ -30,6 +35,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.seep.odd.entity.ModEntities;
+import net.seep.odd.entity.bosswitch.client.BossWitchHexZoneClient;
 import net.seep.odd.entity.flyingwitch.HexProjectileEntity;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -50,8 +56,27 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
     private static final double ARENA_RADIUS = 30.0D;
     private static final float PHASE_TWO_TRIGGER = 0.40f;
+    private static final double BASE_MAX_HEALTH = 260.0D;
+    private static final double HEALTH_SCALE_CHECK_RADIUS = 100.0D;
+    private static final double EXTRA_PLAYER_HEALTH_SCALE = 0.60D;
+    private static final int HEALTH_SCALE_CHECK_INTERVAL = 20;
+
+    private static final int HEX_ZONE_WAVE_COUNT = 3;
+    private static final int HEX_ZONE_INITIAL_CHARGE_TICKS = 30;
+    private static final int HEX_ZONE_REPEAT_CHARGE_TICKS = 15;
+    private static final int HEX_ZONE_TOTAL_TICKS = 67;
+    private static final int HEX_ZONE_COOLDOWN = 58;
+    private static final float HEX_ZONE_DAMAGE = 8.0f;
+    private static final double HEX_ZONE_ARENA_PADDING = 1.5D;
+
+    private static final int GOLEM_RECALL_CAST_TICK = 18;
+    private static final int GOLEM_RECALL_TOTAL_TICKS = 36;
+    private static final int GOLEM_RECALL_COOLDOWN = 54;
+
+    private static final int FALSE_MEMORY_SPAWN_TICKS = 100;
 
     private static final RawAnimation IDLE               = RawAnimation.begin().thenLoop("idle");
+    private static final RawAnimation SPAWN              = RawAnimation.begin().thenPlay("spawn");
     private static final RawAnimation FLYING_DASH        = RawAnimation.begin().thenPlay("flying_dash");
     private static final RawAnimation FLYING_DASH_TWIRL  = RawAnimation.begin().thenPlay("flying_dash_twirl");
     private static final RawAnimation SKULLS_CAST        = RawAnimation.begin().thenPlay("skulls_cast");
@@ -67,9 +92,17 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
             DataTracker.registerData(BossWitchEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Boolean> PHASE_TWO =
             DataTracker.registerData(BossWitchEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+    private static final TrackedData<Boolean> SPAWNING =
+            DataTracker.registerData(BossWitchEntity.class, TrackedDataHandlerRegistry.BOOLEAN);
+
+    private static final byte STATUS_HEX_ZONE_LONG_WAVE_A = 81;
+    private static final byte STATUS_HEX_ZONE_LONG_WAVE_B = 82;
+    private static final byte STATUS_HEX_ZONE_SHORT_WAVE_A = 83;
+    private static final byte STATUS_HEX_ZONE_SHORT_WAVE_B = 84;
 
     private enum AnimState {
         IDLE,
+        SPAWN,
         FLYING_DASH,
         FLYING_DASH_TWIRL,
         SKULLS_CAST,
@@ -87,7 +120,9 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         FROGS,
         FROG_TRANSFORM,
         SNARE,
-        SPIKE
+        SPIKE,
+        HEX_ZONES,
+        GOLEM_RECALL
     }
 
     private static final class TransformingFrogData {
@@ -121,6 +156,10 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
     private int attackCooldown = 60;
 
     private @Nullable UUID heldHexUuid = null;
+    private int cachedNearbyScalingPlayers = -1;
+    private double cachedScaledMaxHealth = BASE_MAX_HEALTH;
+
+    private int falseMemorySpawnTicks = 0;
 
     private final List<TransformingFrogData> transformingFrogs = new ArrayList<>();
 
@@ -137,7 +176,7 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
     public static DefaultAttributeContainer.Builder createAttributes() {
         return HostileEntity.createHostileAttributes()
-                .add(EntityAttributes.GENERIC_MAX_HEALTH, 260.0D)
+                .add(EntityAttributes.GENERIC_MAX_HEALTH, BASE_MAX_HEALTH)
                 .add(EntityAttributes.GENERIC_FOLLOW_RANGE, 40.0D)
                 .add(EntityAttributes.GENERIC_MOVEMENT_SPEED, 0.30D)
                 .add(EntityAttributes.GENERIC_FLYING_SPEED, 0.55D)
@@ -151,6 +190,7 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         super.initDataTracker();
         this.dataTracker.startTracking(ANIM_STATE, AnimState.IDLE.ordinal());
         this.dataTracker.startTracking(PHASE_TWO, false);
+        this.dataTracker.startTracking(SPAWNING, false);
     }
 
     public boolean isPhaseTwo() {
@@ -161,8 +201,41 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         this.dataTracker.set(PHASE_TWO, value);
     }
 
+    public boolean isFalseMemorySpawning() {
+        return this.dataTracker.get(SPAWNING);
+    }
+
+    private void setFalseMemorySpawning(boolean value) {
+        this.dataTracker.set(SPAWNING, value);
+    }
+
+    public void beginFalseMemorySpawn(BlockPos arenaHome) {
+        this.homePos = arenaHome.toImmutable();
+        this.setFalseMemorySpawning(true);
+        this.falseMemorySpawnTicks = FALSE_MEMORY_SPAWN_TICKS;
+
+        this.currentAttack = AttackKind.NONE;
+        this.attackTicks = 0;
+        this.attackCooldown = FALSE_MEMORY_SPAWN_TICKS + 10;
+        this.moveAnimTicks = 0;
+        this.dashCooldown = 20;
+        this.heldHexUuid = null;
+        this.setTarget(null);
+        this.setVelocity(Vec3d.ZERO);
+        this.fallDistance = 0.0f;
+
+        setAnimState(AnimState.SPAWN);
+    }
+
     public int getBossPhase() {
         return isPhaseTwo() ? 2 : 1;
+    }
+
+    private boolean isPhaseTwoCombatActive() {
+        if (!isPhaseTwo()) return false;
+
+        BossGolemEntity golem = findBossGolem();
+        return golem != null && golem.isActiveBody();
     }
 
     @Override
@@ -191,9 +264,9 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
             this.homePos = this.getBlockPos();
         }
 
-        if (this.moveAnimTicks > 0 && this.currentAttack == AttackKind.NONE) {
+        if (this.moveAnimTicks > 0 && this.currentAttack == AttackKind.NONE && !isFalseMemorySpawning()) {
             this.moveAnimTicks--;
-            if (this.moveAnimTicks <= 0 && !isPhaseTwo()) {
+            if (this.moveAnimTicks <= 0 && (!isPhaseTwo() || isPhaseTwoCombatActive())) {
                 setAnimState(AnimState.IDLE);
             }
         }
@@ -203,22 +276,51 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
         if (!this.getWorld().isClient) {
             this.bossBar.setName(this.getDisplayName());
+            if (this.age <= 1 || this.age % HEALTH_SCALE_CHECK_INTERVAL == 0) {
+                updateScaledMaxHealth();
+            }
             this.bossBar.setPercent(MathHelper.clamp(this.getHealth() / this.getMaxHealth(), 0.0f, 1.0f));
 
             ensureBossGolemExists();
             validateTarget();
 
+            if (isFalseMemorySpawning()) {
+                this.setTarget(null);
+                this.setVelocity(Vec3d.ZERO);
+                this.fallDistance = 0.0f;
+                setAnimState(AnimState.SPAWN);
+
+                if (this.falseMemorySpawnTicks > 0) {
+                    this.falseMemorySpawnTicks--;
+                }
+
+                if (this.falseMemorySpawnTicks <= 0) {
+                    this.setFalseMemorySpawning(false);
+                    this.falseMemorySpawnTicks = 0;
+                    this.attackCooldown = Math.max(this.attackCooldown, 20);
+                    setAnimState(AnimState.IDLE);
+                }
+
+                tickTransformingFrogs();
+                return;
+            }
+
             if (!isPhaseTwo() && this.getHealth() <= this.getMaxHealth() * PHASE_TWO_TRIGGER) {
                 beginPhaseTwo();
             }
 
-            if (!isPhaseTwo()) {
-                tickAttackLogic();
-                tickHeldHex();
-            } else {
+            if (isPhaseTwo() && !isPhaseTwoCombatActive()) {
                 this.currentAttack = AttackKind.NONE;
                 this.attackTicks = 0;
+                this.setVelocity(Vec3d.ZERO);
                 setAnimState(AnimState.FROG_TRANSFORM);
+            } else {
+                if (this.currentAttack == AttackKind.NONE && this.attackCooldown <= 0 && shouldRecallBossGolem()) {
+                    startAttack(AttackKind.GOLEM_RECALL);
+                }
+
+                tickAttackLogic();
+                tickHeldHex();
             }
 
             tickTransformingFrogs();
@@ -240,6 +342,20 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         BossGolemEntity golem = findBossGolem();
         if (golem != null) {
             golem.beginAwakening();
+        }
+    }
+
+    private boolean shouldRecallBossGolem() {
+        if (!isPhaseTwoCombatActive()) return false;
+
+        BossGolemEntity golem = findBossGolem();
+        return golem != null && golem.needsRecallToHome();
+    }
+
+    private void recallBossGolem() {
+        BossGolemEntity golem = findBossGolem();
+        if (golem != null) {
+            golem.recallToHome();
         }
     }
 
@@ -272,6 +388,11 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
     }
 
     private void validateTarget() {
+        if (isFalseMemorySpawning()) {
+            this.setTarget(null);
+            return;
+        }
+
         LivingEntity target = this.getTarget();
         if (target == null) {
             if (this.age % 10 == 0) {
@@ -313,6 +434,40 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         return best;
     }
 
+    private void updateScaledMaxHealth() {
+        EntityAttributeInstance maxHealthAttr = this.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
+        if (maxHealthAttr == null) return;
+
+        int nearbyPlayers = countNearbyScalingPlayers();
+        double scaledMaxHealth = BASE_MAX_HEALTH * (1.0D + Math.max(0, nearbyPlayers - 1) * EXTRA_PLAYER_HEALTH_SCALE);
+
+        if (this.cachedNearbyScalingPlayers == nearbyPlayers && Math.abs(this.cachedScaledMaxHealth - scaledMaxHealth) < 0.01D) {
+            return;
+        }
+
+        double oldMaxHealth = Math.max(1.0D, this.getMaxHealth());
+        float oldHealthPercent = MathHelper.clamp(this.getHealth() / (float) oldMaxHealth, 0.0f, 1.0f);
+
+        this.cachedNearbyScalingPlayers = nearbyPlayers;
+        this.cachedScaledMaxHealth = scaledMaxHealth;
+        maxHealthAttr.setBaseValue(scaledMaxHealth);
+        this.setHealth(MathHelper.clamp((float) (scaledMaxHealth * oldHealthPercent), 0.0f, (float) scaledMaxHealth));
+    }
+
+    private int countNearbyScalingPlayers() {
+        Vec3d center = getArenaCenter();
+        double radiusSq = HEALTH_SCALE_CHECK_RADIUS * HEALTH_SCALE_CHECK_RADIUS;
+        int count = 0;
+
+        for (PlayerEntity player : this.getWorld().getPlayers()) {
+            if (!player.isAlive() || player.isCreative() || player.isSpectator()) continue;
+            if (player.squaredDistanceTo(center.x, center.y, center.z) > radiusSq) continue;
+            count++;
+        }
+
+        return Math.max(1, count);
+    }
+
     private boolean isInsideArena(Entity entity) {
         if (this.homePos == null) return true;
         return horizontalDistToHomeSq(entity.getX(), entity.getZ()) <= (ARENA_RADIUS * ARENA_RADIUS);
@@ -344,11 +499,17 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
     }
 
     public boolean canAttackNow() {
-        return !isPhaseTwo() && this.currentAttack == AttackKind.NONE && this.attackCooldown <= 0 && this.getTarget() != null;
+        return !isFalseMemorySpawning()
+                && this.currentAttack == AttackKind.NONE
+                && this.attackCooldown <= 0
+                && this.getTarget() != null
+                && (!isPhaseTwo() || isPhaseTwoCombatActive());
     }
 
     public void maybeStartDashAnimation(boolean twirl) {
-        if (this.currentAttack != AttackKind.NONE || isPhaseTwo()) return;
+        if (this.currentAttack != AttackKind.NONE) return;
+        if (isFalseMemorySpawning()) return;
+        if (isPhaseTwo() && !isPhaseTwoCombatActive()) return;
         if (this.moveAnimTicks > 0) return;
 
         if (twirl) {
@@ -451,6 +612,46 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
                 }
             }
 
+            case HEX_ZONES -> {
+                if (this.attackTicks == 1) {
+                    setAnimState(AnimState.HEX_CAST);
+                    this.playSound(SoundEvents.ENTITY_WITCH_AMBIENT, 1.0f, 0.65f);
+                    sendHexZoneTelegraph(0, true);
+                }
+
+                if (this.attackTicks == 31) {
+                    detonateHexZones(0);
+                    sendHexZoneTelegraph(1, false);
+                }
+
+                if (this.attackTicks == 46) {
+                    detonateHexZones(1);
+                    sendHexZoneTelegraph(0, false);
+                }
+
+                if (this.attackTicks == 61) {
+                    detonateHexZones(0);
+                }
+
+                if (this.attackTicks >= HEX_ZONE_TOTAL_TICKS) {
+                    finishAttack(HEX_ZONE_COOLDOWN);
+                }
+            }
+
+            case GOLEM_RECALL -> {
+                if (this.attackTicks == 1) {
+                    setAnimState(AnimState.HEX_CAST);
+                    this.playSound(SoundEvents.ENTITY_WITCH_AMBIENT, 0.95f, 0.70f);
+                }
+                if (this.attackTicks == GOLEM_RECALL_CAST_TICK) {
+                    recallBossGolem();
+                    this.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.85f);
+                }
+                if (this.attackTicks >= GOLEM_RECALL_TOTAL_TICKS) {
+                    finishAttack(GOLEM_RECALL_COOLDOWN);
+                }
+            }
+
             default -> {
             }
         }
@@ -458,7 +659,14 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
     public void chooseAndStartAttack() {
         LivingEntity target = this.getTarget();
-        if (target == null || isPhaseTwo()) return;
+        if (target == null) return;
+        if (isFalseMemorySpawning()) return;
+        if (isPhaseTwo() && !isPhaseTwoCombatActive()) return;
+
+        if (shouldRecallBossGolem()) {
+            startAttack(AttackKind.GOLEM_RECALL);
+            return;
+        }
 
         double d2 = this.squaredDistanceTo(target);
         float healthPct = this.getHealth() / this.getMaxHealth();
@@ -472,6 +680,14 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         pool.add(AttackKind.HEX);
         pool.add(AttackKind.SKULLS);
         pool.add(AttackKind.SKULLS);
+        pool.add(AttackKind.HEX_ZONES);
+        pool.add(AttackKind.HEX_ZONES);
+
+        if (isPhaseTwo()) {
+            pool.add(AttackKind.HEX_ZONES);
+            pool.add(AttackKind.HEX_ZONES);
+            pool.add(AttackKind.HEX_ZONES);
+        }
 
         if (closeForSnare) {
             pool.add(AttackKind.SNARE);
@@ -484,11 +700,24 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
         if (healthPct <= 0.66f) {
             pool.add(AttackKind.HEX);
+            pool.add(AttackKind.HEX_ZONES);
+            pool.add(AttackKind.HEX_ZONES);
             if (closeForSnare) pool.add(AttackKind.SNARE);
         }
 
         if (healthPct <= 0.33f && inFrogRange && this.random.nextInt(3) == 0) {
             pool.add(AttackKind.FROGS);
+        }
+
+        if (isPhaseTwo()) {
+            pool.add(AttackKind.HEX);
+            pool.add(AttackKind.SKULLS);
+            pool.add(AttackKind.HEX_ZONES);
+            pool.add(AttackKind.HEX_ZONES);
+            pool.add(AttackKind.HEX_ZONES);
+            if (closeForSnare) {
+                pool.add(AttackKind.SNARE);
+            }
         }
 
         startAttack(pool.get(this.random.nextInt(pool.size())));
@@ -505,9 +734,82 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         this.attackTicks = 0;
         this.attackCooldown = cooldownTicks;
         this.heldHexUuid = null;
-        if (!isPhaseTwo()) {
+
+        if (isFalseMemorySpawning()) {
+            setAnimState(AnimState.SPAWN);
+        } else if (!isPhaseTwo() || isPhaseTwoCombatActive()) {
             setAnimState(AnimState.IDLE);
+        } else {
+            setAnimState(AnimState.FROG_TRANSFORM);
         }
+    }
+
+    public Vec3d getArenaCenter() {
+        BlockPos centerPos = this.homePos != null ? this.homePos : this.getBlockPos();
+        return Vec3d.ofCenter(centerPos);
+    }
+
+    private void sendHexZoneTelegraph(int hazardParity, boolean longCharge) {
+        if (!(this.getWorld() instanceof ServerWorld sw)) return;
+
+        byte status = longCharge
+                ? (hazardParity == 0 ? STATUS_HEX_ZONE_LONG_WAVE_A : STATUS_HEX_ZONE_LONG_WAVE_B)
+                : (hazardParity == 0 ? STATUS_HEX_ZONE_SHORT_WAVE_A : STATUS_HEX_ZONE_SHORT_WAVE_B);
+
+        sw.sendEntityStatus(this, status);
+        sw.playSound(null, this.getX(), this.getY(), this.getZ(), SoundEvents.BLOCK_RESPAWN_ANCHOR_CHARGE, SoundCategory.HOSTILE, 1.0f, longCharge ? 0.82f : (hazardParity == 0 ? 1.15f : 0.9f));
+    }
+
+    private void detonateHexZones(int hazardParity) {
+        if (!(this.getWorld() instanceof ServerWorld sw)) return;
+
+        Vec3d center = getArenaCenter();
+
+        for (PlayerEntity player : sw.getPlayers()) {
+            if (!player.isAlive() || player.isCreative() || player.isSpectator()) continue;
+            if (!isInsideArena(player)) continue;
+            if (!isHazardousHexTile(player.getX(), player.getZ(), hazardParity)) continue;
+
+            player.damage(sw.getDamageSources().magic(), HEX_ZONE_DAMAGE);
+            player.addVelocity(0.0D, 0.20D, 0.0D);
+            player.velocityModified = true;
+        }
+
+        sw.playSound(null, center.x, center.y, center.z, SoundEvents.ENTITY_BLAZE_SHOOT, SoundCategory.HOSTILE, 1.1f, 0.55f + this.random.nextFloat() * 0.12f);
+    }
+
+    private boolean isHazardousHexTile(double x, double z, int hazardParity) {
+        Vec3d center = getArenaCenter();
+        double dx = x - center.x;
+        double dz = z - center.z;
+        double radiusSq = (ARENA_RADIUS - HEX_ZONE_ARENA_PADDING) * (ARENA_RADIUS - HEX_ZONE_ARENA_PADDING);
+        if ((dx * dx + dz * dz) > radiusSq) return false;
+
+        int tileX = MathHelper.floor(x - Math.floor(center.x));
+        int tileZ = MathHelper.floor(z - Math.floor(center.z));
+        return ((tileX + tileZ) & 1) == hazardParity;
+    }
+
+    @Environment(EnvType.CLIENT)
+    private void handleHexZoneWaveClient(int hazardParity, int chargeTicks) {
+        BossWitchHexZoneClient.spawnWave(this.getId(), getArenaCenter(), ARENA_RADIUS - HEX_ZONE_ARENA_PADDING, hazardParity, chargeTicks);
+    }
+
+    @Override
+    public void handleStatus(byte status) {
+        if (status == STATUS_HEX_ZONE_LONG_WAVE_A || status == STATUS_HEX_ZONE_LONG_WAVE_B
+                || status == STATUS_HEX_ZONE_SHORT_WAVE_A || status == STATUS_HEX_ZONE_SHORT_WAVE_B) {
+            if (this.getWorld().isClient) {
+                int hazardParity = (status == STATUS_HEX_ZONE_LONG_WAVE_B || status == STATUS_HEX_ZONE_SHORT_WAVE_B) ? 1 : 0;
+                int chargeTicks = (status == STATUS_HEX_ZONE_LONG_WAVE_A || status == STATUS_HEX_ZONE_LONG_WAVE_B)
+                        ? HEX_ZONE_INITIAL_CHARGE_TICKS
+                        : HEX_ZONE_REPEAT_CHARGE_TICKS;
+                handleHexZoneWaveClient(hazardParity, chargeTicks);
+            }
+            return;
+        }
+
+        super.handleStatus(status);
     }
 
     private void summonFrogs(@Nullable LivingEntity target) {
@@ -761,12 +1063,16 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         }
 
         nbt.putBoolean("PhaseTwo", isPhaseTwo());
+        nbt.putBoolean("FalseMemorySpawning", isFalseMemorySpawning());
+        nbt.putInt("FalseMemorySpawnTicks", this.falseMemorySpawnTicks);
         nbt.putInt("AttackCooldown", this.attackCooldown);
         nbt.putInt("MoveAnimTicks", this.moveAnimTicks);
         nbt.putInt("DashCooldown", this.dashCooldown);
         nbt.putInt("AttackTicks", this.attackTicks);
         nbt.putString("AttackKind", this.currentAttack.name());
         if (this.heldHexUuid != null) nbt.putUuid("HeldHex", this.heldHexUuid);
+        nbt.putInt("ScaledNearbyPlayers", this.cachedNearbyScalingPlayers);
+        nbt.putDouble("ScaledMaxHealth", this.cachedScaledMaxHealth);
     }
 
     @Override
@@ -779,6 +1085,8 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
         this.bossGolemUuid = nbt.containsUuid("BossGolem") ? nbt.getUuid("BossGolem") : null;
         this.setPhaseTwo(nbt.getBoolean("PhaseTwo"));
+        this.setFalseMemorySpawning(nbt.getBoolean("FalseMemorySpawning"));
+        this.falseMemorySpawnTicks = nbt.getInt("FalseMemorySpawnTicks");
 
         this.attackCooldown = nbt.getInt("AttackCooldown");
         this.moveAnimTicks = nbt.getInt("MoveAnimTicks");
@@ -792,17 +1100,25 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         }
 
         this.heldHexUuid = nbt.containsUuid("HeldHex") ? nbt.getUuid("HeldHex") : null;
+        this.cachedNearbyScalingPlayers = nbt.contains("ScaledNearbyPlayers") ? nbt.getInt("ScaledNearbyPlayers") : -1;
+        this.cachedScaledMaxHealth = nbt.contains("ScaledMaxHealth") ? nbt.getDouble("ScaledMaxHealth") : BASE_MAX_HEALTH;
     }
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
         controllers.add(new AnimationController<>(this, "main", 0, state -> {
-            if (isPhaseTwo()) {
+            if (isFalseMemorySpawning()) {
+                state.setAndContinue(SPAWN);
+                return PlayState.CONTINUE;
+            }
+
+            if (isPhaseTwo() && !isPhaseTwoCombatActive()) {
                 state.setAndContinue(FROG_TRANSFORM);
                 return PlayState.CONTINUE;
             }
 
             switch (getAnimState()) {
+                case SPAWN -> state.setAndContinue(SPAWN);
                 case FLYING_DASH -> state.setAndContinue(FLYING_DASH);
                 case FLYING_DASH_TWIRL -> state.setAndContinue(FLYING_DASH_TWIRL);
                 case SKULLS_CAST -> state.setAndContinue(SKULLS_CAST);
@@ -851,6 +1167,11 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
         public void tick() {
             if (this.mob.homePos == null) return;
 
+            if (this.mob.isFalseMemorySpawning()) {
+                this.mob.setVelocity(Vec3d.ZERO);
+                return;
+            }
+
             Vec3d center = Vec3d.ofCenter(this.mob.homePos).add(0.0D, 8.0D, 0.0D);
             LivingEntity target = this.mob.getTarget();
 
@@ -885,9 +1206,12 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
                 );
             }
 
+            boolean canDash = !this.mob.isPhaseTwo() || this.mob.isPhaseTwoCombatActive();
             double d2 = this.mob.getPos().squaredDistanceTo(goal);
-            boolean dash = !this.mob.isPhaseTwo() && this.mob.dashCooldown <= 0 && (d2 > 64.0D || this.mob.getRandom().nextInt(90) == 0);
-            double speed = dash ? 1.85D : (this.mob.isPhaseTwo() ? 1.18D : 1.08D);
+            boolean dash = canDash && this.mob.dashCooldown <= 0
+                    && (d2 > 64.0D || this.mob.getRandom().nextInt(90) == 0);
+
+            double speed = dash ? 1.85D : ((this.mob.isPhaseTwo() && !this.mob.isPhaseTwoCombatActive()) ? 1.18D : 1.08D);
 
             if (dash) {
                 this.mob.maybeStartDashAnimation(this.mob.getRandom().nextBoolean());
@@ -911,6 +1235,8 @@ public final class BossWitchEntity extends HostileEntity implements GeoEntity {
 
         @Override
         public boolean canStart() {
+            if (this.mob.isFalseMemorySpawning()) return false;
+
             LivingEntity target = this.mob.getTarget();
             if (target == null || !target.isAlive()) return false;
             if (!this.mob.isInsideArena(target)) return false;

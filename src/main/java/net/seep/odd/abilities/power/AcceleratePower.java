@@ -115,27 +115,25 @@ public final class AcceleratePower implements Power {
     @Override
     public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" -> "SUPER SPEED";
-            case "secondary" -> "RECALL";
+            case "primary" -> "ACCELERATE";
+            case "secondary" -> "FLASH BACK";
             default -> Power.super.slotTitle(slot);
         };
+    }
+    @Override
+    public String longDescription() {
+        return """
+               Electricity coarses through your veins, accelerate forward and strike your opponents at a flashing pace!
+              
+               """;
     }
 
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary" ->
-                    "Toggle Super Speed (meter).\n" +
-                            "Speed 40 (constant), huge jump, keeps momentum.\n" +
-                            "Satin slipstream overlay (more intense when moving faster).\n" +
-                            "Yellow afterimages visible to everyone.\n" +
-                            "Subtle lightning trails at high speed.\n" +
-                            "Gravity 1.5x while active.";
+            case "primary" -> "Enter an energized state where you move extremely fast ";
             case "secondary" ->
-                    "Recall to your location from 7 seconds ago.\n" +
-                            "Heal back up to the health you had then (won’t lower current HP).\n" +
-                            "Cleanses harmful potion effects.\n" +
-                            "Screen Satin lightning rush + in-world burst at both points.";
+                    "Travel back in local time and mend recent injuries.";
             default -> "Accelerate";
         };
     }

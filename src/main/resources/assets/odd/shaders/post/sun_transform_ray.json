@@ -1,0 +1,15 @@
+{
+  "targets": [ "sun_transform_ray" ],
+  "passes": [
+    {
+      "name": "odd:sun_transform_ray",
+      "intarget": "minecraft:main",
+      "outtarget": "sun_transform_ray"
+    },
+    {
+      "name": "blit",
+      "intarget": "sun_transform_ray",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

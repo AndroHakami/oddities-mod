@@ -51,6 +51,7 @@ import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileEntity;
 import net.seep.odd.entity.seal.SealEntity;
 import net.seep.odd.entity.skitter.SkitterEntity;
 import net.seep.odd.entity.skull_bird.SkullBirdEntity;
+import net.seep.odd.entity.sun.PocketSunEntity;
 import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
@@ -194,7 +195,7 @@ public final class ModEntities {
             new Identifier(Oddities.MOD_ID, "skull_bird"),
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, SkullBirdEntity::new)
                     .dimensions(EntityDimensions.fixed(0.8f, 0.95f))
-                    .trackRangeBlocks(10)
+                    .trackRangeBlocks(64)
                     .trackedUpdateRate(3)
                     .build()
     );
@@ -239,6 +240,19 @@ public final class ModEntities {
                     .forceTrackedVelocityUpdates(true)
                     .build()
     );
+    public static final EntityType<net.seep.odd.entity.projectile.OceanChakramEntity> OCEAN_CHAKRAM =
+            Registry.register(
+                    Registries.ENTITY_TYPE,
+                    new Identifier(Oddities.MOD_ID, "ocean_chakram"),
+                    FabricEntityTypeBuilder.<net.seep.odd.entity.projectile.OceanChakramEntity>create(
+                                    SpawnGroup.MISC,
+                                    net.seep.odd.entity.projectile.OceanChakramEntity::new
+                            )
+                            .dimensions(EntityDimensions.fixed(0.5f, 0.5f))
+                            .trackRangeBlocks(64)
+                            .trackedUpdateRate(10)
+                            .build()
+            );
 
     public static final EntityType<BossWitchSnareEntity> BOSS_WITCH_SNARE = Registry.register(
             Registries.ENTITY_TYPE,
@@ -282,6 +296,15 @@ public final class ModEntities {
             new Identifier(Oddities.MOD_ID, "hex_projectile"),
             FabricEntityTypeBuilder.create(SpawnGroup.MISC, HexProjectileEntity::new)
                     .dimensions(EntityDimensions.fixed(0.50f, 0.50f))
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<PocketSunEntity> POCKET_SUN = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "pocket_sun"),
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, PocketSunEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.50f, 1.50f))
                     .trackRangeBlocks(80)
                     .trackedUpdateRate(1)
                     .build()
@@ -909,8 +932,9 @@ public final class ModEntities {
                     Registries.ENTITY_TYPE,
                     new Identifier(Oddities.MOD_ID, "fat_witch"),
                     FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, net.seep.odd.entity.fatwitch.FatWitchEntity::new)
-                            .dimensions(EntityDimensions.fixed(1.1f, 2.3f))
-                            .trackRangeBlocks(10)
+                            .dimensions(EntityDimensions.fixed(1.8f, 2.3f))
+                            .trackRangeBlocks(68)
+                            .trackedUpdateRate(2)
                             .build()
             );
 

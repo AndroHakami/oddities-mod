@@ -43,6 +43,7 @@
     "client.WorldRendererCloudMixin",
     "client.WorldRendererGlitchWallPreviewMixin",
     "client.WorldRendererNoCloudsMixin",
+    "client.TrumpetAxeBipedEntityModelMixin",
     "client.WorldRendererSkyMixin",
     "owl.client.EntityGlowingClientMixin",
     "owl.client.EntityScoreboardTeamClientMixin"

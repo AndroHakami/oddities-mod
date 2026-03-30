@@ -1,0 +1,15 @@
+{
+  "targets": [ "trumpet_axe_wave" ],
+  "passes": [
+    {
+      "name": "odd:trumpet_axe_wave",
+      "intarget": "minecraft:main",
+      "outtarget": "trumpet_axe_wave"
+    },
+    {
+      "name": "blit",
+      "intarget": "trumpet_axe_wave",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

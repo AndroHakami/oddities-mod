@@ -2,5 +2,212 @@
   "parent": "minecraft:item/generated",
   "textures": {
     "layer0": "odd:item/device"
-  }
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 1.0
+      },
+      "model": "odd:item/device/accelerate"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 2.0
+      },
+      "model": "odd:item/device/artificer"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 3.0
+      },
+      "model": "odd:item/device/buddymorph"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 4.0
+      },
+      "model": "odd:item/device/chef"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 5.0
+      },
+      "model": "odd:item/device/climber"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 6.0
+      },
+      "model": "odd:item/device/cosmic"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7.0
+      },
+      "model": "odd:item/device/cultist"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 8.0
+      },
+      "model": "odd:item/device/druid"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 9.0
+      },
+      "model": "odd:item/device/fairy"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 10.0
+      },
+      "model": "odd:item/device/falling_snow"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 11.0
+      },
+      "model": "odd:item/device/fire_sword"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 12.0
+      },
+      "model": "odd:item/device/forger"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 13.0
+      },
+      "model": "odd:item/device/gamble"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 14.0
+      },
+      "model": "odd:item/device/ghostlings"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 15.0
+      },
+      "model": "odd:item/device/glitch"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 16.0
+      },
+      "model": "odd:item/device/icewitch"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 17.0
+      },
+      "model": "odd:item/device/looker"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 18.0
+      },
+      "model": "odd:item/device/lunar"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 19.0
+      },
+      "model": "odd:item/device/misty_veil"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 20.0
+      },
+      "model": "odd:item/device/necromancer"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 21.0
+      },
+      "model": "odd:item/device/owl"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 22.0
+      },
+      "model": "odd:item/device/rat"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 23.0
+      },
+      "model": "odd:item/device/rider"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 24.0
+      },
+      "model": "odd:item/device/rise"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 25.0
+      },
+      "model": "odd:item/device/sniper"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 26.0
+      },
+      "model": "odd:item/device/splash"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 27.0
+      },
+      "model": "odd:item/device/supercharge"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 28.0
+      },
+      "model": "odd:item/device/umbra_soul"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 29.0
+      },
+      "model": "odd:item/device/vampire"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 30.0
+      },
+      "model": "odd:item/device/wizard"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 31.0
+      },
+      "model": "odd:item/device/zerosuit"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 32.0
+      },
+      "model": "odd:item/device/conquer"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 33.0
+      },
+      "model": "odd:item/device/blockade"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 34.0
+      },
+      "model": "odd:item/device/sun"
+    }
+
+  ]
 }

@@ -82,8 +82,19 @@ import net.seep.odd.abilities.icewitch.IceWitchInit;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.render.TexturedRenderLayers;
 
+import net.seep.odd.abilities.sun.SunFxNet;
+import net.seep.odd.abilities.sun.SunNet;
+import net.seep.odd.abilities.sun.client.SunCpmBridge;
+import net.seep.odd.abilities.sun.client.SunEmpoweredFx;
+import net.seep.odd.abilities.sun.client.SunTransformRayFx;
 import net.seep.odd.block.ModBlocks;
+import net.seep.odd.block.client.DabloonsMachineRenderer;
+import net.seep.odd.block.false_memory.client.FalseMemoryBlockRenderer;
+import net.seep.odd.block.rps_machine.client.RpsMachineBlockRenderer;
+import net.seep.odd.block.rps_machine.screen.RpsMachineScreen;
+import net.seep.odd.block.rps_machine.screen.RpsMachineScreenHandlers;
 import net.seep.odd.client.device.social.SocialClientCache;
+import net.seep.odd.client.fx.DabloonsMachineSatinFx;
 import net.seep.odd.entity.ModBoats;
 import net.seep.odd.entity.ModEntities;
 
@@ -177,6 +188,7 @@ import net.seep.odd.entity.flyingwitch.client.HexProjectileRenderer;
 import net.seep.odd.entity.misty.client.MistyBubbleRenderer;
 import net.seep.odd.entity.necromancer.client.CorpseRenderer;
 import net.seep.odd.entity.outerman.OuterManRenderer;
+import net.seep.odd.entity.projectile.client.OceanChakramRenderer;
 import net.seep.odd.entity.rotten_roots.ElderShroomRenderer;
 import net.seep.odd.entity.rotten_roots.ShroomRenderer;
 import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileRenderer;
@@ -184,6 +196,7 @@ import net.seep.odd.entity.seal.client.SealRenderer;
 import net.seep.odd.entity.skitter.client.SkitterRenderer;
 import net.seep.odd.entity.skull_bird.client.SkullBirdRenderer;
 import net.seep.odd.entity.spotted.PhantomBuddyRenderer;
+import net.seep.odd.entity.sun.client.PocketSunRenderer;
 import net.seep.odd.entity.supercharge.SuperEntities;
 import net.seep.odd.entity.ufo.UfoSaucerRenderer;
 
@@ -622,6 +635,20 @@ public final class OdditiesClient implements ClientModInitializer {
         BossGolemCarryCameraClient.init();
         BossGolemShockwaveClient.init();
         ModFluidRendering.register();
+        BossWitchHexZoneClient.init();
+        BossWitchSnareFx.init();
+
+        // Sun (CLIENT)
+        SunNet.Client.register();
+        SunFxNet.initClient();
+        SunEmpoweredFx.init();
+        SunTransformRayFx.init();
+        SunPower.Client.init();
+
+
+        // arcade
+        HandledScreens.register(RpsMachineScreenHandlers.RPS_MACHINE, RpsMachineScreen::new);
+        BlockEntityRendererRegistry.register(ModBlocks.RPS_MACHINE_BE, ctx -> new RpsMachineBlockRenderer());
 
 
 
@@ -751,6 +778,11 @@ public final class OdditiesClient implements ClientModInitializer {
         EntityRendererRegistry.register(ModEntities.SKULL_BIRD, SkullBirdRenderer::new);
         EntityRendererRegistry.register(ModEntities.FAT_WITCH, net.seep.odd.entity.fatwitch.client.FatWitchRenderer::new);
         EntityRendererRegistry.register(ModEntities.FAT_WITCH_SIGIL, net.seep.odd.entity.fatwitch.client.FatWitchSigilRenderer::new);
+        EntityRendererRegistry.register(ModEntities.POCKET_SUN, PocketSunRenderer::new);
+        BlockEntityRendererFactories.register(ModBlocks.FALSE_MEMORY_BE, FalseMemoryBlockRenderer::new);
+        EntityRendererRegistry.register(ModEntities.OCEAN_CHAKRAM, OceanChakramRenderer::new);
+        DabloonsMachineSatinFx.init();
+        BlockEntityRendererFactories.register(ModBlocks.DABLOONS_MACHINE_BE, DabloonsMachineRenderer::new);
 
 
 

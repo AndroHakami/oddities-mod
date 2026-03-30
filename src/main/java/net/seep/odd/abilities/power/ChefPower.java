@@ -52,11 +52,23 @@ public final class ChefPower implements Power {
         };
     }
 
-    @Override public String longDescription() {
-        return "Summon a Super Cooker. Cooking is a rhythm of stirring and timing. "
-                + "Secondary: pull out your Recipe Book.";
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "ETERNAL KITCHEN";
+            case "secondary" -> "FORBIDDEN RECIPES BOOK";
+            default -> Power.super.slotTitle(slot);
+        };
     }
 
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Conjure a cooker from the shadows.";
+            case "secondary" ->
+                    "Grab a hold of the latest recipes... that are totally legal!";
+            default -> "Accelerate";
+        };
+    }
     private static boolean isPowerless(ServerPlayerEntity player) {
         return player != null && player.hasStatusEffect(ModStatusEffects.POWERLESS);
     }

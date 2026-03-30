@@ -11,7 +11,6 @@ public final class ShopServerTick {
     }
 
     private static void tick(MinecraftServer server) {
-        // every 20 ticks sync balance to anyone with shop open
         if (server.getTicks() % 20 != 0) return;
 
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {

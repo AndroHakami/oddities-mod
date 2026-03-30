@@ -37,13 +37,19 @@ public final class ArtificerPower implements Power {
             default        -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "VIAL MATRIX";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
 
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Vial Matrix: opens a 3×3 storage that persists on death. "
-                            + "Only Potions + Essence Buckets can be stored.";
+                    "opens a 3×3 storage that persists on death.";
             case "overview" ->
                     "Artificer maintains a death-persistent potion/essence cache (Vial Matrix).";
             default -> "Artificer channels world essences through crafted instruments.";
@@ -53,8 +59,8 @@ public final class ArtificerPower implements Power {
     @Override
     public String longDescription() {
         return """
-               The Artificer wields a Vial Matrix: a 3×3 storage that persists through death.
-               It only accepts Potions and Essence Buckets.
+               The world is yours to reshape, use the vacuum to extact essences and build the potion mixer 
+               to brew miracles.
                """;
     }
 

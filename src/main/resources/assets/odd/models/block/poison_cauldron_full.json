@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/water_cauldron_full",
+  "textures": {
+    "content": "odd:block/poison_still"
+  }
+}

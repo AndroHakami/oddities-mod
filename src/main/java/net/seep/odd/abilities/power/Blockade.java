@@ -27,10 +27,11 @@ public class Blockade implements Power {
     // --- UI ---
     @Override public String displayName() { return "Blockade"; }
     @Override public String description() { return "Drop temporary platforms under your feet on command."; }
-    @Override public String longDescription() {
+    @Override
+    public String longDescription() {
         return """
-               You don’t build— you **spawn** ground beneath your stride. Flip the switch, stride forward,
-               and leave a vanishing walkway in your wake. Great for chases, escapes, and dramatic exits.""";
+                The air is your ground, blockade allows you traverse through any situation.
+               """;
     }
     @Override public Identifier iconTexture(String slot) {
         return new Identifier("odd", "textures/gui/abilities/blockade_portrait.png");
@@ -40,24 +41,17 @@ public class Blockade implements Power {
     }
     @Override public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" -> "Placement Mode";
+            case "primary" -> "BLOCK MANIFESATION";
             default -> Power.super.slotTitle(slot);
         };
     }
     @Override public String slotDescription(String slot) {
         return switch (slot) {
-            case "primary" -> "Toggle: while active, conjures temporary blocks under your feet";
+            case "primary" -> "Place a bed of temporary blocks under your feet";
             default -> "";
         };
     }
-    @Override public String slotLongDescription(String slot) {
-        return switch (slot) {
-            case "primary" -> "Activate to start laying a path of temporary blocks beneath you. "
-                    + "They’ll overwrite grass and plants, but never solid structures. "
-                    + "Each block poofs after a few seconds.";
-            default -> "";
-        };
-    }
+
 
     // --- Behavior ---
     private static final Set<UUID> ACTIVE = ConcurrentHashMap.newKeySet();

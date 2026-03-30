@@ -8,15 +8,16 @@ import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityT
 import net.fabricmc.fabric.api.object.builder.v1.block.type.BlockSetTypeBuilder;
 import net.fabricmc.fabric.api.object.builder.v1.block.type.WoodTypeBuilder;
 
+import net.fabricmc.fabric.api.transfer.v1.fluid.CauldronFluidContent;
+import net.fabricmc.fabric.api.transfer.v1.fluid.FluidConstants;
 import net.minecraft.block.*;
+import net.minecraft.block.cauldron.CauldronBehavior;
 import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.HangingSignItem;
-import net.minecraft.item.Item;
-import net.minecraft.item.SignItem;
+import net.minecraft.item.*;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.sound.BlockSoundGroup;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Identifier;
 import com.terraformersmc.terraform.sign.block.TerraformHangingSignBlock;
 import com.terraformersmc.terraform.sign.block.TerraformSignBlock;
@@ -35,6 +36,7 @@ import net.seep.odd.block.cultist.CentipedeSpawnBlock;
 import net.seep.odd.block.cultist.CentipedeSpawnBlockEntity;
 
 import net.seep.odd.block.custom.CrappyBlock;
+import net.seep.odd.block.custom.PoisonCauldronBlock;
 import net.seep.odd.block.custom.PoisonFluidBlock;
 import net.seep.odd.block.custom.SoundBlock;
 
@@ -43,12 +45,20 @@ import net.seep.odd.block.grandanvil.GrandAnvilBlockEntity;
 
 import net.seep.odd.block.rotten_roots.BlueMushroomPlantBlock;
 import net.seep.odd.block.rotten_roots.BlueMushroomTrampolineBlock;
+import net.seep.odd.block.rps_machine.RpsMachineBlock;
+import net.seep.odd.block.rps_machine.RpsMachineBlockEntity;
+
 import net.seep.odd.fluid.ModFluids;
+import net.seep.odd.item.ModItems;
 import net.seep.odd.sound.ModSounds;
 
 // False Flower
 import net.seep.odd.block.falseflower.FalseFlowerBlock;
 import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
+
+// False Memory
+import net.seep.odd.block.false_memory.FalseMemoryBlock;
+import net.seep.odd.block.false_memory.FalseMemoryBlockEntity;
 
 // ✅ Chef: Super Cooker
 import net.seep.odd.block.supercooker.SuperCookerBlock;
@@ -60,6 +70,8 @@ import net.seep.odd.block.gate.DimensionalGateBlockEntity;
 
 import net.fabricmc.fabric.api.registry.FlammableBlockRegistry;
 import net.fabricmc.fabric.api.registry.StrippableBlockRegistry;
+
+import java.util.Map;
 
 public class ModBlocks {
 
@@ -159,11 +171,16 @@ public class ModBlocks {
             new BlockItem(USED_DABLOON_BOOKSHELF, new Item.Settings())
     );
 
-    // posion fluid
+    // poison fluid
     public static Block POISON;
+    // arcade
+    public static Block RPS_MACHINE;
+    public static Item  RPS_MACHINE_ITEM;
+    public static BlockEntityType<RpsMachineBlockEntity> RPS_MACHINE_BE;
 
     /* ---------------- Cultist: Centipede Spawn ---------------- */
     public static Block CENTIPEDE_SPAWN;
+    public static BlockEntityType<DabloonsMachineBlockEntity> DABLOONS_MACHINE_BE;
     public static Item  CENTIPEDE_SPAWN_ITEM;
     public static BlockEntityType<CentipedeSpawnBlockEntity> CENTIPEDE_SPAWN_BE;
 
@@ -175,6 +192,11 @@ public class ModBlocks {
     public static Block FALSE_FLOWER;
     public static Item  FALSE_FLOWER_ITEM;
     public static BlockEntityType<FalseFlowerBlockEntity> FALSE_FLOWER_BE;
+
+    /* ---------------- False Memory ---------------- */
+    public static Block FALSE_MEMORY;
+    public static Item  FALSE_MEMORY_ITEM;
+    public static BlockEntityType<FalseMemoryBlockEntity> FALSE_MEMORY_BE;
 
     /*---------- DABLOONS ---------------*/
     public static Block DABLOONS_MACHINE;
@@ -225,7 +247,6 @@ public class ModBlocks {
     public static Block BOGGY_SIGN;
     public static Block BOGGY_WALL_SIGN;
 
-
     public static Block BOGGY_HANGING_SIGN;
     public static Block BOGGY_WALL_HANGING_SIGN;
 
@@ -237,9 +258,10 @@ public class ModBlocks {
     public static Item BLUE_MUSHROOM_BLOCK_ITEM;
 
     public static Block GLOW_SAP;
+    // poison fluid
 
-
-    // ✅ IMPORTANT: register (not build) so Minecraft/Fabric properly knows about the type
+    public static Block POISON_CAULDRON;
+    public static final Map<Item, CauldronBehavior> POISON_CAULDRON_BEHAVIOR = CauldronBehavior.createMap();
 
     public static final Identifier BOGGY_WOODTYPE_ID = id("boggy");
     public static final BlockSetType BOGGY_BLOCK_SET =
@@ -250,7 +272,6 @@ public class ModBlocks {
             id("entity/signs/boggy");
     public static final Identifier BOGGY_HANGING_SIGN_TEXTURE =
             id("entity/signs/hanging/boggy");
-    // yes, Terraform expects the "textures/gui/..." style id like Kaupenjoe
     public static final Identifier BOGGY_HANGING_SIGN_GUI_TEXTURE =
             id("textures/gui/hanging_signs/boggy");
 
@@ -263,21 +284,54 @@ public class ModBlocks {
                         .luminance(s -> 15))
         );
 
+        POISON_CAULDRON = Registry.register(
+                Registries.BLOCK, id("poison_cauldron"),
+                new PoisonCauldronBlock(
+                        AbstractBlock.Settings.copy(Blocks.WATER_CAULDRON),
+                        POISON_CAULDRON_BEHAVIOR
+                )
+        );
+
+        /* --------- REGISTER: RPS Machine --------- */
+        RPS_MACHINE = Registry.register(
+                Registries.BLOCK, id("rps_machine"),
+                new RpsMachineBlock(AbstractBlock.Settings.copy(Blocks.IRON_BLOCK)
+                        .strength(3.5f)
+                        .requiresTool()
+                        .nonOpaque()
+                        .sounds(BlockSoundGroup.METAL)
+                        .luminance(state -> state.get(RpsMachineBlock.ON) ? 10 : 0))
+        );
+
+        RPS_MACHINE_ITEM = Registry.register(
+                Registries.ITEM, id("rps_machine"),
+                new BlockItem(RPS_MACHINE, new FabricItemSettings().maxCount(1))
+        );
+
+        RPS_MACHINE_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("rps_machine_be"),
+                FabricBlockEntityTypeBuilder.create(RpsMachineBlockEntity::new, RPS_MACHINE).build(null)
+        );
+
         Registry.register(
                 Registries.ITEM, id("glow_sap"),
                 new BlockItem(GLOW_SAP, new FabricItemSettings())
         );
+
         Oddities.LOGGER.info("Registering ModBlocks for " + Oddities.MOD_ID);
+
         BLUE_MUSHROOM = Registry.register(
                 Registries.BLOCK, id("blue_mushroom"),
                 new BlueMushroomPlantBlock(
                         AbstractBlock.Settings.copy(Blocks.RED_MUSHROOM)
                 )
         );
+
         BLUE_MUSHROOM_ITEM = Registry.register(
                 Registries.ITEM, id("blue_mushroom"),
                 new BlockItem(BLUE_MUSHROOM, new FabricItemSettings())
         );
+
         POISON = Registry.register(
                 Registries.BLOCK, id("poison"),
                 new PoisonFluidBlock(
@@ -299,18 +353,15 @@ public class ModBlocks {
                         AbstractBlock.Settings.copy(Blocks.RED_MUSHROOM_BLOCK)
                 )
         );
+
         BLUE_MUSHROOM_BLOCK_ITEM = Registry.register(
                 Registries.ITEM, id("blue_mushroom_block"),
                 new BlockItem(BLUE_MUSHROOM_BLOCK, new FabricItemSettings())
         );
 
-
         /* =========================
            BOGGY: Signs
            ========================= */
-
-
-
 
         BOGGY_SIGN = Registry.register(
                 Registries.BLOCK, id("boggy_sign"),
@@ -339,12 +390,6 @@ public class ModBlocks {
                         AbstractBlock.Settings.copy(Blocks.OAK_WALL_HANGING_SIGN)
                 )
         );
-
-
-
-        // NOTE:
-        // We DO NOT try to mutate BlockEntityType.SIGN/HANGING_SIGN here (it’s immutable in 1.20.1 and causes crashes).
-        // Ignore "invalid for ticking" warnings if you see them; signs don’t tick anyway.
 
         /* =========================
            BOGGY: Core wood blocks
@@ -443,7 +488,6 @@ public class ModBlocks {
         Registry.register(Registries.ITEM, id("boggy_pressure_plate"),
                 new BlockItem(BOGGY_PRESSURE_PLATE, new Item.Settings()));
 
-        // --- “usual wood behavior” extras: stripping + flammability ---
         StrippableBlockRegistry.register(BOGGY_LOG, STRIPPED_BOGGY_LOG);
         StrippableBlockRegistry.register(BOGGY_WOOD, STRIPPED_BOGGY_WOOD);
 
@@ -508,6 +552,26 @@ public class ModBlocks {
                 FabricBlockEntityTypeBuilder.create(FalseFlowerBlockEntity::new, FALSE_FLOWER).build(null)
         );
 
+        /* --------- REGISTER: False Memory (block + item + BE) --------- */
+        FALSE_MEMORY = Registry.register(
+                Registries.BLOCK, id("false_memory"),
+                new FalseMemoryBlock(AbstractBlock.Settings.copy(Blocks.CRYING_OBSIDIAN)
+                        .strength(-1.0f, 3600000.0f)
+                        .dropsNothing()
+                        .nonOpaque()
+                        .sounds(BlockSoundGroup.SCULK_SHRIEKER))
+        );
+
+        FALSE_MEMORY_ITEM = Registry.register(
+                Registries.ITEM, id("false_memory"),
+                new BlockItem(FALSE_MEMORY, new Item.Settings())
+        );
+
+        FALSE_MEMORY_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("false_memory"),
+                FabricBlockEntityTypeBuilder.create(FalseMemoryBlockEntity::new, FALSE_MEMORY).build(null)
+        );
+
         /* --------- REGISTER: Dabloons Machine --------- */
         DABLOONS_MACHINE = Registry.register(
                 Registries.BLOCK, id("dabloons_machine"),
@@ -517,6 +581,10 @@ public class ModBlocks {
         DABLOONS_MACHINE_ITEM = Registry.register(
                 Registries.ITEM, id("dabloons_machine"),
                 new BlockItem(DABLOONS_MACHINE, new Item.Settings())
+        );
+        DABLOONS_MACHINE_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("dabloons_machine_be"),
+                FabricBlockEntityTypeBuilder.create(DabloonsMachineBlockEntity::new, DABLOONS_MACHINE).build(null)
         );
 
         /* --------- REGISTER: Vampire Blood Crystal Blocks --------- */
@@ -585,7 +653,7 @@ public class ModBlocks {
                 FabricBlockEntityTypeBuilder.create(DimensionalGateBlockEntity::new, DIMENSIONAL_GATE).build(null)
         );
 
-        // katana block //
+        /* --------- REGISTER: Cosmic Katana Block --------- */
         COSMIC_KATANA_BLOCK = Registry.register(
                 Registries.BLOCK, id("cosmic_katana_block"),
                 new CosmicKatanaBlock(AbstractBlock.Settings.copy(Blocks.OBSIDIAN)
@@ -602,6 +670,41 @@ public class ModBlocks {
         COSMIC_KATANA_BLOCK_BE = Registry.register(
                 Registries.BLOCK_ENTITY_TYPE, id("cosmic_katana_block"),
                 FabricBlockEntityTypeBuilder.create(CosmicKatanaBlockEntity::new, COSMIC_KATANA_BLOCK).build(null)
+        );
+    }
+
+    public static void registerPoisonCauldronBehavior() {
+        CauldronBehavior.EMPTY_CAULDRON_BEHAVIOR.put(ModItems.POISON_BUCKET, (state, world, pos, player, hand, stack) ->
+                CauldronBehavior.fillCauldron(
+                        world,
+                        pos,
+                        player,
+                        hand,
+                        stack,
+                        POISON_CAULDRON.getDefaultState().with(LeveledCauldronBlock.LEVEL, 3),
+                        SoundEvents.ITEM_BUCKET_EMPTY
+                )
+        );
+
+        POISON_CAULDRON_BEHAVIOR.put(Items.BUCKET, (state, world, pos, player, hand, stack) ->
+                CauldronBehavior.emptyCauldron(
+                        state,
+                        world,
+                        pos,
+                        player,
+                        hand,
+                        stack,
+                        new ItemStack(ModItems.POISON_BUCKET),
+                        s -> s.isOf(POISON_CAULDRON) && s.get(LeveledCauldronBlock.LEVEL) == 3,
+                        SoundEvents.ITEM_BUCKET_FILL
+                )
+        );
+
+        CauldronFluidContent.registerCauldron(
+                POISON_CAULDRON,
+                ModFluids.STILL_POISON,
+                FluidConstants.BUCKET / 3,
+                LeveledCauldronBlock.LEVEL
         );
     }
 }

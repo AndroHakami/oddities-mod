@@ -1,0 +1,15 @@
+{
+  "targets": [ "boss_witch_snare" ],
+  "passes": [
+    {
+      "name": "odd:boss_witch_snare",
+      "intarget": "minecraft:main",
+      "outtarget": "boss_witch_snare"
+    },
+    {
+      "name": "blit",
+      "intarget": "boss_witch_snare",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

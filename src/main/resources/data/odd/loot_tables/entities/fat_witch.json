@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:entity",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        { "type": "minecraft:item", "name": "odd:mask_of_shame" }
+      ],
+      "conditions": [
+        { "condition": "minecraft:random_chance", "chance": 0.2 }
+      ]
+    },
+    {
+      "rolls": 1,
+      "entries": [
+        { "type": "minecraft:item", "name": "odd:dabloon" }
+      ],
+      "functions": [
+        {
+          "function": "minecraft:set_count",
+          "count": { "type": "minecraft:uniform", "min": 8, "max": 10 }
+        }
+      ]
+    }
+  ]
+}

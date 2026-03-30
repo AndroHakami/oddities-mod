@@ -2,6 +2,8 @@ package net.seep.odd.entity.bosswitch;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.minecraft.block.BlockState;
+import net.minecraft.client.sound.Sound;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
@@ -27,6 +29,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.seep.odd.Oddities;
+import net.seep.odd.sound.ModSounds;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -71,11 +74,15 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
      * pickup/shockwave cooldowns = ability cooldowns
      */
     private static final int PICKUP_ABILITY_COOLDOWN_TICKS = 100;
-    private static final int SHOCKWAVE_ABILITY_COOLDOWN_TICKS = 140;
+    private static final int SHOCKWAVE_ABILITY_COOLDOWN_TICKS = 20 * 8;
 
-    private static final int PICKUP_ABILITY_CHANCE = 5;
-    private static final int SHOCKWAVE_ABILITY_CHANCE = 4;
-    private static final int CLOSE_SMASH_CHANCE = 4;
+    private static final int PICKUP_ABILITY_CHANCE = 7;
+    private static final int SHOCKWAVE_ABILITY_CHANCE = 1;
+    private static final int CLOSE_SMASH_CHANCE = 7;
+
+    private static final float NON_SMASH_DAMAGE_MULT = 1.30f;
+    private static final float SWING_DAMAGE = 12.0f * NON_SMASH_DAMAGE_MULT;
+    private static final float THROW_EXPLOSION_DAMAGE = 8.0f * NON_SMASH_DAMAGE_MULT;
 
     /*
      * ===== PICKUP TUNING =====
@@ -171,7 +178,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
             this.radius = 0.8D;
             this.maxRadius = 30.0D;
             this.speed = heavy ? 1.85D : 1.45D;
-            this.damage = heavy ? 15.0f : 10.0f;
+            this.damage = heavy ? (15.0f * NON_SMASH_DAMAGE_MULT) : (10.0f * NON_SMASH_DAMAGE_MULT);
             this.knockback = heavy ? 1.45f : 0.72f;
             this.heavy = heavy;
             this.sourceSurfaceY = sourceSurfaceY;
@@ -196,6 +203,13 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
     // committed pickup rush state
     private @Nullable UUID pickupRushTargetUuid;
     private int pickupRushTicks = 0;
+
+    private @Nullable UUID preferredTargetUuid;
+    private @Nullable UUID lastAttackTargetUuid;
+    private int retargetCooldown = 0;
+
+    private int stuckTicks = 0;
+    private @Nullable Vec3d lastProgressCheckPos = null;
 
     private final List<ActiveShockwave> activeShockwaves = new ArrayList<>();
 
@@ -259,6 +273,55 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
                 && this.carriedEntityUuid.equals(passenger.getUuid());
     }
 
+    public boolean needsRecallToHome() {
+        if (!isActiveBody() || this.homePos == null) return false;
+        if (isAwakeningBody()) return false;
+        if (this.carriedEntityUuid != null || this.thrownEntityUuid != null) return false;
+        if (isPickupRushing() || isAttackAnimation(getAnimState())) return false;
+
+        if (this.getY() < this.homePos.getY() - 8.0D) return true;
+        if (horizontalDistToHomeSq(this.getX(), this.getZ()) > (34.0D * 34.0D)) return true;
+
+        return this.stuckTicks >= 80;
+    }
+
+    public void recallToHome() {
+        if (!(this.getWorld() instanceof ServerWorld sw) || this.homePos == null) return;
+
+        clearPickupRush();
+        clearCarry();
+
+        this.thrownEntityUuid = null;
+        this.thrownTicks = 0;
+        this.queuedThrowDir = null;
+        this.activeShockwaves.clear();
+
+        this.actionTicks = 0;
+        this.attackCooldown = 24;
+        this.retargetCooldown = 0;
+        this.stuckTicks = 0;
+
+        double x = this.homePos.getX() + 0.5D;
+        double z = this.homePos.getZ() + 0.5D;
+        double y = findGroundYAt(sw, x, this.homePos.getY() + 8.0D, z, this.homePos.getY());
+
+        this.refreshPositionAndAngles(x, y, z, this.getYaw(), this.getPitch());
+        this.setVelocity(Vec3d.ZERO);
+        this.velocityModified = true;
+        this.fallDistance = 0.0f;
+        this.getNavigation().stop();
+        this.lastProgressCheckPos = new Vec3d(x, y, z);
+
+        setAnimState(AnimState.IDLE);
+
+        sw.spawnParticles(net.minecraft.particle.ParticleTypes.PORTAL,
+                x, y + 1.2D, z,
+                28, 0.85D, 1.0D, 0.85D, 0.12D);
+        this.playSound(SoundEvents.ENTITY_ENDERMAN_TELEPORT, 1.0f, 0.65f);
+
+        refreshCombatTarget(true);
+    }
+
     private boolean isPickupRushing() {
         return this.pickupRushTargetUuid != null;
     }
@@ -292,6 +355,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
             if (this.allowDismountTicks > 0) this.allowDismountTicks--;
             if (this.pickupAbilityCooldown > 0) this.pickupAbilityCooldown--;
             if (this.shockwaveAbilityCooldown > 0) this.shockwaveAbilityCooldown--;
+            if (this.retargetCooldown > 0) this.retargetCooldown--;
 
             if (this.ownerUuid != null && this.getWorld() instanceof ServerWorld sw) {
                 Entity owner = sw.getEntity(this.ownerUuid);
@@ -316,7 +380,9 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
                     this.attackCooldown = 30;
                     this.pickupAbilityCooldown = 80;
                     this.shockwaveAbilityCooldown = 70;
+                    this.lastProgressCheckPos = this.getPos();
                     setAnimState(AnimState.IDLE);
+                    refreshCombatTarget(false);
                 }
                 return;
             }
@@ -330,6 +396,8 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
 
             if (this.attackCooldown > 0) this.attackCooldown--;
 
+            validateCombatTarget();
+            tickRecoveryState();
             tickThrownEntity();
             tickActiveShockwaves();
 
@@ -356,6 +424,173 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
                 tickCarryState();
             }
         }
+    }
+
+    @Override
+    protected void playStepSound(BlockPos pos, BlockState state) {
+        this.playSound(SoundEvents.ENTITY_IRON_GOLEM_STEP, 3.6f, 0.58f);
+    }
+
+    private List<PlayerEntity> getArenaPlayers() {
+        return (List<PlayerEntity>) this.getWorld().getPlayers().stream()
+                .filter(p -> p.isAlive() && !p.isCreative() && !p.isSpectator())
+                .filter(this::isInsideArena)
+                .sorted(Comparator.comparingDouble(this::squaredDistanceTo))
+                .toList();
+    }
+
+    private boolean isValidCombatTarget(@Nullable LivingEntity target) {
+        if (!(target instanceof PlayerEntity player)) return false;
+        return player.isAlive() && !player.isCreative() && !player.isSpectator() && isInsideArena(player);
+    }
+
+    private void setCombatTarget(@Nullable PlayerEntity target) {
+        this.setTarget(target);
+        this.preferredTargetUuid = target != null ? target.getUuid() : null;
+    }
+
+    private void refreshCombatTarget(boolean forceSwap) {
+        List<PlayerEntity> candidates = getArenaPlayers();
+        if (candidates.isEmpty()) {
+            setCombatTarget(null);
+            return;
+        }
+
+        PlayerEntity chosen = null;
+        LivingEntity current = this.getTarget();
+
+        if (!forceSwap && current instanceof PlayerEntity currentPlayer) {
+            for (PlayerEntity candidate : candidates) {
+                if (candidate.getUuid().equals(currentPlayer.getUuid())) {
+                    chosen = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (chosen == null && forceSwap && candidates.size() > 1) {
+            UUID avoidCurrent = current != null ? current.getUuid() : null;
+            UUID avoidLast = this.lastAttackTargetUuid;
+
+            for (PlayerEntity candidate : candidates) {
+                UUID uuid = candidate.getUuid();
+                if ((avoidCurrent == null || !avoidCurrent.equals(uuid))
+                        && (avoidLast == null || !avoidLast.equals(uuid))) {
+                    chosen = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (chosen == null && this.preferredTargetUuid != null) {
+            for (PlayerEntity candidate : candidates) {
+                if (this.preferredTargetUuid.equals(candidate.getUuid())) {
+                    chosen = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (chosen == null && forceSwap && this.lastAttackTargetUuid != null && candidates.size() > 1) {
+            for (PlayerEntity candidate : candidates) {
+                if (!this.lastAttackTargetUuid.equals(candidate.getUuid())) {
+                    chosen = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (chosen == null) {
+            chosen = candidates.get(0);
+        }
+
+        setCombatTarget(chosen);
+        this.retargetCooldown = forceSwap ? 18 : 10;
+    }
+
+    private void validateCombatTarget() {
+        LivingEntity current = this.getTarget();
+        if (!isValidCombatTarget(current)) {
+            refreshCombatTarget(false);
+            return;
+        }
+
+        if (this.retargetCooldown > 0) return;
+
+        List<PlayerEntity> candidates = getArenaPlayers();
+        if (candidates.size() < 2) return;
+        if (!(current instanceof PlayerEntity currentPlayer)) return;
+
+        PlayerEntity bestOther = null;
+        for (PlayerEntity candidate : candidates) {
+            if (!candidate.getUuid().equals(currentPlayer.getUuid())) {
+                bestOther = candidate;
+                break;
+            }
+        }
+
+        if (bestOther != null && this.squaredDistanceTo(bestOther) + 16.0D < this.squaredDistanceTo(currentPlayer)) {
+            setCombatTarget(bestOther);
+            this.retargetCooldown = 12;
+        }
+    }
+
+    private void rememberCurrentTarget() {
+        LivingEntity target = this.getTarget();
+        if (target != null) {
+            this.lastAttackTargetUuid = target.getUuid();
+        }
+    }
+
+    private void retargetAfterAttack() {
+        refreshCombatTarget(true);
+    }
+
+    private void tickRecoveryState() {
+        if (this.age % 20 != 0) return;
+
+        if (this.homePos == null || !isActiveBody() || isAwakeningBody()) {
+            this.stuckTicks = 0;
+            this.lastProgressCheckPos = this.getPos();
+            return;
+        }
+
+        if (this.carriedEntityUuid != null || this.thrownEntityUuid != null || isPickupRushing() || isAttackAnimation(getAnimState())) {
+            this.stuckTicks = 0;
+            this.lastProgressCheckPos = this.getPos();
+            return;
+        }
+
+        if (this.getY() < this.homePos.getY() - 8.0D || horizontalDistToHomeSq(this.getX(), this.getZ()) > (34.0D * 34.0D)) {
+            this.stuckTicks = 100;
+            this.lastProgressCheckPos = this.getPos();
+            return;
+        }
+
+        LivingEntity target = this.getTarget();
+        boolean shouldBeMoving = this.getNavigation().isFollowingPath()
+                || (isValidCombatTarget(target) && this.squaredDistanceTo(target) > (SWING_RANGE_SQ + 2.0D));
+
+        Vec3d currentPos = this.getPos();
+        if (!shouldBeMoving) {
+            this.stuckTicks = 0;
+            this.lastProgressCheckPos = currentPos;
+            return;
+        }
+
+        if (this.lastProgressCheckPos == null) {
+            this.lastProgressCheckPos = currentPos;
+            return;
+        }
+
+        double movedSq = currentPos.squaredDistanceTo(this.lastProgressCheckPos);
+        if (movedSq < 1.0D) {
+            this.stuckTicks += 20;
+        } else {
+            this.stuckTicks = 0;
+        }
+
+        this.lastProgressCheckPos = currentPos;
     }
 
     private boolean isAttackAnimation(AnimState state) {
@@ -395,6 +630,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         if (!(entity instanceof LivingEntity target) || !target.isAlive() || !isInsideArena(target)) {
             clearPickupRush();
             this.getNavigation().stop();
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
             return;
         }
@@ -417,6 +653,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
             clearPickupRush();
             this.getNavigation().stop();
             this.attackCooldown = 10;
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
         }
     }
@@ -490,6 +727,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
             this.actionTicks = 0;
             this.attackCooldown = 12;
             this.queuedThrowDir = null;
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
         }
     }
@@ -665,7 +903,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
             double d2 = living.squaredDistanceTo(sourceEntity);
             if (d2 > 9.0D) continue;
 
-            living.damage(sw.getDamageSources().explosion(this, this), 8.0f);
+            living.damage(sw.getDamageSources().explosion(this, this), THROW_EXPLOSION_DAMAGE);
 
             Vec3d dir = living.getPos().subtract(sourceEntity.getPos());
             Vec3d flat = new Vec3d(dir.x, 0.0D, dir.z);
@@ -694,6 +932,24 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         }
 
         return aroundY;
+    }
+
+    private double findGroundYAt(ServerWorld sw, double x, double startY, double z, double fallbackY) {
+        BlockPos.Mutable pos = new BlockPos.Mutable();
+        int top = Math.min(sw.getTopY() - 1, MathHelper.floor(startY));
+        int bottom = sw.getBottomY();
+
+        int ix = MathHelper.floor(x);
+        int iz = MathHelper.floor(z);
+
+        for (int y = top; y >= bottom; y--) {
+            pos.set(ix, y, iz);
+            if (sw.getBlockState(pos).isSolidBlock(sw, pos)) {
+                return y + 1.0D;
+            }
+        }
+
+        return Math.floor(fallbackY);
     }
 
     private boolean isShockwaveReachable(ServerWorld sw, ActiveShockwave wave, double tx, double tz, double targetSurfaceY) {
@@ -786,9 +1042,9 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         sw.sendEntityStatus(this, heavy ? STATUS_SHOCKWAVE_HEAVY : STATUS_SHOCKWAVE_LIGHT);
 
         this.playSound(
-                heavy ? SoundEvents.ENTITY_GENERIC_EXPLODE : SoundEvents.ENTITY_IRON_GOLEM_ATTACK,
-                heavy ? 1.2f : 1.0f,
-                heavy ? 0.70f : 0.85f
+                ModSounds.TITAN_SHOCKWAVE,
+                heavy ? 4.2f : 3.4f,
+                heavy ? 0.9f : 1.0f
         );
     }
 
@@ -812,28 +1068,41 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         return (dx * dx + dz * dz) <= (30.0D * 30.0D);
     }
 
+    private double horizontalDistToHomeSq(double x, double z) {
+        if (this.homePos == null) return 0.0D;
+
+        double dx = x - (this.homePos.getX() + 0.5D);
+        double dz = z - (this.homePos.getZ() + 0.5D);
+        return dx * dx + dz * dz;
+    }
+
     private void startSwingAttack() {
+        rememberCurrentTarget();
         this.actionTicks = 0;
         this.getNavigation().stop();
         setAnimState(AnimState.SWING_ATTACK);
     }
 
     private void startPickupAttack(LivingEntity target) {
+        this.lastAttackTargetUuid = target.getUuid();
         this.actionTicks = 0;
         this.pickupAbilityCooldown = PICKUP_ABILITY_COOLDOWN_TICKS;
         this.pickupRushTicks = 0;
         this.pickupRushTargetUuid = target.getUuid();
         this.getNavigation().stop();
+        this.playSound(ModSounds.TITAN_SCREECH, 1.15f, 0.95f);
         setAnimState(AnimState.WALK);
     }
 
     private void startSmashAttack() {
+        rememberCurrentTarget();
         this.actionTicks = 0;
         this.getNavigation().stop();
         setAnimState(AnimState.SMASH_ATTACK);
     }
 
     private void startShockwaveAttack() {
+        rememberCurrentTarget();
         this.actionTicks = 0;
         this.shockwaveAbilityCooldown = SHOCKWAVE_ABILITY_COOLDOWN_TICKS;
         this.getNavigation().stop();
@@ -850,6 +1119,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         if (this.actionTicks >= 22) {
             this.actionTicks = 0;
             this.attackCooldown = 14;
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
         }
     }
@@ -864,6 +1134,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         if (this.actionTicks >= SMASH_TOTAL_TICKS) {
             this.actionTicks = 0;
             this.attackCooldown = 18;
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
         }
     }
@@ -886,6 +1157,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         if (this.actionTicks >= SHOCKWAVE_TOTAL_TICKS) {
             this.actionTicks = 0;
             this.attackCooldown = 24;
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
         }
     }
@@ -912,7 +1184,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
                 continue;
             }
 
-            living.damage(sw.getDamageSources().mobAttack(this), 12.0f);
+            living.damage(sw.getDamageSources().mobAttack(this), SWING_DAMAGE);
             living.addVelocity(flat.x * 1.45D, 0.45D, flat.z * 1.45D);
             living.velocityModified = true;
         }
@@ -922,7 +1194,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         Vec3d forward = flattenNormalized(this.getRotationVec(1.0f));
         Vec3d center = this.getPos().add(forward.multiply(3.8D)).add(0.0D, 0.2D, 0.0D);
 
-        this.playSound(SoundEvents.ENTITY_GENERIC_EXPLODE, 1.05f, 0.72f);
+        this.playSound(ModSounds.TITAN_SMASH, 4.0f, 0.9f);
 
         sw.spawnParticles(net.minecraft.particle.ParticleTypes.EXPLOSION,
                 center.x, this.getY() + 0.12D, center.z,
@@ -985,6 +1257,7 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         if (this.actionTicks >= 43) {
             this.actionTicks = 0;
             this.attackCooldown = 12;
+            retargetAfterAttack();
             setAnimState(AnimState.IDLE);
         }
     }
@@ -1001,6 +1274,17 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         );
 
         candidates.sort(Comparator.comparingDouble(this::squaredDistanceTo));
+
+        LivingEntity target = this.getTarget();
+        if (target != null) {
+            candidates.sort(Comparator.comparingDouble(e -> {
+                double score = this.squaredDistanceTo(e);
+                if (e.getUuid().equals(target.getUuid())) {
+                    score -= 4.0D;
+                }
+                return score;
+            }));
+        }
 
         for (LivingEntity living : candidates) {
             Vec3d to = living.getPos().add(0.0D, living.getStandingEyeHeight() * 0.5D, 0.0D).subtract(origin);
@@ -1128,6 +1412,8 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         if (this.carriedEntityUuid != null) nbt.putUuid("Carried", this.carriedEntityUuid);
         if (this.thrownEntityUuid != null) nbt.putUuid("Thrown", this.thrownEntityUuid);
         if (this.pickupRushTargetUuid != null) nbt.putUuid("PickupRushTarget", this.pickupRushTargetUuid);
+        if (this.preferredTargetUuid != null) nbt.putUuid("PreferredTarget", this.preferredTargetUuid);
+        if (this.lastAttackTargetUuid != null) nbt.putUuid("LastAttackTarget", this.lastAttackTargetUuid);
 
         nbt.putInt("ActionTicks", this.actionTicks);
         nbt.putInt("AttackCooldown", this.attackCooldown);
@@ -1139,6 +1425,8 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         nbt.putInt("ThrownTicks", this.thrownTicks);
         nbt.putInt("AllowDismountTicks", this.allowDismountTicks);
         nbt.putInt("PickupRushTicks", this.pickupRushTicks);
+        nbt.putInt("RetargetCooldown", this.retargetCooldown);
+        nbt.putInt("StuckTicks", this.stuckTicks);
     }
 
     @Override
@@ -1153,6 +1441,8 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         this.carriedEntityUuid = nbt.containsUuid("Carried") ? nbt.getUuid("Carried") : null;
         this.thrownEntityUuid = nbt.containsUuid("Thrown") ? nbt.getUuid("Thrown") : null;
         this.pickupRushTargetUuid = nbt.containsUuid("PickupRushTarget") ? nbt.getUuid("PickupRushTarget") : null;
+        this.preferredTargetUuid = nbt.containsUuid("PreferredTarget") ? nbt.getUuid("PreferredTarget") : null;
+        this.lastAttackTargetUuid = nbt.containsUuid("LastAttackTarget") ? nbt.getUuid("LastAttackTarget") : null;
 
         this.actionTicks = nbt.getInt("ActionTicks");
         this.attackCooldown = nbt.getInt("AttackCooldown");
@@ -1164,11 +1454,14 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
         this.thrownTicks = nbt.getInt("ThrownTicks");
         this.allowDismountTicks = nbt.getInt("AllowDismountTicks");
         this.pickupRushTicks = nbt.getInt("PickupRushTicks");
+        this.retargetCooldown = nbt.getInt("RetargetCooldown");
+        this.stuckTicks = nbt.getInt("StuckTicks");
 
         int anim = MathHelper.clamp(nbt.getInt("AnimState"), 0, AnimState.values().length - 1);
         this.dataTracker.set(ANIM_STATE, anim);
 
         this.queuedThrowDir = null;
+        this.lastProgressCheckPos = null;
         this.activeShockwaves.clear();
     }
 
@@ -1225,13 +1518,10 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
                 return;
             }
 
-            PlayerEntity target = mob.getWorld().getPlayers().stream()
-                    .filter(p -> p.isAlive() && !p.isCreative() && !p.isSpectator())
-                    .filter(mob::isInsideArena)
-                    .min(Comparator.comparingDouble(mob::squaredDistanceTo))
-                    .orElse(null);
+            mob.validateCombatTarget();
 
-            if (target == null) {
+            LivingEntity targetEntity = mob.getTarget();
+            if (!(targetEntity instanceof PlayerEntity target)) {
                 mob.getNavigation().stop();
                 mob.setAnimState(AnimState.IDLE);
                 return;
@@ -1242,24 +1532,16 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
             double d2 = mob.squaredDistanceTo(target);
 
             if (mob.attackCooldown <= 0) {
-                // pickup now commits from range: decide first, then rush in fast before animating
-                if (mob.pickupAbilityCooldown <= 0
-                        && mob.getRandom().nextInt(PICKUP_ABILITY_CHANCE) == 0) {
-                    mob.startPickupAttack(target);
-                    return;
-                }
-
                 if (mob.shockwaveAbilityCooldown <= 0
                         && target.isOnGround()
                         && d2 <= SHOCKWAVE_TRIGGER_RANGE_SQ
-                        && d2 >= 7.0D * 7.0D
-                        && mob.getRandom().nextInt(SHOCKWAVE_ABILITY_CHANCE) == 0) {
+                        && d2 >= 7.0D * 7.0D) {
                     mob.startShockwaveAttack();
                     return;
                 }
 
                 if (d2 <= SWING_RANGE_SQ) {
-                    if (d2 > (3.0D * 3.0D) && mob.getRandom().nextInt(CLOSE_SMASH_CHANCE) == 0) {
+                    if (d2 > (2.4D * 2.4D) && mob.getRandom().nextInt(CLOSE_SMASH_CHANCE) == 0) {
                         mob.startSmashAttack();
                     } else {
                         mob.startSwingAttack();
@@ -1267,13 +1549,37 @@ public final class BossGolemEntity extends HostileEntity implements GeoEntity {
                     return;
                 }
 
+                if (d2 <= (6.75D * 6.75D)) {
+                    if (mob.pickupAbilityCooldown <= 0
+                            && mob.getRandom().nextInt(PICKUP_ABILITY_CHANCE) == 0) {
+                        mob.startPickupAttack(target);
+                    } else if (mob.getRandom().nextInt(3) == 0) {
+                        mob.startSmashAttack();
+                    } else {
+                        mob.startSwingAttack();
+                    }
+                    return;
+                }
+
+                if (mob.pickupAbilityCooldown <= 0
+                        && d2 <= (11.5D * 11.5D)
+                        && mob.getRandom().nextInt(PICKUP_ABILITY_CHANCE) == 0) {
+                    mob.startPickupAttack(target);
+                    return;
+                }
+
                 if (d2 <= SMASH_RANGE_SQ) {
-                    mob.startSmashAttack();
+                    if (mob.getRandom().nextInt(4) == 0) {
+                        mob.startSwingAttack();
+                    } else {
+                        mob.startSmashAttack();
+                    }
                     return;
                 }
             }
 
-            mob.getNavigation().startMovingTo(target, 1.0D);
+            double moveSpeed = d2 <= (9.0D * 9.0D) ? 1.12D : 1.0D;
+            mob.getNavigation().startMovingTo(target, moveSpeed);
             mob.setAnimState(AnimState.WALK);
         }
     }

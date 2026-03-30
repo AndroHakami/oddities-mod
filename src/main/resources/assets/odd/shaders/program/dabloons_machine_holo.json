@@ -1,0 +1,89 @@
+{
+  "vertex": "odd:dabloons_machine_holo",
+  "fragment": "odd:dabloons_machine_holo",
+  "attributes": [ "Position" ],
+  "samplers": [
+    { "name": "DiffuseSampler" },
+    { "name": "DepthSampler" }
+  ],
+  "uniforms": [
+    {
+      "name": "ProjMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ]
+    },
+    {
+      "name": "InverseTransformMatrix",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ]
+    },
+    {
+      "name": "ModelViewMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ]
+    },
+    {
+      "name": "OutSize",
+      "type": "float",
+      "count": 2,
+      "values": [ 1.0, 1.0 ]
+    },
+    {
+      "name": "CameraPosition",
+      "type": "float",
+      "count": 3,
+      "values": [ 0.0, 0.0, 0.0 ]
+    },
+    {
+      "name": "Origin",
+      "type": "float",
+      "count": 3,
+      "values": [ 0.0, 0.0, 0.0 ]
+    },
+    {
+      "name": "Normal",
+      "type": "float",
+      "count": 3,
+      "values": [ 0.0, 0.0, 1.0 ]
+    },
+    {
+      "name": "PlaneHalfWidth",
+      "type": "float",
+      "count": 1,
+      "values": [ 1.05 ]
+    },
+    {
+      "name": "PlaneHalfHeight",
+      "type": "float",
+      "count": 1,
+      "values": [ 1.05 ]
+    },
+    {
+      "name": "PlaneThickness",
+      "type": "float",
+      "count": 1,
+      "values": [ 0.12 ]
+    },
+    {
+      "name": "Active01",
+      "type": "float",
+      "count": 1,
+      "values": [ 0.0 ]
+    },
+    {
+      "name": "iTime",
+      "type": "float",
+      "count": 1,
+      "values": [ 0.0 ]
+    },
+    {
+      "name": "Intensity",
+      "type": "float",
+      "count": 1,
+      "values": [ 0.0 ]
+    }
+  ]
+}

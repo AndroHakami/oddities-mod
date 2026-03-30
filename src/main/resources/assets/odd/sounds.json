@@ -12,6 +12,48 @@
       "odd:shy_guy_rage"
     ]
   },
+  "mask_insert": {
+    "subtitle": "odd.mask_insert",
+    "sounds": [
+      "odd:mask_insert"
+    ]
+  },
+  "guitar_hit": {
+    "subtitle": "odd.guitar_hit",
+    "sounds": [
+      "odd:guitar_hit"
+    ]
+  },
+  "trumpet_axe": {
+    "subtitle": "odd.trumpet_axe",
+    "sounds": [
+      "odd:trumpet_axe"
+    ]
+  },
+  "titan_screech": {
+    "subtitle": "odd.titan_screech",
+    "sounds": [
+      "odd:titan_screech"
+    ]
+  },
+  "titan_smash": {
+    "subtitle": "odd.titan_smash",
+    "sounds": [
+      "odd:titan_smash"
+    ]
+  },
+  "titan_shockwave": {
+    "subtitle": "odd.titan_shockwave",
+    "sounds": [
+      "odd:titan_shockwave"
+    ]
+  },
+  "guitar_smash": {
+    "subtitle": "odd.guitar_smash",
+    "sounds": [
+      "odd:guitar_smash"
+    ]
+  },
   "vacuum_essence": {
     "subtitle": "odd.vacuum_essence",
     "sounds": [
@@ -34,6 +76,12 @@
     "subtitle": "odd.glitter_music_disc",
     "sounds": [
       "odd:glitter_music_disc"
+    ]
+  },
+  "crater_music_disc": {
+    "subtitle": "odd.crater_music_disc",
+    "sounds": [
+      "odd:crater_music_disc"
     ]
   },
   "cosmic_prepare": {

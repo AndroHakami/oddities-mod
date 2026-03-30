@@ -43,6 +43,24 @@ public final class DabloonBankManager {
         return BALANCES.getOrDefault(playerUuid, 0);
     }
 
+    public static int takeBalance(ServerPlayerEntity player, int requested) {
+        int amount = Math.max(0, requested);
+        if (amount <= 0) return 0;
+
+        int current = getBalance(player.getUuid());
+        int taken = Math.min(current, amount);
+        if (taken <= 0) return 0;
+
+        int newBalance = current - taken;
+        if (newBalance <= 0) {
+            BALANCES.remove(player.getUuid());
+        } else {
+            BALANCES.put(player.getUuid(), newBalance);
+        }
+        save(player.getServer());
+        return taken;
+    }
+
     public static boolean canDepositAtCurrentLocation(ServerPlayerEntity player) {
         ServerWorld currentWorld = player.getServerWorld();
         BlockPos targetSpawn;

@@ -68,6 +68,7 @@ import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
 import net.seep.odd.abilities.spotted.SpottedNet;
+import net.seep.odd.abilities.sun.SunNet;
 import net.seep.odd.abilities.tamer.TamerLeveling;
 import net.seep.odd.abilities.tamer.TamerMoves;
 import net.seep.odd.abilities.vampire.VampireTempCrystalManager;
@@ -86,6 +87,7 @@ import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
 
+import net.seep.odd.block.rps_machine.screen.RpsMachineScreenHandlers;
 import net.seep.odd.commands.OddCooldownCommand;
 import net.seep.odd.device.social.SocialNetworking;
 import net.seep.odd.enchant.ItalianStompersHandler;
@@ -112,6 +114,7 @@ import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
+import net.seep.odd.lore.RottenRootsLoreCommand;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.shader.ModShaders;
 import net.seep.odd.shop.screen.ModScreenHandlers;
@@ -136,6 +139,7 @@ public final class Oddities implements ModInitializer {
 		ModItemGroups.registerItemGroups();
 		ModFluids.registerModFluids();
 		ModBlocks.registerModBlocks();
+		ModBlocks.registerPoisonCauldronBehavior();
 		ModItems.registerModItems();
 		ModSounds.registerSounds();
 		ModStatusEffects.init();
@@ -146,6 +150,7 @@ public final class Oddities implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			GateCommands.register(dispatcher, registryAccess);
 		});
+		RpsMachineScreenHandlers.register();
 
 		net.seep.odd.worldgen.ModStructures.init();
 		WitchlogDebugCommand.register();
@@ -193,7 +198,7 @@ public final class Oddities implements ModInitializer {
 		// Rotten Roots
 
 		net.seep.odd.entity.rotten_roots.ShroomTrades.init();
-
+		RottenRootsLoreCommand.register();
 
 
 
@@ -259,6 +264,7 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new ChefPower());
 		Powers.register(new SniperPower());
 		Powers.register(new WizardPower());
+		Powers.register(new SunPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -523,6 +529,10 @@ public final class Oddities implements ModInitializer {
 
 		// Wizard
 		WizardPower.register();
+
+		// Sun
+
+		SunNet.registerServer();
 
 		// EVENT (ALIEN INVASION)
 		net.seep.odd.event.alien.AlienInvasionInit.init();

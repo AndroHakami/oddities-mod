@@ -1,7 +1,8 @@
 {
 	"variants": {
-		"": {
-			"model": "odd:block/dabloons_machine"
-		}
+		"facing=north": { "model": "odd:block/dabloons_machine", "y": 180 },
+		"facing=south": { "model": "odd:block/dabloons_machine" },
+		"facing=west":  { "model": "odd:block/dabloons_machine", "y": 90 },
+		"facing=east":  { "model": "odd:block/dabloons_machine", "y": 270 }
 	}
 }

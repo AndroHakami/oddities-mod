@@ -71,7 +71,7 @@ public final class ClimberPower implements Power {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Throw a 30m hook (arcing). Rope shows while flying. Tap again mid-air to retract. On hit: swing tether. Space shortens rope, Shift lengthens (max 30m). Tap again to detach.";
+                    "Throw forward a rope ";
             case "secondary" ->
                     "Throw a pull-rope. If it hits a living target with max HP <= 50, it tethers + pulls them to you, applies Nausea (2s) + Slowness III (1s).";
             default -> "Climber";

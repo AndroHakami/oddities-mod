@@ -26,16 +26,17 @@ import net.minecraft.world.gen.noise.NoiseConfig;
 import net.seep.odd.block.ModBlocks;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
- * Void terrain + bedrock floor, baked “Rotten Roots” webs.
+ * Void terrain + bedrock ceiling, with interconnected “Rotten Roots” webs.
  */
 public final class RottenRootsChunkGenerator extends ChunkGenerator {
 
-    // MapCodec used by the CHUNK_GENERATOR registry (type-based dispatch)
     public static final MapCodec<RottenRootsChunkGenerator> CONFIG_CODEC = RecordCodecBuilder.mapCodec(instance ->
             instance.group(
                     BiomeSource.CODEC.fieldOf("biome_source").forGetter(g -> g.biomeSource),
@@ -44,18 +45,17 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             ).apply(instance, RottenRootsChunkGenerator::new)
     );
 
-    // IMPORTANT: stable Codec instance (do NOT call CONFIG_CODEC.codec() every time)
     public static final Codec<RottenRootsChunkGenerator> CODEC = CONFIG_CODEC.codec();
 
-    // === Multipliers ===
-    private static final float DENSITY_FACTOR = 1.4f;
-    private static final int   LENGTH_MULT    = 3;
-    private static final int   THICK_SCALE_MAX= 2;
+    private static final float DENSITY_FACTOR = 1.35f;
 
-    // --- Blue Sap tuning ---
-    // "quite rarely" overall, but when it hits we make a small clump.
-    private static final int BLUE_SAP_RARE_CHANCE = 2800; // lower = more common
-    private static final int BLUE_SAP_CLUMP_TRIES = 7;    // how many nearby shell spots we try to also convert
+    private static final int NORMAL_MAX_THICK = 8;
+    private static final int SUPPORT_MAX_THICK = 9;
+
+    private static final int GLOW_SAP_CLUSTER_RARE_CHANCE = 3600;
+    private static final int GLOW_SAP_CLUSTER_MIN = 4;
+    private static final int GLOW_SAP_CLUSTER_MAX = 8;
+    private static final int GLOW_SAP_CLUSTER_ATTEMPTS = 72;
 
     private final long seed;
     private final float density;
@@ -66,10 +66,9 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         this.density = Math.max(0.05f, density);
     }
 
-    // THIS is what fixes your world save corruption:
     @Override
     protected Codec<? extends ChunkGenerator> getCodec() {
-        return CODEC; // stable instance
+        return CODEC;
     }
 
     public ChunkGenerator withSeed(long seed) {
@@ -85,9 +84,9 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
     @Override
     public CompletableFuture<Chunk> populateNoise(Executor executor, Blender blender, NoiseConfig noiseConfig,
                                                   StructureAccessor structures, Chunk chunk) {
-        paintBedrockFloor(chunk);
-        paintBedrockCeiling(chunk); // ✅ add this
+        paintBedrockCeiling(chunk);
         paintRoots(chunk);
+        pruneDisconnectedBits(chunk);
         return CompletableFuture.completedFuture(chunk);
     }
 
@@ -104,7 +103,6 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         int height = world.getHeight();
         BlockState[] states = new BlockState[height];
         for (int i = 0; i < height; i++) states[i] = Blocks.AIR.getDefaultState();
-        states[0] = Blocks.BEDROCK.getDefaultState();
         return new VerticalBlockSample(bottom, states);
     }
 
@@ -113,23 +111,10 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
 
     /* -------------------- painting -------------------- */
 
-    private void paintBedrockFloor(Chunk chunk) {
-        final int y = chunk.getBottomY();
-        final int x0 = chunk.getPos().getStartX();
-        final int z0 = chunk.getPos().getStartZ();
-        final BlockState bedrock = Blocks.BEDROCK.getDefaultState();
-        BlockPos.Mutable m = new BlockPos.Mutable();
-        for (int dx = 0; dx < 16; dx++) for (int dz = 0; dz < 16; dz++) {
-            m.set(x0 + dx, y, z0 + dz);
-            chunk.setBlockState(m, bedrock, false);
-        }
-    }
-
     private void paintBedrockCeiling(Chunk chunk) {
-        // topExclusive = bottomY + height (same convention as HeightLimitView)
         final int topExclusive = chunk.getBottomY() + chunk.getHeight();
-        final int yTop = topExclusive - 1;     // max buildable Y in this chunk
-        final int yTop2 = topExclusive - 2;    // 2nd bedrock layer
+        final int yTop = topExclusive - 1;
+        final int yTop2 = topExclusive - 2;
 
         final int x0 = chunk.getPos().getStartX();
         final int z0 = chunk.getPos().getStartZ();
@@ -154,8 +139,10 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         final int maxX = minX + 15;
         final int maxZ = minZ + 15;
         final int bottomY = chunk.getBottomY();
+        final int topY = bottomY + chunk.getHeight() - 3;
 
         final int CELL = 40;
+        final float densityMul = DENSITY_FACTOR * this.density;
 
         int cx0 = Math.floorDiv(minX, CELL) - 1;
         int cz0 = Math.floorDiv(minZ, CELL) - 1;
@@ -163,91 +150,366 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         int cz1 = Math.floorDiv(maxZ, CELL) + 1;
 
         BlockPos.Mutable m = new BlockPos.Mutable();
-        List<Anchor> reps = new ArrayList<>();
 
-        for (int cx = cx0; cx <= cx1; cx++) for (int cz = cz0; cz <= cz1; cz++) {
-            int cellId = (cx * 7349) ^ (cz * 9157);
-            Random r = Random.create(scrambleId(seed, cellId));
+        Map<Long, List<Anchor>> anchorMap = new HashMap<>();
+        Map<Long, Anchor> repMap = new HashMap<>();
 
-            int baseAnchors = 3 + r.nextBetween(0, 2);
-            int anchorsHere = Math.max(2, Math.round(baseAnchors * DENSITY_FACTOR));
+        // Pass 1: anchors
+        for (int cx = cx0; cx <= cx1; cx++) {
+            for (int cz = cz0; cz <= cz1; cz++) {
+                int cellId = (cx * 7349) ^ (cz * 9157);
+                Random r = Random.create(scrambleId(seed, cellId));
 
-            List<Anchor> anchors = new ArrayList<>(anchorsHere);
-            for (int i = 0; i < anchorsHere; i++) {
-                int ax = cx * CELL + r.nextBetween(0, CELL - 1);
-                int az = cz * CELL + r.nextBetween(0, CELL - 1);
-                int ay = r.nextBetween(24, 320);
-                anchors.add(new Anchor(ax, ay, az, cx, cz, i));
+                int baseAnchors = 4 + r.nextBetween(0, 2);
+                int anchorsHere = Math.max(3, Math.round(baseAnchors * densityMul));
+
+                List<Anchor> anchors = new ArrayList<>(anchorsHere);
+                for (int i = 0; i < anchorsHere; i++) {
+                    int ax = cx * CELL + r.nextBetween(0, CELL - 1);
+                    int az = cz * CELL + r.nextBetween(0, CELL - 1);
+                    int ay = r.nextBetween(26, 318);
+                    anchors.add(new Anchor(ax, ay, az, cx, cz, i));
+                }
+
+                long key = cellKey(cx, cz);
+                anchorMap.put(key, anchors);
+                repMap.put(key, anchors.get(r.nextInt(anchors.size())));
             }
-            reps.add(anchors.get(r.nextInt(anchors.size())));
+        }
 
-            for (Anchor a : anchors) {
-                int baseStrands = 2 + r.nextBetween(0, 2);
-                int strands = Math.max(1, Math.round(baseStrands * DENSITY_FACTOR));
-                for (int s = 0; s < strands; s++) {
-                    Vec3d d = chooseWeightedDirection(r);
-                    int len = (90 + r.nextBetween(0, 120)) * LENGTH_MULT;
-                    int baseThick = pickThickness(r);
-                    int scale = 1 + r.nextBetween(0, THICK_SCALE_MAX - 1);
-                    int thick = Math.min(8, baseThick * scale);
-                    BlockState log = pickLog(r);
-                    carveStrand(chunk, m, a.x, a.y, a.z, d, len, thick, log,
-                            minX, minZ, maxX, maxZ, bottomY, r);
+        // Pass 2: local webs + forward bridgey roots
+        for (int cx = cx0; cx <= cx1; cx++) {
+            for (int cz = cz0; cz <= cz1; cz++) {
+                long key = cellKey(cx, cz);
+                List<Anchor> anchors = anchorMap.get(key);
+                if (anchors == null || anchors.isEmpty()) continue;
+
+                int cellId = (cx * 7349) ^ (cz * 9157);
+                Random r = Random.create(scrambleId(seed, cellId ^ 0x5F3759DF));
+
+                for (Anchor a : anchors) {
+                    Anchor nearest = findNearestAnchor(a, anchors, null);
+                    if (nearest != null) {
+                        connectAnchors(
+                                chunk, m, a, nearest,
+                                Math.min(SUPPORT_MAX_THICK, pickThickness(r) + 1),
+                                pickLog(r),
+                                minX, minZ, maxX, maxZ, bottomY, topY, r,
+                                0.012, 0.010, 0.18
+                        );
+                    }
+
+                    if (r.nextFloat() < 0.72f) {
+                        Anchor secondNearest = findNearestAnchor(a, anchors, nearest);
+                        if (secondNearest != null) {
+                            connectAnchors(
+                                    chunk, m, a, secondNearest,
+                                    Math.min(SUPPORT_MAX_THICK, pickThickness(r)),
+                                    pickLog(r),
+                                    minX, minZ, maxX, maxZ, bottomY, topY, r,
+                                    0.015, 0.012, 0.16
+                            );
+                        }
+                    }
+
+                    Anchor neighbor = findNearestNeighborAnchor(a, anchorMap, cx, cz);
+                    if (neighbor != null) {
+                        connectAnchors(
+                                chunk, m, a, neighbor,
+                                Math.min(SUPPORT_MAX_THICK, pickThickness(r) + 1),
+                                pickLog(r),
+                                minX, minZ, maxX, maxZ, bottomY, topY, r,
+                                0.014, 0.012, 0.17
+                        );
+                    }
+
+                    int forwardSpans = 1 + r.nextBetween(0, 1);
+                    for (int i = 0; i < forwardSpans; i++) {
+                        Anchor forward = findForwardAnchor(a, anchorMap, r);
+                        if (forward != null) {
+                            connectAnchors(
+                                    chunk, m, a, forward,
+                                    Math.min(SUPPORT_MAX_THICK, pickThickness(r) + 1),
+                                    pickLog(r),
+                                    minX, minZ, maxX, maxZ, bottomY, topY, r,
+                                    0.016, 0.012, 0.14
+                            );
+                        }
+                    }
+
+                    // Extra horizontal-ish roots: flatter and angled variants.
+                    int horizontalSpans = 1 + r.nextBetween(0, 1) + (r.nextFloat() < 0.45f ? 1 : 0);
+                    for (int i = 0; i < horizontalSpans; i++) {
+                        boolean preferFlat = r.nextFloat() < 0.55f;
+                        Anchor horizontal = findHorizontalAnchor(a, anchorMap, r, preferFlat);
+                        if (horizontal != null) {
+                            int extraThickness = preferFlat
+                                    ? r.nextBetween(0, 1)
+                                    : r.nextBetween(0, 2);
+
+                            connectAnchors(
+                                    chunk, m, a, horizontal,
+                                    Math.min(SUPPORT_MAX_THICK, pickThickness(r) + extraThickness),
+                                    pickLog(r),
+                                    minX, minZ, maxX, maxZ, bottomY, topY, r,
+                                    preferFlat ? 0.010 : 0.013,
+                                    preferFlat ? 0.006 : 0.010,
+                                    preferFlat ? 0.20 : 0.16
+                            );
+                        }
+                    }
+
+                    // Rare brace accents only, but always tilted.
+                    if (r.nextFloat() < 0.14f) {
+                        boolean towardCeiling = r.nextFloat() < 0.55f;
+
+                        int tx = a.x + signedBetween(r, 7, 18);
+                        int tz = a.z + signedBetween(r, 6, 16);
+                        int ty = towardCeiling
+                                ? topY - r.nextBetween(2, 20)
+                                : bottomY + 2 + r.nextBetween(0, 20);
+
+                        int len = (int) Math.max(28, new Vec3d(tx - a.x, ty - a.y, tz - a.z).length()) + 18;
+
+                        carveTargetedStrand(
+                                chunk, m,
+                                a.x, a.y, a.z,
+                                tx, ty, tz,
+                                len,
+                                Math.min(SUPPORT_MAX_THICK, pickThickness(r) + 1),
+                                pickLog(r),
+                                minX, minZ, maxX, maxZ, bottomY, topY,
+                                r,
+                                0.010, 0.010, 0.22
+                        );
+                    }
                 }
             }
+        }
 
-            int baseBridgesLocal = 2 + r.nextBetween(0, 2);
-            int bridgesLocal = Math.max(1, Math.round(baseBridgesLocal * DENSITY_FACTOR));
-            for (int b = 0; b < bridgesLocal; b++) {
-                Anchor a = anchors.get(r.nextInt(anchors.size()));
-                Anchor b2 = anchors.get(r.nextInt(anchors.size()));
-                if (a == b2) continue;
+        // Pass 3: bigger rep-to-rep webs
+        for (int cx = cx0; cx <= cx1; cx++) {
+            for (int cz = cz0; cz <= cz1; cz++) {
+                Anchor a = repMap.get(cellKey(cx, cz));
+                if (a == null) continue;
 
-                Vec3d dir = directionToward(a.x, a.y, a.z, b2.x, b2.y, b2.z, r, 20, 40);
-                int baseLen = (int)Math.max(50, new Vec3d(b2.x - a.x, b2.y - a.y, b2.z - a.z).length());
-                int len = baseLen * LENGTH_MULT;
+                int cellId = (cx * 7349) ^ (cz * 9157);
+                Random r = Random.create(scrambleId(seed, cellId ^ 0x1234ABCD));
 
-                int baseThick = pickThickness(r);
-                int scale = 1 + r.nextBetween(0, THICK_SCALE_MAX - 1);
-                int thick = Math.max(1, Math.min(7, baseThick * scale - 1));
+                connectRepresentativePair(chunk, m, a, repMap.get(cellKey(cx + 1, cz)), r, minX, minZ, maxX, maxZ, bottomY, topY);
+                connectRepresentativePair(chunk, m, a, repMap.get(cellKey(cx, cz + 1)), r, minX, minZ, maxX, maxZ, bottomY, topY);
 
-                BlockState log = pickLog(r);
-                carveStrand(chunk, m, a.x, a.y, a.z, dir, len, thick, log,
-                        minX, minZ, maxX, maxZ, bottomY, r);
+                if (r.nextFloat() < 0.75f) {
+                    connectRepresentativePair(chunk, m, a, repMap.get(cellKey(cx + 1, cz + 1)), r, minX, minZ, maxX, maxZ, bottomY, topY);
+                }
+                if (r.nextFloat() < 0.55f) {
+                    connectRepresentativePair(chunk, m, a, repMap.get(cellKey(cx - 1, cz + 1)), r, minX, minZ, maxX, maxZ, bottomY, topY);
+                }
+
+                // Macro flatter bridges too.
+                if (r.nextFloat() < 0.70f) {
+                    connectRepresentativePair(chunk, m, a, repMap.get(cellKey(cx + 2, cz)), r, minX, minZ, maxX, maxZ, bottomY, topY);
+                }
+                if (r.nextFloat() < 0.70f) {
+                    connectRepresentativePair(chunk, m, a, repMap.get(cellKey(cx, cz + 2)), r, minX, minZ, maxX, maxZ, bottomY, topY);
+                }
+            }
+        }
+    }
+
+    /* -------------------- cleanup -------------------- */
+
+    private void pruneDisconnectedBits(Chunk chunk) {
+        final int bottomY = chunk.getBottomY();
+        final int height = chunk.getHeight();
+        final int topY = bottomY + height - 1;
+
+        boolean[] visited = new boolean[16 * height * 16];
+        List<Component> components = new ArrayList<>();
+        BlockPos.Mutable m = new BlockPos.Mutable();
+
+        for (int dx = 0; dx < 16; dx++) {
+            for (int dz = 0; dz < 16; dz++) {
+                for (int y = bottomY; y <= topY; y++) {
+                    int index = packIndex(dx, y - bottomY, dz);
+                    if (visited[index]) continue;
+
+                    m.set(chunk.getPos().getStartX() + dx, y, chunk.getPos().getStartZ() + dz);
+                    if (!isRootMaterial(chunk.getBlockState(m))) continue;
+
+                    Component comp = floodComponent(chunk, dx, y - bottomY, dz, bottomY, height, visited);
+                    components.add(comp);
+                }
             }
         }
 
-        for (int cx = cx0; cx <= cx1; cx++) for (int cz = cz0; cz <= cz1; cz++) {
-            int cellId = (cx * 7349) ^ (cz * 9157);
-            Random r = Random.create(scrambleId(seed, cellId));
+        if (components.isEmpty()) {
+            return;
+        }
 
-            int baseBridges = 2 + r.nextBetween(0, 2);
-            int bridges = Math.max(1, Math.round(baseBridges * DENSITY_FACTOR));
+        int fallbackKeep = -1;
+        int bestSize = -1;
 
-            Anchor a = representativeFor(reps, cx, cz);
-            if (a == null) continue;
-
-            for (int b = 0; b < bridges; b++) {
-                int nx = cx + r.nextBetween(-1, 1);
-                int nz = cz + r.nextBetween(-1, 1);
-                if (nx == cx && nz == cz) nz += 1;
-
-                Anchor nb = representativeFor(reps, nx, nz);
-                if (nb == null) continue;
-
-                Vec3d dir = directionToward(a.x, a.y, a.z, nb.x, nb.y, nb.z, r, 20, 40);
-                int baseLen = (int)Math.max(60, new Vec3d(nb.x - a.x, nb.y - a.y, nb.z - a.z).length());
-                int len = baseLen * LENGTH_MULT;
-
-                int baseThick = pickThickness(r);
-                int scale = 1 + r.nextBetween(0, THICK_SCALE_MAX - 1);
-                int thick = Math.max(1, Math.min(7, baseThick * scale - 1));
-
-                BlockState log = pickLog(r);
-                carveStrand(chunk, m, a.x, a.y, a.z, dir, len, thick, log,
-                        minX, minZ, maxX, maxZ, bottomY, r);
+        for (int i = 0; i < components.size(); i++) {
+            Component c = components.get(i);
+            if (c.blocks.size() > bestSize) {
+                bestSize = c.blocks.size();
+                fallbackKeep = i;
             }
         }
+
+        boolean anyStrongKeep = false;
+        for (Component c : components) {
+            if (shouldStrongKeep(c)) {
+                anyStrongKeep = true;
+                break;
+            }
+        }
+
+        for (int i = 0; i < components.size(); i++) {
+            Component comp = components.get(i);
+
+            boolean keep = shouldStrongKeep(comp);
+            if (!anyStrongKeep && i == fallbackKeep) {
+                keep = true;
+            }
+
+            if (keep) continue;
+
+            for (int packed : comp.blocks) {
+                int dx = unpackDx(packed);
+                int dy = unpackDy(packed);
+                int dz = unpackDz(packed);
+
+                m.set(chunk.getPos().getStartX() + dx, bottomY + dy, chunk.getPos().getStartZ() + dz);
+                chunk.setBlockState(m, Blocks.AIR.getDefaultState(), false);
+            }
+        }
+    }
+
+    private boolean shouldStrongKeep(Component c) {
+        int borderFaces = Integer.bitCount(c.borderMask);
+        int rangeX = c.maxDx - c.minDx + 1;
+        int rangeY = c.maxDy - c.minDy + 1;
+        int rangeZ = c.maxDz - c.minDz + 1;
+
+        boolean sliceLike =
+                (rangeX <= 4 && rangeY >= 8 && rangeZ >= 8) ||
+                        (rangeZ <= 4 && rangeY >= 8 && rangeX >= 8) ||
+                        (rangeY <= 4 && (rangeX >= 8 || rangeZ >= 8));
+
+        if (c.touchesCeiling) return true;
+        if (borderFaces >= 2) return true;
+
+        if (borderFaces == 1 && sliceLike) return false;
+        if (borderFaces == 1 && c.blocks.size() < 260) return false;
+
+        if (borderFaces == 0) {
+            return c.blocks.size() >= 420 && !sliceLike;
+        }
+
+        return c.blocks.size() >= 700 && !sliceLike;
+    }
+
+    private Component floodComponent(Chunk chunk, int startDx, int startDy, int startDz, int bottomY, int height, boolean[] visited) {
+        int[] queue = new int[16 * height * 16];
+        int qHead = 0;
+        int qTail = 0;
+
+        Component comp = new Component();
+        BlockPos.Mutable m = new BlockPos.Mutable();
+
+        int start = packIndex(startDx, startDy, startDz);
+        visited[start] = true;
+        queue[qTail++] = start;
+
+        while (qHead < qTail) {
+            int cur = queue[qHead++];
+            comp.blocks.add(cur);
+
+            int dx = unpackDx(cur);
+            int dy = unpackDy(cur);
+            int dz = unpackDz(cur);
+
+            comp.minDx = Math.min(comp.minDx, dx);
+            comp.maxDx = Math.max(comp.maxDx, dx);
+            comp.minDy = Math.min(comp.minDy, dy);
+            comp.maxDy = Math.max(comp.maxDy, dy);
+            comp.minDz = Math.min(comp.minDz, dz);
+            comp.maxDz = Math.max(comp.maxDz, dz);
+
+            if (dx == 0)  comp.borderMask |= 1;
+            if (dx == 15) comp.borderMask |= 2;
+            if (dz == 0)  comp.borderMask |= 4;
+            if (dz == 15) comp.borderMask |= 8;
+
+            if (bottomY + dy >= bottomY + height - 4) {
+                comp.touchesCeiling = true;
+            }
+
+            for (int dir = 0; dir < 6; dir++) {
+                int nx = dx;
+                int ny = dy;
+                int nz = dz;
+
+                switch (dir) {
+                    case 0 -> nx++;
+                    case 1 -> nx--;
+                    case 2 -> ny++;
+                    case 3 -> ny--;
+                    case 4 -> nz++;
+                    case 5 -> nz--;
+                }
+
+                if (nx < 0 || nx >= 16 || nz < 0 || nz >= 16 || ny < 0 || ny >= height) continue;
+
+                int ni = packIndex(nx, ny, nz);
+                if (visited[ni]) continue;
+
+                m.set(chunk.getPos().getStartX() + nx, bottomY + ny, chunk.getPos().getStartZ() + nz);
+                if (!isRootMaterial(chunk.getBlockState(m))) continue;
+
+                visited[ni] = true;
+                queue[qTail++] = ni;
+            }
+        }
+
+        return comp;
+    }
+
+    private boolean isRootMaterial(BlockState state) {
+        return state.isOf(ModBlocks.BOGGY_LOG)
+                || state.isOf(ModBlocks.BOGGY_WOOD)
+                || state.isOf(ModBlocks.GLOW_SAP);
+    }
+
+    private static int packIndex(int dx, int dy, int dz) {
+        return dx + (dz * 16) + (dy * 16 * 16);
+    }
+
+    private static int unpackDx(int packed) {
+        return packed & 15;
+    }
+
+    private static int unpackDz(int packed) {
+        return (packed >> 4) & 15;
+    }
+
+    private static int unpackDy(int packed) {
+        return packed >> 8;
+    }
+
+    private static final class Component {
+        final List<Integer> blocks = new ArrayList<>();
+        boolean touchesCeiling = false;
+        int borderMask = 0;
+
+        int minDx = Integer.MAX_VALUE;
+        int maxDx = Integer.MIN_VALUE;
+        int minDy = Integer.MAX_VALUE;
+        int maxDy = Integer.MIN_VALUE;
+        int minDz = Integer.MAX_VALUE;
+        int maxDz = Integer.MIN_VALUE;
     }
 
     /* -------------------- helpers -------------------- */
@@ -259,76 +521,262 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         return h ^ (h >>> 31);
     }
 
+    private static long cellKey(int cx, int cz) {
+        return (((long) cx) << 32) ^ (cz & 0xffffffffL);
+    }
+
     private static class Anchor {
         final int x, y, z, cellX, cellZ, id;
         Anchor(int x, int y, int z, int cellX, int cellZ, int id) {
-            this.x = x; this.y = y; this.z = z;
-            this.cellX = cellX; this.cellZ = cellZ; this.id = id;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.cellX = cellX;
+            this.cellZ = cellZ;
+            this.id = id;
         }
     }
 
-    private static Anchor representativeFor(List<Anchor> reps, int cx, int cz) {
-        for (Anchor a : reps) if (a.cellX == cx && a.cellZ == cz) return a;
-        return null;
+    private static Anchor findNearestAnchor(Anchor from, List<Anchor> list, Anchor exclude) {
+        Anchor best = null;
+        double bestDist = Double.MAX_VALUE;
+
+        for (Anchor a : list) {
+            if (a == from) continue;
+            if (a == exclude) continue;
+
+            double dx = a.x - from.x;
+            double dy = a.y - from.y;
+            double dz = a.z - from.z;
+            double d2 = dx * dx + dy * dy + dz * dz;
+
+            if (d2 < bestDist) {
+                bestDist = d2;
+                best = a;
+            }
+        }
+
+        return best;
     }
 
-    private static Vec3d chooseWeightedDirection(Random r) {
-        double lw = 0.60 * 0.70;
-        double mw = 0.25 * 0.70;
-        double sw = 0.15 * 1.50;
-        double sum = lw + mw + sw;
-        double lowT = lw / sum;
-        double medT = (lw + mw) / sum;
+    private static Anchor findNearestNeighborAnchor(Anchor from, Map<Long, List<Anchor>> anchorMap, int cx, int cz) {
+        Anchor best = null;
+        double bestDist = Double.MAX_VALUE;
 
-        float f = r.nextFloat();
-        if (f < lowT) return dirLow(r);
-        if (f < medT) return dirMedium(r);
-        return dirSteep(r);
+        for (int ox = -1; ox <= 1; ox++) {
+            for (int oz = -1; oz <= 1; oz++) {
+                if (ox == 0 && oz == 0) continue;
+
+                List<Anchor> list = anchorMap.get(cellKey(cx + ox, cz + oz));
+                if (list == null) continue;
+
+                for (Anchor a : list) {
+                    double dx = a.x - from.x;
+                    double dy = a.y - from.y;
+                    double dz = a.z - from.z;
+                    double d2 = dx * dx + dy * dy + dz * dz;
+
+                    if (d2 < bestDist) {
+                        bestDist = d2;
+                        best = a;
+                    }
+                }
+            }
+        }
+
+        return best;
     }
 
-    private static Vec3d dirLow(Random r) {
+    private static Anchor findForwardAnchor(Anchor from, Map<Long, List<Anchor>> anchorMap, Random r) {
         double yaw = r.nextDouble() * Math.PI * 2.0;
-        double pitch = Math.toRadians(r.nextBetween(0, 20));
-        return fromAngles(yaw, pitch);
-    }
-    private static Vec3d dirMedium(Random r) {
-        double yaw = r.nextDouble() * Math.PI * 2.0;
-        double pitch = Math.toRadians(r.nextBetween(20, 45));
-        return fromAngles(yaw, pitch);
-    }
-    private static Vec3d dirSteep(Random r) {
-        double yaw = r.nextDouble() * Math.PI * 2.0;
-        double pitch = Math.toRadians(r.nextBetween(45, 80));
-        return fromAngles(yaw, pitch);
+        double fx = Math.cos(yaw);
+        double fz = Math.sin(yaw);
+
+        Anchor best = null;
+        double bestScore = -1_000_000.0;
+
+        for (int ox = -2; ox <= 2; ox++) {
+            for (int oz = -2; oz <= 2; oz++) {
+                List<Anchor> list = anchorMap.get(cellKey(from.cellX + ox, from.cellZ + oz));
+                if (list == null) continue;
+
+                for (Anchor a : list) {
+                    if (a == from) continue;
+
+                    double dx = a.x - from.x;
+                    double dy = a.y - from.y;
+                    double dz = a.z - from.z;
+
+                    double horiz = Math.sqrt(dx * dx + dz * dz);
+                    if (horiz < 18.0 || horiz > 110.0) continue;
+
+                    double forwardness = (dx * fx + dz * fz) / horiz;
+                    if (forwardness < 0.35) continue;
+
+                    double score = (forwardness * 50.0)
+                            - Math.abs(horiz - 48.0) * 0.35
+                            - Math.abs(dy) * 0.28;
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        best = a;
+                    }
+                }
+            }
+        }
+
+        return best;
     }
 
-    private static Vec3d directionToward(int ax, int ay, int az, int bx, int by, int bz, Random r, int minPitchDeg, int maxPitchDeg) {
-        Vec3d toward = new Vec3d(bx - ax, by - ay, bz - az).normalize();
-        double yaw = Math.atan2(toward.z, toward.x) + (r.nextDouble() - 0.5) * 0.4;
-        int pitchDeg = MathHelper.clamp(minPitchDeg + r.nextBetween(0, Math.max(0, maxPitchDeg - minPitchDeg)), 0, 80);
-        double pitch = Math.toRadians(pitchDeg) * (toward.y < 0 ? -1 : 1);
-        return fromAngles(yaw, pitch);
+    private static Anchor findHorizontalAnchor(Anchor from, Map<Long, List<Anchor>> anchorMap, Random r, boolean preferFlat) {
+        double yaw = r.nextDouble() * Math.PI * 2.0;
+        double fx = Math.cos(yaw);
+        double fz = Math.sin(yaw);
+
+        double preferredDist = preferFlat
+                ? 58.0 + r.nextDouble() * 32.0
+                : 44.0 + r.nextDouble() * 42.0;
+
+        double targetSlope = preferFlat
+                ? 0.02 + r.nextDouble() * 0.07
+                : 0.10 + r.nextDouble() * 0.22;
+
+        double minSlope = preferFlat ? 0.0 : 0.04;
+        double maxSlope = preferFlat ? 0.14 : 0.40;
+        double minForwardness = preferFlat ? 0.20 : 0.08;
+
+        Anchor best = null;
+        double bestScore = -1_000_000.0;
+
+        for (int ox = -3; ox <= 3; ox++) {
+            for (int oz = -3; oz <= 3; oz++) {
+                List<Anchor> list = anchorMap.get(cellKey(from.cellX + ox, from.cellZ + oz));
+                if (list == null) continue;
+
+                for (Anchor a : list) {
+                    if (a == from) continue;
+
+                    double dx = a.x - from.x;
+                    double dy = a.y - from.y;
+                    double dz = a.z - from.z;
+
+                    double horiz = Math.sqrt(dx * dx + dz * dz);
+                    if (horiz < 20.0 || horiz > 150.0) continue;
+
+                    double absDy = Math.abs(dy);
+                    double slope = absDy / horiz;
+                    if (slope < minSlope || slope > maxSlope) continue;
+
+                    double forwardness = (dx * fx + dz * fz) / horiz;
+                    if (forwardness < minForwardness) continue;
+
+                    double score = (forwardness * 42.0)
+                            - Math.abs(horiz - preferredDist) * 0.22
+                            - Math.abs(slope - targetSlope) * 90.0
+                            - absDy * (preferFlat ? 0.45 : 0.18);
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        best = a;
+                    }
+                }
+            }
+        }
+
+        return best;
     }
 
-    private static Vec3d fromAngles(double yaw, double pitch) {
-        double x = Math.cos(yaw) * Math.cos(pitch);
-        double y = Math.sin(pitch);
-        double z = Math.sin(yaw) * Math.cos(pitch);
-        return new Vec3d(x, y, z).normalize();
+    private static void connectRepresentativePair(
+            Chunk chunk, BlockPos.Mutable m,
+            Anchor a, Anchor b,
+            Random r,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY
+    ) {
+        if (a == null || b == null) return;
+
+        double dist = new Vec3d(b.x - a.x, b.y - a.y, b.z - a.z).length();
+        if (dist < 18.0) return;
+
+        connectAnchors(
+                chunk, m, a, b,
+                Math.min(SUPPORT_MAX_THICK, pickThickness(r) + 1),
+                pickLog(r),
+                minX, minZ, maxX, maxZ, bottomY, topY,
+                r,
+                0.015, 0.012, 0.15
+        );
+    }
+
+    private static void connectAnchors(
+            Chunk chunk, BlockPos.Mutable m,
+            Anchor a, Anchor b,
+            int thick, BlockState log,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY,
+            Random r,
+            double wobbleXZ,
+            double wobbleY,
+            double spring
+    ) {
+        int dx = b.x - a.x;
+        int dz = b.z - a.z;
+
+        // Near-vertical links get a forced bend so they stop looking like towers.
+        if (dx * dx + dz * dz < 64) {
+            int midX = (a.x + b.x) / 2 + signedBetween(r, 6, 14);
+            int midY = (a.y + b.y) / 2;
+            int midZ = (a.z + b.z) / 2 + signedBetween(r, 5, 12);
+
+            int len1 = (int) Math.max(18, new Vec3d(midX - a.x, midY - a.y, midZ - a.z).length()) + 12;
+            int len2 = (int) Math.max(18, new Vec3d(b.x - midX, b.y - midY, b.z - midZ).length()) + 12;
+
+            carveTargetedStrand(
+                    chunk, m,
+                    a.x, a.y, a.z,
+                    midX, midY, midZ,
+                    len1, thick, log,
+                    minX, minZ, maxX, maxZ, bottomY, topY,
+                    r, wobbleXZ, wobbleY, spring
+            );
+
+            carveTargetedStrand(
+                    chunk, m,
+                    midX, midY, midZ,
+                    b.x, b.y, b.z,
+                    len2, thick, log,
+                    minX, minZ, maxX, maxZ, bottomY, topY,
+                    r, wobbleXZ, wobbleY, spring
+            );
+            return;
+        }
+
+        int len = (int) Math.max(26, new Vec3d(dx, b.y - a.y, dz).length()) + 18;
+
+        carveTargetedStrand(
+                chunk, m,
+                a.x, a.y, a.z,
+                b.x, b.y, b.z,
+                len, thick, log,
+                minX, minZ, maxX, maxZ, bottomY, topY,
+                r,
+                wobbleXZ, wobbleY, spring
+        );
+    }
+
+    private static int signedBetween(Random r, int min, int max) {
+        int v = r.nextBetween(min, max);
+        return r.nextBoolean() ? v : -v;
+    }
+
+    private static BlockState pickLog(Random r) {
+        return ModBlocks.BOGGY_LOG.getDefaultState();
     }
 
     private static int pickThickness(Random r) {
         float f = r.nextFloat();
-        if (f < 0.15f) return 1;
-        if (f < 0.60f) return 2;
-        return 3;
-    }
-
-    private static BlockState pickLog(Random r) {
-        List<BlockState> logs = List.of(
-                ModBlocks.BOGGY_LOG.getDefaultState()
-        );
-        return logs.get(r.nextInt(logs.size()));
+        if (f < 0.05f) return 2;
+        if (f < 0.22f) return 3;
+        if (f < 0.62f) return 4;
+        return 5;
     }
 
     private static Direction.Axis dominantAxis(Vec3d v) {
@@ -338,97 +786,188 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         return Direction.Axis.Y;
     }
 
-    private static void carveStrand(
+    private static void carveTargetedStrand(
             Chunk chunk, BlockPos.Mutable m,
-            int sx, int sy, int sz, Vec3d dir, int len, int thick, BlockState log,
-            int minX, int minZ, int maxX, int maxZ, int bottomY, Random r
+            int sx, int sy, int sz,
+            int tx, int ty, int tz,
+            int len, int thick, BlockState log,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY,
+            Random r,
+            double wobbleXZ,
+            double wobbleY,
+            double spring
     ) {
         Vec3d p = new Vec3d(sx + 0.5, sy + 0.5, sz + 0.5);
-        Vec3d d = dir.normalize();
+        Vec3d target = new Vec3d(tx + 0.5, ty + 0.5, tz + 0.5);
+        Vec3d d = target.subtract(p).normalize();
 
         for (int i = 0; i < len; i++) {
-            d = d.add((r.nextDouble() - 0.5) * 0.035, (r.nextDouble() - 0.5) * 0.03, (r.nextDouble() - 0.5) * 0.035).normalize();
-            p = p.add(d.multiply(1.15));
+            Vec3d toTarget = target.subtract(p);
+            double remaining = toTarget.length();
+            if (remaining < 2.0) break;
+
+            Vec3d targetDir = toTarget.normalize();
+            d = d.multiply(1.0 - spring).add(targetDir.multiply(spring));
+            d = d.add(
+                    (r.nextDouble() - 0.5) * wobbleXZ,
+                    (r.nextDouble() - 0.5) * wobbleY,
+                    (r.nextDouble() - 0.5) * wobbleXZ
+            ).normalize();
+
+            p = p.add(d.multiply(1.10));
 
             int x = MathHelper.floor(p.x);
             int y = MathHelper.floor(p.y);
             int z = MathHelper.floor(p.z);
-            if (y < bottomY + 1 || y >= bottomY + 384) continue;
 
+            if (y < bottomY + 1 || y >= topY) continue;
             if (x < minX - thick || x > maxX + thick || z < minZ - thick || z > maxZ + thick) continue;
 
-            Direction.Axis axis = dominantAxis(d);
+            int effectiveThickness = computeTaperedThickness(
+                    i, len, remaining, thick, x, z, minX, minZ, maxX, maxZ
+            );
 
-            // core (inside) is boggy_log (the 'log' passed in)
-            BlockState coreOriented  = log.with(PillarBlock.AXIS, axis);
+            if (effectiveThickness <= 0) continue;
 
-            // shell (outside) is boggy_wood
-            BlockState shellOriented = ModBlocks.BOGGY_WOOD.getDefaultState().with(PillarBlock.AXIS, axis);
-
-            int outerR2 = thick * thick;
-
-            // shell is 1-block thick:
-            // core radius = (thick - 1), shell is everything outside that up to thick
-            int coreR = Math.max(0, thick - 1);
-            int coreR2 = coreR * coreR;
-
-            for (int dx = -thick; dx <= thick; dx++)
-                for (int dy = -thick; dy <= thick; dy++)
-                    for (int dz = -thick; dz <= thick; dz++) {
-
-                        int dist2 = dx*dx + dy*dy + dz*dz;
-                        if (dist2 > outerR2) continue;
-
-                        int px = x + dx, py = y + dy, pz = z + dz;
-                        if (px < minX || px > maxX || pz < minZ || pz > maxZ) continue;
-
-                        m.set(px, py, pz);
-                        if (!chunk.getBlockState(m).isAir()) continue;
-
-                        boolean isShell = dist2 > coreR2;
-
-                        if (!isShell) {
-                            // inside
-                            chunk.setBlockState(m, coreOriented, false);
-                            continue;
-                        }
-
-                        // outside shell: usually boggy_wood, rarely blue_sap (in clumps)
-                        // NOTE: rename ModBlocks.BLUE_SAP if your field name differs.
-                        boolean placeBlueSap = (r.nextInt(BLUE_SAP_RARE_CHANCE) == 0);
-
-                        if (placeBlueSap) {
-                            chunk.setBlockState(m, ModBlocks.GLOW_SAP.getDefaultState(), false);
-
-                            // Make a small clump: try to convert a few nearby shell blocks
-                            for (int t = 0; t < BLUE_SAP_CLUMP_TRIES; t++) {
-                                int ox = r.nextBetween(-2, 2);
-                                int oy = r.nextBetween(-2, 2);
-                                int oz = r.nextBetween(-2, 2);
-
-                                int nx = px + ox, ny = py + oy, nz = pz + oz;
-                                if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
-
-                                // must still be on/near the shell band for this local blob
-                                int sdx = (nx - x);
-                                int sdy = (ny - y);
-                                int sdz = (nz - z);
-                                int nd2 = sdx*sdx + sdy*sdy + sdz*sdz;
-                                if (nd2 > outerR2) continue;
-                                if (nd2 <= coreR2) continue; // don't go into core
-
-                                m.set(nx, ny, nz);
-                                if (!chunk.getBlockState(m).isAir()) continue;
-
-                                // a little extra randomness so clumps aren't perfect spheres
-                                if (r.nextInt(3) != 0) continue;
-
-                                chunk.setBlockState(m, ModBlocks.GLOW_SAP.getDefaultState(), false);
-                            }
-                        } else {
-                            chunk.setBlockState(m, shellOriented, false);
-                        }
-                    }
+            paintTubeAt(chunk, m, x, y, z, d, effectiveThickness, log, minX, minZ, maxX, maxZ, r);
         }
+    }
+
+    private static int computeTaperedThickness(
+            int step, int totalSteps, double remainingDistance, int baseThickness,
+            int x, int z, int minX, int minZ, int maxX, int maxZ
+    ) {
+        int tipSteps = Math.max(4, baseThickness * 3 + 3);
+
+        double startScale = MathHelper.clamp((step + 1) / (double) tipSteps, 0.0, 1.0);
+        double endScale = MathHelper.clamp(remainingDistance / (baseThickness * 2.5 + 3.0), 0.0, 1.0);
+
+        startScale = Math.sqrt(startScale);
+        endScale = Math.sqrt(endScale);
+
+        double scale = Math.min(startScale, endScale);
+
+        int borderDist = Math.min(
+                Math.min(x - minX, maxX - x),
+                Math.min(z - minZ, maxZ - z)
+        );
+
+        int borderTip = Math.max(3, baseThickness * 2 + 2);
+        if (borderDist < borderTip) {
+            double borderScale = 0.45 + 0.55 * MathHelper.clamp(borderDist / (double) borderTip, 0.0, 1.0);
+            scale = Math.min(scale, borderScale);
+        }
+
+        int effective = Math.max(1, MathHelper.floor(baseThickness * scale));
+        return Math.min(effective, baseThickness);
+    }
+
+    private static void paintTubeAt(
+            Chunk chunk, BlockPos.Mutable m,
+            int x, int y, int z, Vec3d dir, int thick, BlockState log,
+            int minX, int minZ, int maxX, int maxZ, Random r
+    ) {
+        Direction.Axis axis = dominantAxis(dir);
+
+        BlockState coreOriented = log.with(PillarBlock.AXIS, axis);
+        BlockState shellOriented = ModBlocks.BOGGY_WOOD.getDefaultState().with(PillarBlock.AXIS, axis);
+
+        int outerR2 = thick * thick;
+        int coreR = Math.max(1, thick - 1);
+        int coreR2 = coreR * coreR;
+
+        for (int dx = -thick; dx <= thick; dx++) {
+            for (int dy = -thick; dy <= thick; dy++) {
+                for (int dz = -thick; dz <= thick; dz++) {
+                    int dist2 = dx * dx + dy * dy + dz * dz;
+                    if (dist2 > outerR2) continue;
+
+                    int px = x + dx;
+                    int py = y + dy;
+                    int pz = z + dz;
+
+                    if (px < minX || px > maxX || pz < minZ || pz > maxZ) continue;
+
+                    m.set(px, py, pz);
+                    if (!chunk.getBlockState(m).isAir()) continue;
+
+                    boolean isShell = dist2 > coreR2;
+
+                    if (!isShell) {
+                        chunk.setBlockState(m, coreOriented, false);
+                        continue;
+                    }
+
+                    boolean placeGlowSapCluster = (r.nextInt(GLOW_SAP_CLUSTER_RARE_CHANCE) == 0);
+
+                    if (placeGlowSapCluster) {
+                        placeGlowSapCluster(
+                                chunk, m,
+                                px, py, pz,
+                                x, y, z,
+                                coreR2, outerR2,
+                                minX, minZ, maxX, maxZ,
+                                r
+                        );
+                    } else {
+                        chunk.setBlockState(m, shellOriented, false);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void placeGlowSapCluster(
+            Chunk chunk, BlockPos.Mutable m,
+            int seedX, int seedY, int seedZ,
+            int centerX, int centerY, int centerZ,
+            int coreR2, int outerR2,
+            int minX, int minZ, int maxX, int maxZ,
+            Random r
+    ) {
+        int target = GLOW_SAP_CLUSTER_MIN + r.nextBetween(0, GLOW_SAP_CLUSTER_MAX - GLOW_SAP_CLUSTER_MIN);
+        int placed = 0;
+
+        if (tryPlaceGlowSap(chunk, m, seedX, seedY, seedZ)) {
+            placed++;
+        }
+
+        int attempts = 0;
+        while (placed < target && attempts < GLOW_SAP_CLUSTER_ATTEMPTS) {
+            attempts++;
+
+            int ox = r.nextBetween(-3, 3);
+            int oy = r.nextBetween(-3, 3);
+            int oz = r.nextBetween(-3, 3);
+
+            if (Math.abs(ox) + Math.abs(oy) + Math.abs(oz) > 5) continue;
+
+            int nx = seedX + ox;
+            int ny = seedY + oy;
+            int nz = seedZ + oz;
+
+            if (nx < minX || nx > maxX || nz < minZ || nz > maxZ) continue;
+
+            int sdx = nx - centerX;
+            int sdy = ny - centerY;
+            int sdz = nz - centerZ;
+            int nd2 = sdx * sdx + sdy * sdy + sdz * sdz;
+
+            if (nd2 > outerR2) continue;
+            if (nd2 <= coreR2) continue;
+
+            if (tryPlaceGlowSap(chunk, m, nx, ny, nz)) {
+                placed++;
+            }
+        }
+    }
+
+    private static boolean tryPlaceGlowSap(Chunk chunk, BlockPos.Mutable m, int x, int y, int z) {
+        m.set(x, y, z);
+        if (!chunk.getBlockState(m).isAir()) {
+            return false;
+        }
+        chunk.setBlockState(m, ModBlocks.GLOW_SAP.getDefaultState(), false);
+        return true;
     }
 }

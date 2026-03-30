@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "odd:mask_of_shame" },
+    { "item": "odd:mask_of_vengeance" },
+    { "item": "odd:mask_of_regret" }
+  ],
+  "result": {
+    "item": "odd:rotten_mask",
+    "count": 1
+  }
+}

@@ -29,7 +29,7 @@ vec2 hash22(vec2 p){
     return vec2(n, hash21(p + n + 19.19));
 }
 
-float noise2(vec2 p) {
+float valueNoise2(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
 
@@ -38,15 +38,15 @@ float noise2(vec2 p) {
     float c = hash21(i + vec2(0.0, 1.0));
     float d = hash21(i + vec2(1.0, 1.0));
 
-    vec2 u = f*f*(3.0 - 2.0*f);
-    return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
 float fbm(vec2 p) {
     float v = 0.0;
     float a = 0.55;
     for (int i = 0; i < 5; i++) {
-        v += a * noise2(p);
+        v += a * valueNoise2(p);
         p *= 2.02;
         a *= 0.52;
     }
@@ -56,14 +56,14 @@ float fbm(vec2 p) {
 // domain-warped fbm (clean “ocean” motion)
 float dfbm(vec2 p) {
     vec2 q = vec2(
-        fbm(p + vec2(0.0, 0.0)),
-        fbm(p + vec2(5.2, 1.3))
+    fbm(p + vec2(0.0, 0.0)),
+    fbm(p + vec2(5.2, 1.3))
     );
     vec2 r = vec2(
-        fbm(p + 2.0*q + vec2(1.7, 9.2)),
-        fbm(p + 2.0*q + vec2(8.3, 2.8))
+    fbm(p + 2.0 * q + vec2(1.7, 9.2)),
+    fbm(p + 2.0 * q + vec2(8.3, 2.8))
     );
-    return fbm(p + 1.6*r);
+    return fbm(p + 1.6 * r);
 }
 
 /* -------------------- reconstruct view direction -------------------- */
@@ -130,7 +130,7 @@ vec3 cartoonStars(vec3 dir, float t){
         vec2 id = floor(g);
         vec2 f  = fract(g) - 0.5;
 
-        for (int j=-1; j<=1; j++) for (int i=-1; i<=1; i++){
+        for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
             vec2 cid = id + vec2(i, j);
             vec2 rnd = hash22(cid);
 
@@ -145,7 +145,7 @@ vec3 cartoonStars(vec3 dir, float t){
             float s = star5(p, size);
 
             float d = length(p);
-            float halo = exp(-(d*d) / max(1e-4, size*size*1.9));
+            float halo = exp(-(d * d) / max(1e-4, size * size * 1.9));
 
             // twinkle
             float tw = 0.72 + 0.28 * sin(t * 2.2 + rnd.x * 25.0);
@@ -162,7 +162,7 @@ vec3 cartoonStars(vec3 dir, float t){
         vec2 id = floor(g);
         vec2 f  = fract(g) - 0.5;
 
-        for (int j=-1; j<=1; j++) for (int i=-1; i<=1; i++){
+        for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
             vec2 cid = id + vec2(i, j);
             float r = hash21(cid);
             vec2 rnd = hash22(cid + r);
@@ -260,16 +260,16 @@ void main() {
     vec3 col = oceanSky(dir, t);
     col += auroraCurtains(dir, t);
 
-    // === NEW: cartoony floating glowing yellow stars ===
+    // cartoony floating glowing yellow stars
     col += cartoonStars(dir, t);
 
     // keep tiny background stars, but tone them down so the cartoon stars read clearly
     float starFade = pow(sat((dir.y + 0.05) / 1.05), 0.35);
 
     float s =
-        starLayer(dir, 420.0, 0.016, 0.18, t) +
-        starLayer(dir, 210.0, 0.010, 0.23, t * 0.85) * 0.65 +
-        starLayer(dir, 840.0, 0.006, 0.14, t * 1.25) * 0.45;
+    starLayer(dir, 420.0, 0.016, 0.18, t) +
+    starLayer(dir, 210.0, 0.010, 0.23, t * 0.85) * 0.65 +
+    starLayer(dir, 840.0, 0.006, 0.14, t * 1.25) * 0.45;
 
     float glow = pow(sat(s), 2.2);
 

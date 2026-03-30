@@ -1,0 +1,30 @@
+{
+  "vertex": "odd:boss_witch_snare",
+  "fragment": "odd:boss_witch_snare",
+  "attributes": [ "Position" ],
+  "samplers": [
+    { "name": "DiffuseSampler" },
+    { "name": "DepthSampler" }
+  ],
+  "uniforms": [
+    { "name": "ProjMat", "type": "matrix4x4", "count": 16,
+      "values": [ 1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1 ] },
+
+    { "name": "InverseTransformMatrix", "type": "matrix4x4", "count": 16,
+      "values": [ 1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1 ] },
+
+    { "name": "ModelViewMat", "type": "matrix4x4", "count": 16,
+      "values": [ 1,0,0,0,  0,1,0,0,  0,0,1,0,  0,0,0,1 ] },
+
+    { "name": "OutSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+    { "name": "CameraPosition", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+
+    { "name": "Center", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+    { "name": "Radius", "type": "float", "count": 1, "values": [ 3.0 ] },
+    { "name": "Warn01", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Root01", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Active01", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "iTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Intensity", "type": "float", "count": 1, "values": [ 0.0 ] }
+  ]
+}

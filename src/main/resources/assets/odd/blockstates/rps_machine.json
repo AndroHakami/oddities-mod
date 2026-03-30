@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "facing=north,on=false": { "model": "odd:block/rps_machine" },
+    "facing=south,on=false": { "model": "odd:block/rps_machine" },
+    "facing=west,on=false":  { "model": "odd:block/rps_machine" },
+    "facing=east,on=false":  { "model": "odd:block/rps_machine" },
+
+    "facing=north,on=true": { "model": "odd:block/rps_machine" },
+    "facing=south,on=true": { "model": "odd:block/rps_machine" },
+    "facing=west,on=true":  { "model": "odd:block/rps_machine" },
+    "facing=east,on=true":  { "model": "odd:block/rps_machine" }
+  }
+}

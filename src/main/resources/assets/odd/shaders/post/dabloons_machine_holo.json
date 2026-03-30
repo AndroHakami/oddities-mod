@@ -1,0 +1,15 @@
+{
+  "targets": [ "dabloons_machine_holo" ],
+  "passes": [
+    {
+      "name": "odd:dabloons_machine_holo",
+      "intarget": "minecraft:main",
+      "outtarget": "dabloons_machine_holo"
+    },
+    {
+      "name": "blit",
+      "intarget": "dabloons_machine_holo",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

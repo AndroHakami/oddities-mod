@@ -1,0 +1,15 @@
+{
+  "targets": [ "boss_witch_hex_zones" ],
+  "passes": [
+    {
+      "name": "odd:boss_witch_hex_zones",
+      "intarget": "minecraft:main",
+      "outtarget": "boss_witch_hex_zones"
+    },
+    {
+      "name": "blit",
+      "intarget": "boss_witch_hex_zones",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

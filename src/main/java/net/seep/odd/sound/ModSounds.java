@@ -86,6 +86,7 @@ public class ModSounds {
 
     // Buddymorph
     public static final SoundEvent MELODY = registerSoundEvent("melody");
+    public static final SoundEvent MASK_INSERT = registerSoundEvent("mask_insert");
 
     // Lunar
     public static final SoundEvent DRILL = registerSoundEvent("drill");
@@ -106,6 +107,7 @@ public class ModSounds {
     // Shop
     public static final SoundEvent SHOP_MUSIC = registerSoundEvent("shop_music");
     public static final SoundEvent GLITTER_MUSIC_DISC = registerSoundEvent("glitter_music_disc");
+    public static final SoundEvent CRATER_MUSIC_DISC = registerSoundEvent("crater_music_disc");
 
     // Cultist
     public static final SoundEvent SHY_GUY_AMBIENT = registerSoundEvent("shy_guy_ambient");
@@ -116,6 +118,15 @@ public class ModSounds {
     public static final SoundEvent SHY_GUY_ATTACK = registerSoundEvent("shy_guy_attack");
     public static final SoundEvent FLASH_RECALL = registerSoundEvent("flash_recall");
     public static final SoundEvent DIVINE_TOUCH = registerSoundEvent("cultist_divine");
+    // add these to ModSounds.java
+
+    public static final SoundEvent TRUMPET_AXE = registerSoundEvent("trumpet_axe");
+
+    // BOSS TITAN/GOLEM
+    public static final SoundEvent TITAN_SCREECH = registerSoundEvent("titan_screech");
+    public static final SoundEvent TITAN_SHOCKWAVE = registerSoundEvent("titan_shockwave");
+    public static final SoundEvent TITAN_SMASH = registerSoundEvent("titan_smash");
+
 
 
     // Artificer
@@ -134,6 +145,10 @@ public class ModSounds {
 
     // Invasion
     public static final SoundEvent ALIEN_INVASION = registerSoundEvent("alien_invasion");
+
+    // Guitar Item
+    public static final SoundEvent GUITAR_HIT = registerSoundEvent("guitar_hit");
+    public static final SoundEvent GUITAR_SMASH = registerSoundEvent("guitar_smash");
 
 
 

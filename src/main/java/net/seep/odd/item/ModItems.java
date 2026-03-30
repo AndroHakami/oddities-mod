@@ -34,10 +34,7 @@ import net.seep.odd.entity.whiskers.item.WhiskersSpawnEggItem;
 import net.seep.odd.expeditions.rottenroots.boggy.BoggyBoatItem;
 import net.seep.odd.expeditions.rottenroots.item.SporeBowItem;
 import net.seep.odd.fluid.ModFluids;
-import net.seep.odd.item.custom.CosmicKatanaItem;
-import net.seep.odd.item.custom.DeviceItem;
-import net.seep.odd.item.custom.MetalDetectorItem;
-import net.seep.odd.item.custom.TooltipItem;
+import net.seep.odd.item.custom.*;
 import net.seep.odd.item.ghost.GhostHandItem;
 import net.seep.odd.item.necromancer.NecromancerStaffItem;
 import net.seep.odd.item.wizard.WalkingStickItem;
@@ -52,6 +49,43 @@ public class ModItems {
     public static final Item RUBY_STAFF = registerItem("ruby_staff", new Item(new FabricItemSettings().maxCount(1)));
     public static final Item TAME_BALL = registerItem("tame_ball", new TameBallItem(new FabricItemSettings().maxCount(16)));
     public static final Item GHOST_HAND = registerItem("ghost_hand", new GhostHandItem(new FabricItemSettings().maxCount(1)));
+    public static final Item OCEAN_CHAKRAM = registerItem(
+            "ocean_chakram",
+            new net.seep.odd.item.custom.OceanChakramItem(
+                    ToolMaterials.IRON,
+                    3,          // iron sword style damage
+                    -2.2f,      // slightly faster than normal sword (-2.4)
+                    new FabricItemSettings().maxCount(1)
+            )
+    );
+    // in ModItems.java
+    public static final Item TRUMPET_AXE = registerItem(
+            "trumpet_axe",
+            new TrumpetAxeItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
+    );
+    public static final Item GHAST_SHOES = registerItem("ghast_shoes",
+            new GhastShoesItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+    public static final Item MARIO_HAT = registerItem("mario_hat",
+            new MarioHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+
+    public static final Item LUIGI_HAT = registerItem("luigi_hat",
+            new LuigiHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+
+    public static final Item WARIO_HAT = registerItem("wario_hat",
+            new WarioHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+
+    public static final Item WALUIGI_HAT = registerItem("waluigi_hat",
+            new WaluigiHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+
+    public static final Item SEEP_HAT = registerItem("seep_hat",
+            new SeepHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+
 
     public static final Item EMERALD_SHURIKEN = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "emerald_shuriken"), new Item(new Item.Settings()));
     public static final Item ICE_PROJECTILE = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "ice_projectile"), new Item(new Item.Settings()));
@@ -61,6 +95,11 @@ public class ModItems {
 
     public static final Item ALIEN_PEARL = registerItem("alien_pearl", new Item(new FabricItemSettings().food(ModFoodComponents.ALIEN_PEARL)));
     public static final Item COSMIC_KATANA = registerItem("cosmic_katana", new CosmicKatanaItem(new FabricItemSettings().maxCount(1).maxDamage(1561)));
+    public static final Item GUITAR = registerItem("guitar",
+            new GuitarItem(new FabricItemSettings()));
+    public static final Item RAT_HAT = registerItem("rat_hat",
+            new RatHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
 
     public static final Item LUNAR_DRILL = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "lunar_drill"), new LunarDrillItem(new Item.Settings().maxCount(1)));
     public static final Item FIRE_SWORD = Registry.register(Registries.ITEM, new Identifier("odd", "fire_sword"),
@@ -160,7 +199,35 @@ public class ModItems {
                     191
             )
     );
+    public static final Item CRATER_MUSIC_DISC = Registry.register(
+            Registries.ITEM,
+            new Identifier(Oddities.MOD_ID, "crater_music_disc"),
+            new CraterMusicDiscItem(
+                    14,
+                    ModSounds.CRATER_MUSIC_DISC,
+                    new Item.Settings().maxCount(1).rarity(Rarity.RARE),
+                    272
+            )
+    );
+    public static final Item MASK_OF_SHAME =
+            registerItem("mask_of_shame", new Item(new FabricItemSettings()));
+
+    public static final Item MASK_OF_VENGEANCE =
+            registerItem("mask_of_vengeance", new Item(new FabricItemSettings()));
+
+    public static final Item MASK_OF_REGRET =
+            registerItem("mask_of_regret", new Item(new FabricItemSettings()));
+
+    public static final Item ROTTEN_MASK =
+            registerItem("rotten_mask", new Item(new FabricItemSettings()));
+    public static final Item CROWN = registerItem("crown",
+            new CrownItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
+    public static final Item FROG_HAT = registerItem("frog_hat",
+            new FrogHatItem(ArmorMaterials.NETHERITE,
+                    new FabricItemSettings().maxCount(1).fireproof()));
     public static final Item DEVICE = registerItem("device", new DeviceItem(new Item.Settings().maxCount(1)));
+
 
     /* =========================
        ✅ CHEF FOODS (from your PNGs)
