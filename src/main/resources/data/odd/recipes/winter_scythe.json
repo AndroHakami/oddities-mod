@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["ZXZ"," V ","V  "],
+  "key": {
+    "X": { "item": "minecraft:diamond" },
+    "Z": { "item": "minecraft:netherite_ingot" },
+    "V": { "item": "minecraft:stick" }
+  },
+  "result": { "item": "odd:winter_scythe", "count": 1 }
+}

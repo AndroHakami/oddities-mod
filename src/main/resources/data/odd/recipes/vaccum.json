@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["XXX","#V#","XXX"],
+  "key": {
+    "#": { "item": "minecraft:copper_block" },
+    "X": { "item": "minecraft:iron_block" },
+    "V": { "item": "minecraft:redstone_block" }
+  },
+  "result": { "item": "odd:vacuum", "count": 1 }
+}

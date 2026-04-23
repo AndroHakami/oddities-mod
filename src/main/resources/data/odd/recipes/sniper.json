@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["X#X"," VX","  X"],
+  "key": {
+    "#": { "item": "minecraft:spyglass" },
+    "X": { "item": "minecraft:iron_ingot" },
+    "V": { "item": "minecraft:redstone" }
+  },
+  "result": { "item": "odd:sniper", "count": 1 }
+}

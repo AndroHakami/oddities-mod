@@ -54,11 +54,9 @@ void main() {
 
     /* ===================== SPEED: SLIPSTREAM + CRACKLY LIGHTNING ===================== */
     if (a > 0.001) {
-        // “covers most but not center”
         float mask = smoothstep(0.12, 0.98, r);
         mask *= mask;
 
-        // Radial blur amount (slightly stronger with speed)
         vec2 dir = nUv;
         float blurAmt = (0.004 + 0.010 * a) * mask;
 
@@ -68,19 +66,16 @@ void main() {
 
         col = mix(col, blur, (0.18 + 0.18 * a) * mask);
 
-        // Slipstream spokes (radial lines) with moving dashes
-        float ang = atan(uv.y, uv.x);             // -pi..pi
-        float ang01 = (ang / TAU) + 0.5;          // 0..1
+        float ang = atan(uv.y, uv.x);
+        float ang01 = (ang / TAU) + 0.5;
 
-        float N = mix(12.0, 26.0, a);             // number of spokes increases with speed
+        float N = mix(12.0, 26.0, a);
         float spokeCell = floor(ang01 * N);
-        float spokeLocal = fract(ang01 * N);      // 0..1 within spoke
+        float spokeLocal = fract(ang01 * N);
 
-        // make a thin line in the middle of each spoke cell
-        float spokeW = mix(0.070, 0.030, a);      // thinner at higher speed
+        float spokeW = mix(0.070, 0.030, a);
         float spoke = smoothstep(spokeW, 0.0, abs(spokeLocal - 0.5));
 
-        // moving “dash” along radius (classic speed-line feel)
         float dashFreq = mix(8.0, 20.0, a);
         float dashSpd  = mix(9.0, 28.0, a);
         float dashNoise = hash(vec2(spokeCell, 13.7)) * 1.7;
@@ -88,31 +83,25 @@ void main() {
 
         float lines = spoke * dash;
 
-        // Crackly lightning modulation along the lines
         float crack = sin((r * 38.0) + Time * (22.0 + 24.0 * a) + spokeCell * 0.9);
         crack = 0.5 + 0.5 * crack;
         float crack2 = hash(uv * OutSize * 0.002 + vec2(Time * 9.0, Time * 7.0));
         float crackly = sat(crack * 0.7 + crack2 * 0.8);
         lines *= (0.45 + 0.55 * crackly);
 
-        // yellow slip tint + white lightning highlight
-        vec3 yellow = vec3(1.00, 0.92, 0.28);
-        vec3 white  = vec3(1.00, 1.00, 0.92);
+        // green slip tint + pale mint lightning highlight
+        vec3 green = vec3(0.26, 1.00, 0.40);
+        vec3 mint  = vec3(0.92, 1.00, 0.94);
 
         float pulse = 0.85 + 0.15 * sin(Time * 7.0);
         float k = a * mask * pulse;
 
-        // overall warm boost
-        col += yellow * (0.42 * k);
+        col += green * (0.42 * k);
+        col += green * (0.55 * lines) * k;
 
-        // add slipstream lines
-        col += yellow * (0.55 * lines) * k;
-
-        // add “electric” crack highlight (stronger at high speed)
         float elec = sat((lines * crackly) * (0.35 + 0.65 * a));
-        col += white * (0.55 * elec) * k;
+        col += mint * (0.55 * elec) * k;
 
-        // tiny grain
         float n = hash(texCoord * OutSize + vec2(Time * 40.0, Time * 23.0));
         col += (n - 0.5) * (0.028 * k);
     }
@@ -121,16 +110,12 @@ void main() {
     if (f > 0.001) {
         float t = FlashTime;
 
-        // super quick envelope
         float env = exp(-t * 10.5) * f;
 
-        // outward-moving wave front (towards edges)
-        // r goes to ~1.4, so wave speed ~2.6 feels fast
         float waveR = t * 2.6;
-        float front = smoothstep(waveR, waveR - 0.28, r);  // thin ring moving outward
+        float front = smoothstep(waveR, waveR - 0.28, r);
         front *= front;
 
-        // bolts that “ride” the front (use scaled uv so they push outward)
         vec2 uv2 = uv * (1.0 + t * 1.8);
 
         float b = 0.0;
@@ -138,25 +123,21 @@ void main() {
         b += bolt2D(uv2 + vec2(0.28, 0.0), 2.7, t);
         b += bolt2D(uv2 + vec2(-0.34, 0.0), 4.3, t);
 
-        // blast core fades quickly; front is the main action
         float core = smoothstep(0.90, 0.05, r);
         core *= core;
 
-        vec3 yel = vec3(1.00, 0.90, 0.16);
-        vec3 red = vec3(1.00, 0.18, 0.10);
+        vec3 mint = vec3(0.88, 1.00, 0.92);
+        vec3 green = vec3(0.18, 0.95, 0.34);
 
-        // edge rush: strong at the wave front
-        col += yel * (1.35 * b) * env * front;
-        col += red * (0.95 * b) * env * front;
+        col += mint * (1.35 * b) * env * front;
+        col += green * (0.95 * b) * env * front;
 
-        // some central pop
-        col += yel * (0.55 * core) * env;
-        col += red * (0.25 * core) * env;
+        col += mint * (0.55 * core) * env;
+        col += green * (0.25 * core) * env;
 
-        // sparks noise (biased to front)
         float n = hash(texCoord * OutSize + vec2(Time * 90.0, Time * 61.0));
         float sparks = smoothstep(0.984, 1.0, n) * (0.25 + 0.75 * front);
-        col += (yel * 0.9 + red * 0.6) * (0.85 * sparks) * env;
+        col += (mint * 0.9 + green * 0.6) * (0.85 * sparks) * env;
     }
 
     fragColor = vec4(col, src.a);

@@ -56,17 +56,25 @@ public final class ConquerPower implements Power {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Summon Milo. Press again to dismiss. Milo remembers armor/HP. If killed, 120s lock.";
+                    "Summon Milo, the legendary dark horse";
             case "secondary" ->
-                    "Tap: Corrupt a Villager or Iron Golem. Sneak+Tap: Capture a CORRUPTED Iron Golem into a Metalic Frost Spawn.";
+                    "Spread your darkness into villagers and golems, turning them into servants!, additionally condense corrupted golems into a summon item by pressing shift along side the ability key.";
             default -> "Conquer";
         };
     }
 
     @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "EMPEROR'S BEST FRIEND";
+            case "secondary" -> "TOUCH OF CORRUPTION";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+    @Override
     public String longDescription() {
-        return "Conquer: Summon Milo (persistent state + death lockout). Corrupt villagers/golems via a status effect. "
-                + "Capture: Sneak + Secondary on a corrupted golem to bottle it into a Metalic Frost Spawn item.";
+        return "Through the cold and the storms, you alone shall cleanse the lands, with your trusty horse, endless army and sharp scythe, nothing cant be conquered.";
     }
 
     /** Power check (NO tags): matches your TameBallItem gate. */
@@ -83,7 +91,7 @@ public final class ConquerPower implements Power {
     private static final Object2ObjectOpenHashMap<UUID, UUID> ACTIVE_HORSES = new Object2ObjectOpenHashMap<>();
     private static final Object2ObjectOpenHashMap<UUID, NbtCompound> STORED_HORSE_NBT = new Object2ObjectOpenHashMap<>();
     private static final Object2LongOpenHashMap<UUID> DEATH_COOLDOWN_UNTIL = new Object2LongOpenHashMap<>();
-    private static final long DEATH_COOLDOWN_TICKS = 120L * 20L; // 120s
+    private static final long DEATH_COOLDOWN_TICKS = 30L * 20L; // 120s
 
     // POWERLESS warn throttle (like Blockade)
     private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();

@@ -54,8 +54,15 @@ public final class LookerClient {
         LookerInvisFx.setActive(on, clientMeter, clientMax);
     }
 
-    /** Armor mixin helper: hide armor when local player is looker-invisible. */
+    /**
+     * Ability-specific invis helper for render mixins.
+     * Uses the synced tracked flag for every player, with a local overlay fallback for the owner.
+     */
     public static boolean isLookerInvisible(LivingEntity e) {
+        if (e instanceof OddLookerInvisibility looker && looker.oddities$isLookerInvisible()) {
+            return true;
+        }
+
         var mc = MinecraftClient.getInstance();
         return mc != null && mc.player == e && LookerInvisFx.isActive();
     }
@@ -78,7 +85,7 @@ public final class LookerClient {
 
         int bg   = 0x66000000;
         int edge = 0x88FFFFFF;
-        int fill = 0xFFB6D7FF; // icy pale blue (feel free to change)
+        int fill = 0xFFB6D7FF;
 
         ctx.fill(x - 2, y - 2, x + barW + 2, y + barH + 2, bg);
         ctx.drawBorder(x - 2, y - 2, barW + 4, barH + 4, edge);

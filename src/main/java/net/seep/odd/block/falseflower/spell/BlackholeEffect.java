@@ -4,9 +4,12 @@ package net.seep.odd.block.falseflower.spell;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.*;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
 
 public final class BlackholeEffect implements FalseFlowerSpellEffect {
@@ -26,10 +29,12 @@ public final class BlackholeEffect implements FalseFlowerSpellEffect {
 
             Vec3d to = c.subtract(e.getPos());
             double d = Math.max(0.6, to.length());
-            Vec3d pull = to.normalize().multiply(0.22 / d);
 
-            e.addVelocity(pull.x, pull.y * 0.6, pull.z);
-            e.velocityDirty = true;
+            double basePull = (e instanceof PlayerEntity) ? 0.34 : 0.22;
+            Vec3d pull = to.normalize().multiply(basePull / d);
+
+            FalseFlowerSpellUtil.addVelocitySafe(e, pull.x, pull.y * 0.6, pull.z);
+            e.fallDistance = 0.0f;
 
             // particles “fly into” center
             if (time % 3 == 0) {

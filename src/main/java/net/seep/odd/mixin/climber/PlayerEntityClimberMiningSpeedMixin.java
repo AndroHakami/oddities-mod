@@ -33,12 +33,13 @@ public abstract class PlayerEntityClimberMiningSpeedMixin {
         if (!self.getWorld().isClient && self instanceof ServerPlayerEntity sp) {
             if (!ClimberPower.hasClimber(sp)) return;
 
-            // ✅ FIX: include real wall-contact test (horizontalCollision is flaky)
-            shouldBypass = ClimberPower.isPrimaryEngaged(sp) || ClimberPower.isTouchingWall(sp);
+            // Rope movement should still keep normal mining speed even if passive wall climb is toggled off.
+            shouldBypass = ClimberPower.isPrimaryEngaged(sp) || (ClimberPower.canUsePassiveClimb(sp) && ClimberPower.isTouchingWall(sp));
         } else {
-            // Client: allow if rope nearby OR server-synced "can climb"
-            if (!ClimberPower.hasClimberAnySide(self)) return;
-            shouldBypass = self.horizontalCollision || isRopedOrHookFlying(self);
+            // Client: allow if rope nearby OR server-synced passive climb permission.
+            boolean roped = isRopedOrHookFlying(self);
+            if (!roped && !ClimberPower.hasClimberAnySide(self)) return;
+            shouldBypass = self.horizontalCollision || roped;
         }
 
         if (!shouldBypass) return;

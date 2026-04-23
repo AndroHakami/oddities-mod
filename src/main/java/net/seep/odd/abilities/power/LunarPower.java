@@ -39,7 +39,7 @@ public final class LunarPower implements Power {
     }
 
     @Override public long cooldownTicks() { return 0; }
-    @Override public long secondaryCooldownTicks() { return 20 * 25; }
+    @Override public long secondaryCooldownTicks() { return 20 * 15; }
     @Override public long thirdCooldownTicks() { return 20; }
 
     @Override
@@ -54,22 +54,22 @@ public final class LunarPower implements Power {
 
     @Override public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" -> "TETHER";
-            case "secondary" -> "MOONLIGHT";
-            case "third" -> "REMOVE";
+            case "primary" -> "THE TIDE";
+            case "secondary" -> "MOONLIGHT MARK";
+            case "third" -> "ECLIPSE THE LIGHT";
             default -> Power.super.slotTitle(slot);
         };
     }
 
     @Override public String longDescription() {
-        return "Throw a Moonlight projectile; it anchors on first hit (entity or block). Primary toggles continuous tether (drains charge). Third removes the current Moonlight mark.";
+        return "With your trusty lunar drill, and your gravitational abilities, nothing can hold the ground anymore!";
     }
 
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Toggle continuous pull toward the Moonlight mark. Drains tether charge.";
-            case "secondary" -> "Throw Moonlight. If a mark already exists, it is replaced by the new throw.";
-            case "third"     -> "Remove the current Moonlight mark.";
+            case "primary"   -> "Toggle to be continuously pulled towards the moonlight mark.";
+            case "secondary" -> "Throw a Moonlight mark, an anchor point for the tether, can be attached to entities.";
+            case "third"     -> "Removes the current moonlight mark";
             default -> "";
         };
     }

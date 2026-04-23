@@ -1,7 +1,6 @@
 package net.seep.odd.item.custom.client;
 
 import net.seep.odd.item.custom.GuitarItem;
-import net.seep.odd.item.custom.client.GuitarItemModel;
 import software.bernie.geckolib.renderer.GeoItemRenderer;
 // import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
 

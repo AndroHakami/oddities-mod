@@ -69,7 +69,7 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
     }
 
     @Override public String longDescription() {
-        return "Hold to charge a dimensional slash (CPM stance), release to blink and cleave. Orbiting swords on secondary.";
+        return "Cosmic lightning courses through your veins, cut through opponents with your godly katana, and break space itself with your slashes!";
     }
 
     @Override public String slotTitle(String slot) {
@@ -82,8 +82,8 @@ public final class CosmicPower implements Power, DeferredCooldownPower, Secondar
 
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Hold to charge; release (or press again) to dash. CPM stance/slash.";
-            case "secondary" -> "Orbiting Swords: hold to hover 5 blades; release to volley; press during cooldown to recall.";
+            case "primary"   -> "While wielding the cosmic sword, press to charge up a powerful forward slash, then press again to release!";
+            case "secondary" -> "Call upon 5 cosmic swords, press again to fire, press another time to recall the flying swords back to you.";
             default          -> "Cosmic";
         };
     }

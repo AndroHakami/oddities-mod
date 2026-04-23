@@ -1,0 +1,15 @@
+{
+  "targets": [ "dragoness_meteor_fall" ],
+  "passes": [
+    {
+      "name": "odd:dragoness_meteor_fall",
+      "intarget": "minecraft:main",
+      "outtarget": "dragoness_meteor_fall"
+    },
+    {
+      "name": "blit",
+      "intarget": "dragoness_meteor_fall",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

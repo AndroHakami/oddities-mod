@@ -1,0 +1,15 @@
+{
+  "targets": [ "dragoness_chill_barrier" ],
+  "passes": [
+    {
+      "name": "odd:dragoness_chill_barrier",
+      "intarget": "minecraft:main",
+      "outtarget": "dragoness_chill_barrier"
+    },
+    {
+      "name": "blit",
+      "intarget": "dragoness_chill_barrier",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

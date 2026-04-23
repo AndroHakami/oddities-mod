@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["XUX","XDX","XRX"],
+  "key": {
+    "X": { "item": "minecraft:copper_block" },
+    "U": { "item": "minecraft:dispenser" },
+    "R": { "item": "minecraft:redstone_block" },
+    "D": { "item": "odd:dabloon" }
+  },
+  "result": { "item": "odd:dabloon_store", "count": 1 }
+}

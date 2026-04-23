@@ -60,23 +60,25 @@ public final class FireSwordPower implements Power {
         };
     }
 
-    @Override
-    public String slotLongDescription(String slot) {
+    @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary" ->
-                    "Conjure a Fire Sword by channeling 2s on a fire source (blocks/items/lava) OR on a fire-immune mob (it becomes the sword). " +
-                            "You must stay close + keep looking at the target. The sword drops on the ground.";
-            case "secondary" ->
-                    "Throw your conjured Fire Sword. On impact it ignites and explodes, destroying the sword.";
-            default -> "FireSword";
+            case "primary"   -> "Condense a heat source to create a fire sword, the fire sword lasts a short time but deals massive damage.";
+            case "secondary" -> "Throw a fire sword out, dealing a big explosion on impact!";
+            default          -> "Ice Witch";
+        };
+    }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "BONFIRE";
+            case "secondary" -> "BLADE SURGE";
+            default -> Power.super.slotTitle(slot);
         };
     }
 
-    @Override
-    public String longDescription() {
-        return "Conjure a fragile but deadly Fire Sword by consuming a fire source (blocks/items/lava) or transmuting a fire-immune creature. "
-                + "Strikes ignite targets. Throwing it causes a fiery explosion on impact, destroying it. "
-                + "You have permanent Fire Resistance while you have the FireSword power.";
+
+    @Override public String longDescription() {
+        return "Condense the flames into a worthy fiery blade, strike opponents down and set the world ablaze!";
     }
 
     /* =========================================================

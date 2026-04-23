@@ -60,14 +60,23 @@ public final class CultistPower implements Power {
         return new Identifier("odd", "textures/gui/abilities/cultist_divine_touch.png");
     }
 
+    @Override public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary"   -> "Bless a player to protect them from your creatures, alternatively use this on a creature structure to summon a creature.";
+            default          -> "Ice Witch";
+        };
+    }
     @Override
-    public String slotLongDescription(String slot) {
-        return "Divine Touch: Toggle Divine Protection on players, or bring a built construct to life.";
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "DIVINE TOUCH";
+            default -> Power.super.slotTitle(slot);
+        };
     }
 
-    @Override
-    public String longDescription() {
-        return "Cultist: Summon holy constructs. Divine Touch toggles Divine Protection on players and animates built monsters.";
+
+    @Override public String longDescription() {
+        return "The monsters came from beyond, only you can manipulate their senses. use divine touch to protect those you care about and spare them the chaos.";
     }
 
     /* =========================================================

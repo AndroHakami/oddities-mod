@@ -128,6 +128,8 @@ public final class DeviceSocialComposeScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (bodyEditor != null && bodyEditor.mouseClicked(mouseX, mouseY, button)) {
+            if (titleField != null) titleField.setFocused(false);
+            if (mainUrlField != null) mainUrlField.setFocused(false);
             return true;
         }
         if (bodyEditor != null) {
@@ -146,6 +148,7 @@ public final class DeviceSocialComposeScreen extends Screen {
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
+        if (bodyEditor != null && bodyEditor.isFocused() && bodyEditor.charTyped(chr, modifiers)) return true;
         if (titleField != null && titleField.charTyped(chr, modifiers)) return true;
         if (mainUrlField != null && mainUrlField.charTyped(chr, modifiers)) return true;
         if (bodyEditor != null && bodyEditor.charTyped(chr, modifiers)) return true;
@@ -154,6 +157,7 @@ public final class DeviceSocialComposeScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (bodyEditor != null && bodyEditor.isFocused() && bodyEditor.keyPressed(keyCode, scanCode, modifiers)) return true;
         if (titleField != null && titleField.keyPressed(keyCode, scanCode, modifiers)) return true;
         if (mainUrlField != null && mainUrlField.keyPressed(keyCode, scanCode, modifiers)) return true;
         if (bodyEditor != null && bodyEditor.keyPressed(keyCode, scanCode, modifiers)) return true;

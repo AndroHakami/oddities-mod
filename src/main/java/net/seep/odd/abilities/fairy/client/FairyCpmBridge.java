@@ -17,8 +17,8 @@ import net.seep.odd.abilities.power.FairyPower;
  *   - "fairy_left"
  *   - "fairy_right"
  *
- *  Loop/hold-while-active:
- *   - "beam"   (plays while beam is ON, stops when OFF)
+ *  Hold-while-active:
+ *   - "beam"
  */
 public final class FairyCpmBridge {
     private FairyCpmBridge() {}
@@ -28,9 +28,7 @@ public final class FairyCpmBridge {
     private static int upHold = 0, downHold = 0, leftHold = 0, rightHold = 0;
     private static final int HOLD_TICKS = 6;
 
-    // beam
     private static boolean beamActive = false;
-    private static long lastBeamWorldTime = -1;
 
     public static void init() {
         if (inited) return;
@@ -40,13 +38,10 @@ public final class FairyCpmBridge {
         ClientPlayNetworking.registerGlobalReceiver(FairyPower.S2C_CPM_BEAM, (client, handler, buf, resp) -> {
             boolean on = buf.readBoolean();
             client.execute(() -> {
-                // if we swapped worlds/powers and packets are weird, still safe
                 if (client.player == null || client.world == null) {
                     stopBeam();
                     return;
                 }
-
-                lastBeamWorldTime = client.world.getTime();
 
                 if (on) startBeam();
                 else stopBeam();
@@ -62,12 +57,9 @@ public final class FairyCpmBridge {
             if (leftHold > 0 && --leftHold == 0) CpmHooks.stop("fairy_left");
             if (rightHold > 0 && --rightHold == 0) CpmHooks.stop("fairy_right");
 
-            // Failsafe: if beamActive but packets stopped (power swapped), stop after ~1s
             if (beamActive) {
                 MinecraftClient mc = MinecraftClient.getInstance();
-                if (mc.world == null) { stopBeam(); return; }
-                long now = mc.world.getTime();
-                if (lastBeamWorldTime >= 0 && (now - lastBeamWorldTime) > 20) {
+                if (mc.world == null || mc.player == null) {
                     stopBeam();
                 }
             }
@@ -77,17 +69,26 @@ public final class FairyCpmBridge {
     private static void startBeam() {
         if (beamActive) return;
         beamActive = true;
+
+        // beam should fully own the pose while active
+        CpmHooks.stop("fairy_up");
+        CpmHooks.stop("fairy_down");
+        CpmHooks.stop("fairy_left");
+        CpmHooks.stop("fairy_right");
+        upHold = downHold = leftHold = rightHold = 0;
+
         CpmHooks.stop("beam");
-        CpmHooks.play("beam"); // set this animation to loop (or hold) in CPM
+        CpmHooks.play("beam");
     }
 
     private static void stopBeam() {
         beamActive = false;
         CpmHooks.stop("beam");
-        lastBeamWorldTime = -1;
     }
 
     public static void playDir(byte dir) {
+        if (beamActive) return;
+
         switch (dir) {
             case 0 -> playUp();
             case 1 -> playDown();
@@ -98,24 +99,28 @@ public final class FairyCpmBridge {
     }
 
     public static void playUp() {
+        if (beamActive) return;
         CpmHooks.stop("fairy_up");
         CpmHooks.play("fairy_up");
         upHold = HOLD_TICKS;
     }
 
     public static void playDown() {
+        if (beamActive) return;
         CpmHooks.stop("fairy_down");
         CpmHooks.play("fairy_down");
         downHold = HOLD_TICKS;
     }
 
     public static void playLeft() {
+        if (beamActive) return;
         CpmHooks.stop("fairy_left");
         CpmHooks.play("fairy_left");
         leftHold = HOLD_TICKS;
     }
 
     public static void playRight() {
+        if (beamActive) return;
         CpmHooks.stop("fairy_right");
         CpmHooks.play("fairy_right");
         rightHold = HOLD_TICKS;

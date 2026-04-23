@@ -24,7 +24,7 @@ public final class SpireStompersHandler {
 
     // tuning
     private static final float STOMP_DAMAGE = 7.0f; // strong
-    private static final int COOLDOWN_TICKS = 12;
+    private static final int COOLDOWN_TICKS = 8;
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {

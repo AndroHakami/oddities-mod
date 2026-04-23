@@ -39,8 +39,31 @@ public final class DabloonBankManager {
         }
     }
 
+    public record SpendResult(int amount, int inventorySpent, int bankSpent, int remainingBalance, String error) {
+        public boolean ok() {
+            return error == null;
+        }
+    }
+
     public static int getBalance(UUID playerUuid) {
         return BALANCES.getOrDefault(playerUuid, 0);
+    }
+
+    public static int getSpendable(ServerPlayerEntity player) {
+        Item dabloon = getDabloonItem();
+        if (dabloon == null || dabloon == Items.AIR) {
+            return getBalance(player.getUuid());
+        }
+        return getBalance(player.getUuid()) + countHeldDabloons(player, dabloon);
+    }
+
+    public static void addBalance(MinecraftServer server, UUID playerUuid, int amount) {
+        if (server == null || playerUuid == null || amount <= 0) {
+            return;
+        }
+
+        BALANCES.put(playerUuid, getBalance(playerUuid) + amount);
+        save(server);
     }
 
     public static int takeBalance(ServerPlayerEntity player, int requested) {
@@ -51,14 +74,41 @@ public final class DabloonBankManager {
         int taken = Math.min(current, amount);
         if (taken <= 0) return 0;
 
-        int newBalance = current - taken;
-        if (newBalance <= 0) {
-            BALANCES.remove(player.getUuid());
-        } else {
-            BALANCES.put(player.getUuid(), newBalance);
-        }
+        setBalance(player.getUuid(), current - taken);
         save(player.getServer());
         return taken;
+    }
+
+    public static SpendResult spend(ServerPlayerEntity player, int requested) {
+        Item dabloon = getDabloonItem();
+        if (dabloon == null || dabloon == Items.AIR) {
+            return new SpendResult(0, 0, 0, getBalance(player.getUuid()), "Dabloon item wasn't found.");
+        }
+
+        int amount = clampRequest(requested);
+        if (amount <= 0) {
+            return new SpendResult(0, 0, 0, getBalance(player.getUuid()), "Enter a valid amount.");
+        }
+
+        int onHand = countHeldDabloons(player, dabloon);
+        int bank = getBalance(player.getUuid());
+        int total = onHand + bank;
+        if (total < amount) {
+            return new SpendResult(0, 0, 0, bank, "You don't have enough dabloons.");
+        }
+
+        int fromInventory = Math.min(onHand, amount);
+        if (fromInventory > 0) {
+            removeHeldDabloons(player, dabloon, fromInventory);
+        }
+
+        int fromBank = amount - fromInventory;
+        if (fromBank > 0) {
+            setBalance(player.getUuid(), bank - fromBank);
+            save(player.getServer());
+        }
+
+        return new SpendResult(amount, fromInventory, fromBank, getBalance(player.getUuid()), null);
     }
 
     public static boolean canDepositAtCurrentLocation(ServerPlayerEntity player) {
@@ -100,7 +150,7 @@ public final class DabloonBankManager {
 
             NbtList list = root.getList("Balances", 10);
             for (int i = 0; i < list.size(); i++) {
-                NbtCompound tag = (NbtCompound) list.get(i);
+                NbtCompound tag = list.getCompound(i);
                 BALANCES.put(tag.getUuid("Player"), tag.getInt("Amount"));
             }
         } catch (Exception e) {
@@ -192,11 +242,18 @@ public final class DabloonBankManager {
             return new BankResult(0, balance, "Couldn't withdraw any dabloons.");
         }
 
-        int newBalance = balance - inserted;
-        BALANCES.put(player.getUuid(), newBalance);
+        setBalance(player.getUuid(), balance - inserted);
         save(player.getServer());
 
-        return new BankResult(inserted, newBalance, null);
+        return new BankResult(inserted, getBalance(player.getUuid()), null);
+    }
+
+    private static void setBalance(UUID playerUuid, int newBalance) {
+        if (newBalance <= 0) {
+            BALANCES.remove(playerUuid);
+        } else {
+            BALANCES.put(playerUuid, newBalance);
+        }
     }
 
     private static int clampRequest(int requested) {

@@ -4,7 +4,6 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.packet.s2c.play.EntityPassengersSetS2CPacket;
@@ -15,13 +14,12 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.*;
 import net.minecraft.world.RaycastContext;
-import net.minecraft.world.World;
 import net.seep.odd.Oddities;
 import net.seep.odd.abilities.PowerAPI;
-import net.seep.odd.abilities.rat.PehkuiUtil;
 import net.seep.odd.abilities.rat.food.FoodEatenCallback;
 import net.seep.odd.abilities.rat.food.RatFoodLogic;
 import net.seep.odd.status.ModStatusEffects;
+import virtuoel.pehkui.api.ScaleTypes;
 
 import java.util.*;
 
@@ -38,13 +36,8 @@ public final class RatPower implements Power {
 
     private static final double TARGET_MAX_DIST        = 4.0;
     private static final double TARGET_FALLBACK_RADIUS = 2.0;
-
-    /* ===== shoulder seat tuning (no scoreboard tags) ===== */
-    private static final String SEAT_NAME_PREFIX = "odd_rat_seat:"; // custom name marker (not visible)
-    private static final double SHOULDER_SIDE = 0.34;              // +right shoulder
-    private static final double SHOULDER_FWD  = 0.10;              // slightly forward
-    private static final double SHOULDER_Y_EYE_OFFSET = -0.38;     // below eye Y
-    private static final double HOST_SEAT_SCAN_R = 1.85;
+    private static final float  RAT_BASE_SCALE_MAX     = 0.75f;
+    private static final int    PASSENGER_SYNC_INTERVAL_TICKS = 5;
 
     /* ======================= meta ======================= */
     @Override public String id() { return "rat"; }
@@ -59,10 +52,10 @@ public final class RatPower implements Power {
     }
 
     @Override public String longDescription() {
-        return "Become a tiny, speedy rat. Primary: hop on/off a player's shoulder. Passive: when you eat, you gain extra saturation and your host is fed with a small themed buff.";
+        return "Become a tiny, speedy rat, provides support to the players you ride, and go through the tiniest of openings.";
     }
     @Override public String slotLongDescription(String slot) {
-        return "Primary: hop on/off a nearby player's shoulder.";
+        return "hop on/off a nearby player's shoulder, providing them with buffs based on the food you eat!";
     }
     @Override public Identifier portraitTexture() {
         return new Identifier(Oddities.MOD_ID, "textures/gui/overview/rat.png");
@@ -93,9 +86,8 @@ public final class RatPower implements Power {
     /* ======================= state ======================= */
     private static final class St {
         boolean applied;
-        UUID lastHostUuid;          // host player uuid
-        UUID seatUuid;              // invisible seat armorstand uuid
-        int  lastMountSyncAt = -999999;
+        UUID lastHostUuid;
+        int lastMountSyncAt = Integer.MIN_VALUE;
     }
 
     private static final Map<UUID, St> DATA = new Object2ObjectOpenHashMap<>();
@@ -113,7 +105,7 @@ public final class RatPower implements Power {
 
     @Override
     public void forceDisable(ServerPlayerEntity p) {
-        cleanupRidingAndSync(p);
+        cleanupRiding(p);
     }
 
     /* ======================= input ======================= */
@@ -124,18 +116,15 @@ public final class RatPower implements Power {
 
         if (isPowerless(p)) {
             warnPowerlessOncePerSec(p);
-            cleanupRidingAndSync(p);
+            cleanupRiding(p);
             return;
         }
 
-        if (!(p.getWorld() instanceof ServerWorld sw)) return;
         St st = S(p);
 
-        // already riding? hop down
-        Entity veh = p.getVehicle();
-        if (isRatSeat(veh) || veh instanceof PlayerEntity) {
-            cleanupRidingAndSync(p);
-
+        // already riding another player? hop down
+        if (p.getVehicle() instanceof PlayerEntity) {
+            cleanupRiding(p);
             return;
         }
 
@@ -147,26 +136,22 @@ public final class RatPower implements Power {
             return;
         }
 
-        if (hostHasOccupiedSeat(sw, target)) {
+        if (hostHasRatPassenger(target)) {
             p.sendMessage(Text.literal("They're already carrying someone."), true);
             return;
         }
 
-        ArmorStandEntity seat = spawnSeat(sw, target, p.getUuid());
-        if (seat == null) {
-            p.sendMessage(Text.literal("Couldn't perch right now."), true);
-            return;
-        }
-
-        if (p.startRiding(seat, true)) {
+        if (p.startRiding(target, true)) {
             st.lastHostUuid = target.getUuid();
-            st.seatUuid = seat.getUuid();
-            st.lastMountSyncAt = -999999;
+            st.lastMountSyncAt = Integer.MIN_VALUE;
+            p.fallDistance = 0.0f;
 
-            syncPassengers(sw, seat);
+            if (p.getWorld() instanceof ServerWorld sw) {
+                syncPassengers(sw, target, p);
+            }
+
             p.sendMessage(Text.literal("Perched on " + target.getName().getString() + "'s shoulder."), true);
         } else {
-            seat.discard();
             p.sendMessage(Text.literal("Couldn't ride that player right now."), true);
         }
     }
@@ -188,56 +173,39 @@ public final class RatPower implements Power {
                 maxAttr.setBaseValue(MAX_HEARTS * 2.0);
                 if (p.getHealth() > (float)(MAX_HEARTS * 2.0)) p.setHealth((float)(MAX_HEARTS * 2.0));
             }
-
-
         }
 
-        PehkuiUtil.applyScaleSafely(p,
-                SCALE_BASE, SCALE_MOTION, SCALE_JUMP_HEIGHT, SCALE_STEP_HEIGHT, SCALE_EYE_HEIGHT);
+
 
         if (isPowerless(p)) {
             warnPowerlessOncePerSec(p);
-            cleanupRidingAndSync(p);
+            cleanupRiding(p);
             return;
         }
 
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
 
-        Entity veh = p.getVehicle();
-
-        if (veh instanceof ArmorStandEntity seat && isRatSeat(seat)) {
-            UUID hostId = hostIdFromSeat(seat);
-            if (hostId != null) st.lastHostUuid = hostId;
-
-            PlayerEntity host = (st.lastHostUuid != null) ? sw.getPlayerByUuid(st.lastHostUuid) : null;
-            if (host == null || !host.isAlive()) {
-                cleanupRidingAndSync(p);
+        Entity vehicle = p.getVehicle();
+        if (vehicle instanceof PlayerEntity host) {
+            if (!host.isAlive()) {
+                cleanupRiding(p);
                 return;
             }
 
-            Vec3d pos = shoulderPos(host);
-            seat.refreshPositionAndAngles(pos.x, pos.y, pos.z, host.getYaw(), 0f);
-            seat.setVelocity(Vec3d.ZERO);
-            seat.velocityDirty = true;
+            st.lastHostUuid = host.getUuid();
+            p.fallDistance = 0.0f;
 
             int now = (int) sw.getTime();
-            if (now - st.lastMountSyncAt >= 20) {
+            if (now - st.lastMountSyncAt >= PASSENGER_SYNC_INTERVAL_TICKS) {
                 st.lastMountSyncAt = now;
-                syncPassengers(sw, seat);
+                syncPassengers(sw, host, p);
             }
             return;
         }
 
-        // dismounted (SHIFT / any): discard seat + sync once
-        if (st.seatUuid != null) {
-            Entity e = sw.getEntity(st.seatUuid);
-            if (e != null) {
-                syncPassengers(sw, e);
-                e.discard();
-            }
-            st.seatUuid = null;
-            st.lastHostUuid = null;
-        }
+        // dismounted (SHIFT / any): clear remembered host
+        st.lastHostUuid = null;
+        st.lastMountSyncAt = Integer.MIN_VALUE;
     }
 
     public static void onDeactivated(ServerPlayerEntity p) {
@@ -251,10 +219,10 @@ public final class RatPower implements Power {
             if (p.getHealth() > 20.0f) p.setHealth(20.0f);
         }
 
-        PehkuiUtil.resetScalesSafely(p);
-        cleanupRidingAndSync(p);
+
+        cleanupRiding(p);
         st.lastHostUuid = null;
-        st.seatUuid = null;
+        st.lastMountSyncAt = Integer.MIN_VALUE;
     }
 
     /* ======================= passive: share food ======================= */
@@ -273,6 +241,9 @@ public final class RatPower implements Power {
     /* ======================= helpers ======================= */
 
     public static PlayerEntity findMountedHost(PlayerEntity rat) {
+        Entity v = rat.getVehicle();
+        if (v instanceof PlayerEntity p) return p;
+
         if (rat instanceof ServerPlayerEntity sp) {
             St st = DATA.get(sp.getUuid());
             if (st != null && st.lastHostUuid != null && sp.getWorld() instanceof ServerWorld sw) {
@@ -280,37 +251,23 @@ public final class RatPower implements Power {
                 if (host != null) return host;
             }
         }
-        Entity v = rat.getVehicle();
-        return (v instanceof PlayerEntity p) ? p : null;
+        return null;
     }
 
-    private static void cleanupRidingAndSync(ServerPlayerEntity rat) {
-        if (!(rat.getWorld() instanceof ServerWorld sw)) {
-            rat.stopRiding();
-            return;
+    private static void cleanupRiding(ServerPlayerEntity rat) {
+        Entity vehicle = rat.getVehicle();
+        rat.stopRiding();
+
+        if (rat.getWorld() instanceof ServerWorld sw && vehicle != null) {
+            syncPassengers(sw, vehicle, rat);
         }
 
         St st = S(rat);
-
-        Entity veh = rat.getVehicle();
-        rat.stopRiding();
-
-        if (veh != null) syncPassengers(sw, veh);
-        if (veh != null && isRatSeat(veh)) veh.discard();
-
-        if (st.seatUuid != null) {
-            Entity e = sw.getEntity(st.seatUuid);
-            if (e != null) {
-                syncPassengers(sw, e);
-                e.discard();
-            }
-        }
-
-        st.seatUuid = null;
         st.lastHostUuid = null;
+        st.lastMountSyncAt = Integer.MIN_VALUE;
     }
 
-    private static void syncPassengers(ServerWorld sw, Entity vehicle) {
+    private static void syncPassengers(ServerWorld sw, Entity vehicle, Entity extraTarget) {
         if (vehicle == null) return;
 
         EntityPassengersSetS2CPacket pkt = new EntityPassengersSetS2CPacket(vehicle);
@@ -321,79 +278,29 @@ public final class RatPower implements Power {
         for (Entity passenger : vehicle.getPassengerList()) {
             if (passenger instanceof ServerPlayerEntity psp) targets.add(psp);
         }
+        if (extraTarget instanceof ServerPlayerEntity esp) targets.add(esp);
 
-        for (ServerPlayerEntity sp : targets) sp.networkHandler.sendPacket(pkt);
+        for (ServerPlayerEntity sp : targets) {
+            sp.networkHandler.sendPacket(pkt);
+        }
     }
 
-    private static String seatName(UUID hostUuid, UUID ratUuid) {
-        return SEAT_NAME_PREFIX + hostUuid + ":" + ratUuid;
+    private static boolean hostHasRatPassenger(PlayerEntity host) {
+        for (Entity passenger : host.getPassengerList()) {
+            if (isRatPassenger(passenger)) return true;
+        }
+        return false;
     }
 
-    private static boolean isRatSeat(Entity e) {
-        if (!(e instanceof ArmorStandEntity as)) return false;
-        Text n = as.getCustomName();
-        if (n == null) return false;
-        return n.getString().startsWith(SEAT_NAME_PREFIX);
-    }
+    public static boolean isRatPassenger(Entity entity) {
+        if (!(entity instanceof PlayerEntity player)) return false;
+        if (entity instanceof ServerPlayerEntity sp && isCurrent(sp)) return true;
 
-    private static UUID hostIdFromSeat(ArmorStandEntity seat) {
-        Text n = seat.getCustomName();
-        if (n == null) return null;
-        String s = n.getString();
-        if (!s.startsWith(SEAT_NAME_PREFIX)) return null;
-        String rest = s.substring(SEAT_NAME_PREFIX.length());
-        int idx = rest.indexOf(':');
-        if (idx <= 0) return null;
-        try { return UUID.fromString(rest.substring(0, idx)); }
-        catch (Exception ignored) { return null; }
-    }
-
-    private static boolean hostHasOccupiedSeat(ServerWorld sw, PlayerEntity host) {
-        UUID hostId = host.getUuid();
-        String prefix = SEAT_NAME_PREFIX + hostId + ":";
-
-        Box box = host.getBoundingBox().expand(HOST_SEAT_SCAN_R);
-        List<ArmorStandEntity> seats = sw.getEntitiesByClass(
-                ArmorStandEntity.class,
-                box,
-                as -> as != null && as.isAlive()
-                        && as.getCustomName() != null
-                        && as.getCustomName().getString().startsWith(prefix)
-                        && !as.getPassengerList().isEmpty()
-        );
-        return !seats.isEmpty();
-    }
-
-    private static Vec3d shoulderPos(PlayerEntity host) {
-        float yaw = host.getYaw();
-        double rad = Math.toRadians(yaw);
-
-        Vec3d fwd = new Vec3d(-MathHelper.sin((float)rad), 0, MathHelper.cos((float)rad));
-        Vec3d right = new Vec3d(MathHelper.cos((float)rad), 0, MathHelper.sin((float)rad));
-
-        double y = host.getEyeY() + SHOULDER_Y_EYE_OFFSET;
-        Vec3d base = new Vec3d(host.getX(), y, host.getZ());
-
-        return base.add(right.multiply(SHOULDER_SIDE)).add(fwd.multiply(SHOULDER_FWD));
-    }
-
-    private static ArmorStandEntity spawnSeat(ServerWorld sw, PlayerEntity host, UUID ratUuid) {
-        ArmorStandEntity seat = new ArmorStandEntity(sw, host.getX(), host.getY(), host.getZ());
-
-        // only use methods that are definitely accessible
-        seat.setInvisible(true);
-        seat.setInvulnerable(true);
-        seat.setNoGravity(true);
-        seat.setSilent(true);
-
-        seat.setCustomName(Text.literal(seatName(host.getUuid(), ratUuid)));
-        seat.setCustomNameVisible(false);
-
-        Vec3d pos = shoulderPos(host);
-        seat.refreshPositionAndAngles(pos.x, pos.y, pos.z, host.getYaw(), 0f);
-
-        boolean ok = sw.spawnEntity(seat);
-        return ok ? seat : null;
+        try {
+            return ScaleTypes.BASE.getScaleData(player).getScale() <= RAT_BASE_SCALE_MAX;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static PlayerEntity raycastPlayer(ServerPlayerEntity p, double max) {

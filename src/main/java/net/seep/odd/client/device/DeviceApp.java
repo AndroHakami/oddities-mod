@@ -7,7 +7,7 @@ public enum DeviceApp {
     NOTES        ("notes",         "Notes",         "textures/gui/device/apps/notes.png",   38,  34),
     INFO         ("info",          "Info",          "textures/gui/device/apps/info.png",    138, 34),
     DABLOON_BANK ("dabloon_bank",  "Dabloon Bank",  "textures/gui/device/apps/dabloon.png", 38,  120),
-    GUILD        ("guild",         "Guild",         "textures/gui/device/apps/team.png",    138, 120),
+    GUILD        ("guild",         "Guilds",        "textures/gui/device/apps/team.png",    138, 120),
     SOCIAL       ("social",        "Social",        "textures/gui/device/apps/social.png",  38,  206),
     STORE        ("store",         "Store",         "textures/gui/device/apps/shop.png",    138, 206);
 

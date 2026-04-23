@@ -52,10 +52,16 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
     private static final int NORMAL_MAX_THICK = 8;
     private static final int SUPPORT_MAX_THICK = 9;
 
-    private static final int GLOW_SAP_CLUSTER_RARE_CHANCE = 3600;
-    private static final int GLOW_SAP_CLUSTER_MIN = 4;
-    private static final int GLOW_SAP_CLUSTER_MAX = 8;
-    private static final int GLOW_SAP_CLUSTER_ATTEMPTS = 72;
+    private static final int GLOW_SAP_CLUSTER_RARE_CHANCE = 4800;
+    private static final int GLOW_SAP_CLUSTER_MIN = 3;
+    private static final int GLOW_SAP_CLUSTER_MAX = 6;
+    private static final int GLOW_SAP_CLUSTER_ATTEMPTS = 60;
+
+    private static final float FROGLIGHT_TIP_CHANCE = 0.18f;
+    private static final int FROGLIGHT_TIP_MIN_DIST = 18;
+    private static final int FROGLIGHT_TIP_MAX_DIST = 44;
+    private static final int FROGLIGHT_CLUSTER_MIN_RADIUS = 2;
+    private static final int FROGLIGHT_CLUSTER_MAX_RADIUS = 3;
 
     private final long seed;
     private final float density;
@@ -283,6 +289,15 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
                                 0.010, 0.010, 0.22
                         );
                     }
+
+                    if (r.nextFloat() < FROGLIGHT_TIP_CHANCE) {
+                        carveFroglightTipStrand(
+                                chunk, m, a,
+                                Math.min(SUPPORT_MAX_THICK, pickThickness(r) + 1),
+                                minX, minZ, maxX, maxZ, bottomY, topY,
+                                r
+                        );
+                    }
                 }
             }
         }
@@ -477,10 +492,11 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         return comp;
     }
 
-    private boolean isRootMaterial(BlockState state) {
+    private static boolean isRootMaterial(BlockState state) {
         return state.isOf(ModBlocks.BOGGY_LOG)
                 || state.isOf(ModBlocks.BOGGY_WOOD)
-                || state.isOf(ModBlocks.GLOW_SAP);
+                || state.isOf(ModBlocks.GLOW_SAP)
+                || state.isOf(Blocks.OCHRE_FROGLIGHT);
     }
 
     private static int packIndex(int dx, int dy, int dz) {
@@ -797,9 +813,39 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             double wobbleY,
             double spring
     ) {
+        carveTargetedStrand(
+                chunk, m,
+                sx, sy, sz,
+                tx, ty, tz,
+                len, thick, log,
+                minX, minZ, maxX, maxZ, bottomY, topY,
+                r,
+                wobbleXZ, wobbleY, spring,
+                false
+        );
+    }
+
+    private static void carveTargetedStrand(
+            Chunk chunk, BlockPos.Mutable m,
+            int sx, int sy, int sz,
+            int tx, int ty, int tz,
+            int len, int thick, BlockState log,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY,
+            Random r,
+            double wobbleXZ,
+            double wobbleY,
+            double spring,
+            boolean decorateTipWithFroglight
+    ) {
         Vec3d p = new Vec3d(sx + 0.5, sy + 0.5, sz + 0.5);
         Vec3d target = new Vec3d(tx + 0.5, ty + 0.5, tz + 0.5);
         Vec3d d = target.subtract(p).normalize();
+
+        boolean placedAny = false;
+        int lastX = sx;
+        int lastY = sy;
+        int lastZ = sz;
+        Vec3d lastDir = d;
 
         for (int i = 0; i < len; i++) {
             Vec3d toTarget = target.subtract(p);
@@ -830,6 +876,22 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
             if (effectiveThickness <= 0) continue;
 
             paintTubeAt(chunk, m, x, y, z, d, effectiveThickness, log, minX, minZ, maxX, maxZ, r);
+            placedAny = true;
+            lastX = x;
+            lastY = y;
+            lastZ = z;
+            lastDir = d;
+        }
+
+        if (decorateTipWithFroglight && placedAny) {
+            placeFroglightTipCluster(
+                    chunk, m,
+                    lastX, lastY, lastZ,
+                    lastDir,
+                    Math.max(2, thick),
+                    minX, minZ, maxX, maxZ, bottomY, topY,
+                    r
+            );
         }
     }
 
@@ -861,6 +923,241 @@ public final class RottenRootsChunkGenerator extends ChunkGenerator {
         int effective = Math.max(1, MathHelper.floor(baseThickness * scale));
         return Math.min(effective, baseThickness);
     }
+
+    private static void carveFroglightTipStrand(
+            Chunk chunk, BlockPos.Mutable m, Anchor start,
+            int thick,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY,
+            Random r
+    ) {
+        double yaw = r.nextDouble() * Math.PI * 2.0;
+        int distance = r.nextBetween(FROGLIGHT_TIP_MIN_DIST, FROGLIGHT_TIP_MAX_DIST);
+
+        int tx = start.x + MathHelper.floor(Math.cos(yaw) * distance);
+        int tz = start.z + MathHelper.floor(Math.sin(yaw) * distance);
+        int ty = MathHelper.clamp(start.y + signedBetween(r, 4, 18), bottomY + 6, topY - 6);
+
+        int len = (int) Math.max(20, new Vec3d(tx - start.x, ty - start.y, tz - start.z).length()) + 12;
+
+        carveTargetedStrand(
+                chunk, m,
+                start.x, start.y, start.z,
+                tx, ty, tz,
+                len,
+                thick,
+                pickLog(r),
+                minX, minZ, maxX, maxZ, bottomY, topY,
+                r,
+                0.012, 0.010, 0.16,
+                true
+        );
+    }
+
+    private static void placeFroglightTipCluster(
+            Chunk chunk, BlockPos.Mutable m,
+            int tipX, int tipY, int tipZ,
+            Vec3d dir,
+            int thick,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY,
+            Random r
+    ) {
+        Vec3d axis = dir.lengthSquared() > 1.0E-6 ? dir.normalize() : new Vec3d(0.0, 1.0, 0.0);
+        Vec3d tangentA = choosePerpendicular(axis);
+        Vec3d tangentB = axis.crossProduct(tangentA).normalize();
+
+        int radius = MathHelper.clamp(1 + (thick / 2) + r.nextBetween(0, 1), FROGLIGHT_CLUSTER_MIN_RADIUS, FROGLIGHT_CLUSTER_MAX_RADIUS);
+        double axialRadius = radius + 0.70 + r.nextDouble() * 0.70;
+
+        Vec3d tip = new Vec3d(tipX + 0.5, tipY + 0.5, tipZ + 0.5);
+        Vec3d center = tip.add(axis.multiply(0.65 + radius * 0.55));
+
+        Direction.Axis dominant = dominantAxis(axis);
+        BlockState coreOriented = ModBlocks.BOGGY_LOG.getDefaultState().with(PillarBlock.AXIS, dominant);
+        BlockState shellOriented = ModBlocks.BOGGY_WOOD.getDefaultState().with(PillarBlock.AXIS, dominant);
+        BlockState froglight = Blocks.OCHRE_FROGLIGHT.getDefaultState();
+
+        int ix0 = Math.max(minX, MathHelper.floor(center.x - radius - 2));
+        int ix1 = Math.min(maxX, MathHelper.floor(center.x + radius + 2));
+        int iy0 = Math.max(bottomY + 1, MathHelper.floor(center.y - axialRadius - 2));
+        int iy1 = Math.min(topY - 1, MathHelper.floor(center.y + axialRadius + 2));
+        int iz0 = Math.max(minZ, MathHelper.floor(center.z - radius - 2));
+        int iz1 = Math.min(maxZ, MathHelper.floor(center.z + radius + 2));
+
+        for (int px = ix0; px <= ix1; px++) {
+            for (int py = iy0; py <= iy1; py++) {
+                for (int pz = iz0; pz <= iz1; pz++) {
+                    Vec3d rel = new Vec3d(px + 0.5 - center.x, py + 0.5 - center.y, pz + 0.5 - center.z);
+                    double axial = rel.dotProduct(axis);
+                    Vec3d radialVec = rel.subtract(axis.multiply(axial));
+                    double radial = radialVec.length();
+                    double radialNorm = (radial * radial) / (radius * radius);
+                    double axialNorm = (axial * axial) / (axialRadius * axialRadius);
+                    double shape = radialNorm + axialNorm;
+
+                    if (shape > 1.0) continue;
+                    if (shape > 0.86 && r.nextFloat() < 0.28f) continue;
+
+                    m.set(px, py, pz);
+                    BlockState existing = chunk.getBlockState(m);
+                    if (!canReplaceForFroglightTip(existing)) continue;
+
+                    double frontness = MathHelper.clamp((axial / axialRadius + 1.0) * 0.5, 0.0, 1.0);
+                    double ribness = 0.0;
+                    if (radial > 1.0E-6) {
+                        Vec3d radialDir = radialVec.multiply(1.0 / radial);
+                        ribness = Math.max(
+                                Math.abs(radialDir.dotProduct(tangentA)),
+                                Math.abs(radialDir.dotProduct(tangentB))
+                        );
+                    }
+
+                    boolean backShell = shape > 0.58 && frontness < 0.76;
+                    boolean clampRib = shape > 0.48 && frontness > 0.30 && ribness > 0.80;
+                    boolean woodyCore = shape < 0.24 && frontness < 0.44;
+
+                    if (woodyCore || backShell || clampRib) {
+                        chunk.setBlockState(m, shape < 0.20 ? coreOriented : shellOriented, false);
+                        continue;
+                    }
+
+                    boolean frontGlow = frontness > 0.42;
+                    if (shape < 0.40) {
+                        chunk.setBlockState(m, frontGlow ? froglight : shellOriented, false);
+                    } else {
+                        double froglightChance = 0.20 + (frontness * 0.62);
+                        chunk.setBlockState(m, r.nextDouble() < froglightChance ? froglight : shellOriented, false);
+                    }
+                }
+            }
+        }
+
+        Vec3d stemBack = tip.subtract(axis.multiply(Math.max(0.8, thick * 0.28)));
+        Vec3d stemFront = center.subtract(axis.multiply(axialRadius * 0.42));
+        placeWoodLine(
+                chunk, m,
+                stemBack, stemFront,
+                Math.max(1, thick - 2),
+                Math.max(1, radius - 1),
+                dominant,
+                minX, minZ, maxX, maxZ, bottomY, topY
+        );
+
+        placeWoodBlob(
+                chunk, m,
+                center.subtract(axis.multiply(axialRadius * 0.48)),
+                Math.max(1, radius - 1),
+                dominant,
+                minX, minZ, maxX, maxZ, bottomY, topY
+        );
+
+        Vec3d[] ribs = new Vec3d[] {
+                tangentA,
+                tangentA.multiply(-1.0),
+                tangentB,
+                tangentB.multiply(-1.0)
+        };
+
+        for (Vec3d ribDir : ribs) {
+            Vec3d ribStart = center.subtract(axis.multiply(axialRadius * 0.28)).add(ribDir.multiply(radius * 0.15));
+            Vec3d ribMid = center.add(ribDir.multiply(radius * 0.48)).add(axis.multiply(axialRadius * 0.02));
+            Vec3d ribEnd = center.add(ribDir.multiply(radius * 0.92)).add(axis.multiply(axialRadius * (0.10 + r.nextDouble() * 0.10)));
+
+            placeWoodLine(
+                    chunk, m,
+                    ribStart, ribMid,
+                    Math.max(1, radius - 1),
+                    1,
+                    dominant,
+                    minX, minZ, maxX, maxZ, bottomY, topY
+            );
+            placeWoodLine(
+                    chunk, m,
+                    ribMid, ribEnd,
+                    1,
+                    1,
+                    dominant,
+                    minX, minZ, maxX, maxZ, bottomY, topY
+            );
+        }
+    }
+
+    private static Vec3d choosePerpendicular(Vec3d axis) {
+        Vec3d ref = Math.abs(axis.y) < 0.85
+                ? new Vec3d(0.0, 1.0, 0.0)
+                : new Vec3d(1.0, 0.0, 0.0);
+
+        Vec3d perpendicular = axis.crossProduct(ref);
+        if (perpendicular.lengthSquared() < 1.0E-6) {
+            perpendicular = new Vec3d(0.0, 0.0, 1.0);
+        }
+        return perpendicular.normalize();
+    }
+
+    private static void placeWoodLine(
+            Chunk chunk, BlockPos.Mutable m,
+            Vec3d from, Vec3d to,
+            int startRadius, int endRadius,
+            Direction.Axis axis,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY
+    ) {
+        double distance = from.distanceTo(to);
+        int steps = Math.max(2, MathHelper.ceil(distance * 2.0));
+
+        for (int i = 0; i <= steps; i++) {
+            double t = i / (double) steps;
+            Vec3d pos = from.lerp(to, t);
+            int radius = Math.max(1, MathHelper.floor(MathHelper.lerp((float) t, startRadius, endRadius)));
+            placeWoodBlob(chunk, m, pos, radius, axis, minX, minZ, maxX, maxZ, bottomY, topY);
+        }
+    }
+
+    private static void placeWoodBlob(
+            Chunk chunk, BlockPos.Mutable m,
+            Vec3d center,
+            int radius,
+            Direction.Axis axis,
+            int minX, int minZ, int maxX, int maxZ, int bottomY, int topY
+    ) {
+        int outerR2 = radius * radius;
+        int coreR = Math.max(1, radius - 1);
+        int coreR2 = coreR * coreR;
+
+        BlockState coreOriented = ModBlocks.BOGGY_LOG.getDefaultState().with(PillarBlock.AXIS, axis);
+        BlockState shellOriented = ModBlocks.BOGGY_WOOD.getDefaultState().with(PillarBlock.AXIS, axis);
+
+        int cx = MathHelper.floor(center.x);
+        int cy = MathHelper.floor(center.y);
+        int cz = MathHelper.floor(center.z);
+
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    int dist2 = dx * dx + dy * dy + dz * dz;
+                    if (dist2 > outerR2) continue;
+
+                    int px = cx + dx;
+                    int py = cy + dy;
+                    int pz = cz + dz;
+
+                    if (px < minX || px > maxX || pz < minZ || pz > maxZ) continue;
+                    if (py < bottomY + 1 || py >= topY) continue;
+
+                    m.set(px, py, pz);
+                    BlockState existing = chunk.getBlockState(m);
+                    if (!canReplaceForFroglightTip(existing)) continue;
+
+                    chunk.setBlockState(m, dist2 <= coreR2 ? coreOriented : shellOriented, false);
+                }
+            }
+        }
+    }
+
+    private static boolean canReplaceForFroglightTip(BlockState state) {
+        return state.isAir()
+                || isRootMaterial(state)
+                || state.isOf(Blocks.OCHRE_FROGLIGHT);
+    }
+
 
     private static void paintTubeAt(
             Chunk chunk, BlockPos.Mutable m,

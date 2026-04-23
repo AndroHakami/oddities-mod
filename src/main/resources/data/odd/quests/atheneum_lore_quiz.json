@@ -1,0 +1,18 @@
+{
+  "id": "atheneum_lore_quiz",
+  "title": "Requested Volume",
+  "description": "Find the requested Atheneum volume in a starry bookshelf, read it, then return to the librarian and answer the question.",
+  "icon": "odd:textures/gui/quest_icons/default.png",
+  "unlockLevel": 1,
+  "questXp": 3,
+  "music": "",
+  "objective": {
+    "type": "lore_book_quiz",
+    "entity": "",
+    "count": 1
+  },
+  "rewards": [
+    { "type": "item", "item": "minecraft:diamond", "count": 1 },
+    { "type": "item", "item": "odd:dabloon", "count": 15 }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "scared_rascal_2",
+  "title": "Scared Rascal 2",
+  "description": "Meet the distant rascal, travel with him to the ambush spot, defeat the Robo Rascal before it kills him, then escort him back to the librarian.",
+  "icon": "odd:textures/gui/quest_icons/default.png",
+  "unlockLevel": 0,
+  "questXp": 4,
+  "music": "odd:quest_fight",
+  "objective": {
+    "type": "scared_rascal_2",
+    "entity": "odd:robo_rascal",
+    "count": 4
+  },
+  "rewards": []
+}

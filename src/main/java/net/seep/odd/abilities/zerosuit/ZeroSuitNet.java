@@ -152,13 +152,22 @@ public final class ZeroSuitNet {
             final String key = buf.readString(32);
             client.execute(() -> {
                 switch (key) {
-                    case "stance_on"   -> ZeroSuitCpmBridge.playStance();
-                    case "stance_off"  -> ZeroSuitCpmBridge.stopStance();
-                    case "charge_on"   -> ZeroSuitCpmBridge.playBlastCharge();
-                    case "charge_off"  -> ZeroSuitCpmBridge.stopBlastCharge();
-                    case "force_push"  -> ZeroSuitCpmBridge.playForcePush();
-                    case "force_pull"  -> ZeroSuitCpmBridge.playForcePull();
-                    case "blast_fire"  -> ZeroSuitCpmBridge.playBlastFire();
+                    case "stance_on" -> ZeroSuitCpmBridge.playStance();
+                    case "stance_off" -> ZeroSuitCpmBridge.stopStance();
+                    case "charge_on" -> {
+                        ZeroSuitCpmBridge.playBlastCharge();
+                        net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.onRemoteChargeStart(who);
+                    }
+                    case "charge_off" -> {
+                        ZeroSuitCpmBridge.stopBlastCharge();
+                        net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.onRemoteChargeStop(who);
+                    }
+                    case "force_push" -> ZeroSuitCpmBridge.playForcePush();
+                    case "force_pull" -> ZeroSuitCpmBridge.playForcePull();
+                    case "blast_fire", "zero_blast" -> {
+                        net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.onRemoteChargeStop(who);
+                        ZeroSuitCpmBridge.playBlastFire();
+                    }
                     default -> {}
                 }
             });
@@ -205,6 +214,7 @@ public final class ZeroSuitNet {
     private static void hardResetClientState() {
         net.seep.odd.abilities.power.ZeroSuitPower.ClientHud.onHud(false, 0, 1);
         net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.stop();
+        net.seep.odd.abilities.zerosuit.client.ZeroBlastChargeFx.stopAllRemoteLoops();
 
         // This call MUST happen so jetpack loop sound + overlay hard-stop.
         net.seep.odd.abilities.zerosuit.client.ZeroJetpackHud.onHud(false, 0, 100, false);

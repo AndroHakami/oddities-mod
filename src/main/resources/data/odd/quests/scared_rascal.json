@@ -1,0 +1,15 @@
+{
+  "id": "scared_rascal",
+  "title": "Scared Rascal",
+  "description": "Find the distant rascal, survive the Rake's chase, then escort him back to the librarian.",
+  "icon": "odd:textures/gui/quest_icons/default.png",
+  "unlockLevel": 0,
+  "questXp": 3,
+  "music": "odd:quest_fight",
+  "objective": {
+    "type": "scared_rascal",
+    "entity": "odd:scared_rascal",
+    "count": 2
+  },
+  "rewards": []
+}

@@ -48,6 +48,7 @@ import net.seep.odd.block.rotten_roots.BlueMushroomTrampolineBlock;
 import net.seep.odd.block.rps_machine.RpsMachineBlock;
 import net.seep.odd.block.rps_machine.RpsMachineBlockEntity;
 
+import net.seep.odd.device.store.screen.StoreScreenHandlers;
 import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.item.ModItems;
 import net.seep.odd.sound.ModSounds;
@@ -67,6 +68,9 @@ import net.seep.odd.block.supercooker.SuperCookerBlockEntity;
 // ✅ Dimensional Gate (NEW)
 import net.seep.odd.block.gate.DimensionalGateBlock;
 import net.seep.odd.block.gate.DimensionalGateBlockEntity;
+import net.seep.odd.block.DabloonStoreBlock;
+import net.seep.odd.block.DabloonStoreBlockEntity;
+
 
 import net.fabricmc.fabric.api.registry.FlammableBlockRegistry;
 import net.fabricmc.fabric.api.registry.StrippableBlockRegistry;
@@ -148,6 +152,16 @@ public class ModBlocks {
                     80
             )
     );
+    public static final Block STARRY_BOOKSHELF = Registry.register(
+            Registries.BLOCK, id("starry_bookshelf"),
+            new StarryBookshelfBlock(AbstractBlock.Settings.copy(Blocks.BOOKSHELF)
+                    .sounds(BlockSoundGroup.CHISELED_BOOKSHELF))
+    );
+    public static final Item STARRY_BOOKSHELF_ITEM = Registry.register(
+            Registries.ITEM, id("starry_bookshelf"),
+            new BlockItem(STARRY_BOOKSHELF, new Item.Settings())
+    );
+
 
     public static final Block DABLOON_BOOKSHELF = Registry.register(
             Registries.BLOCK, id("dabloon_bookshelf"),
@@ -201,6 +215,9 @@ public class ModBlocks {
     /*---------- DABLOONS ---------------*/
     public static Block DABLOONS_MACHINE;
     public static Item  DABLOONS_MACHINE_ITEM;
+    public static Block DABLOON_STORE;
+    public static Item  DABLOON_STORE_ITEM;
+    public static BlockEntityType<DabloonStoreBlockEntity> DABLOON_STORE_BE;
 
     /* ---------- VAMPIRE: Blood Crystal Blocks ---------- */
     public static Block BLOOD_CRYSTAL_BLOCK;
@@ -276,6 +293,7 @@ public class ModBlocks {
             id("textures/gui/hanging_signs/boggy");
 
     public static void registerModBlocks() {
+        StoreScreenHandlers.register();
         GLOW_SAP = Registry.register(
                 Registries.BLOCK, id("glow_sap"),
                 new Block(AbstractBlock.Settings.copy(Blocks.GLOWSTONE)
@@ -585,6 +603,22 @@ public class ModBlocks {
         DABLOONS_MACHINE_BE = Registry.register(
                 Registries.BLOCK_ENTITY_TYPE, id("dabloons_machine_be"),
                 FabricBlockEntityTypeBuilder.create(DabloonsMachineBlockEntity::new, DABLOONS_MACHINE).build(null)
+        );
+
+        /* --------- REGISTER: Dabloon Store --------- */
+        DABLOON_STORE = Registry.register(
+                Registries.BLOCK, id("dabloon_store"),
+                new DabloonStoreBlock()
+        );
+
+        DABLOON_STORE_ITEM = Registry.register(
+                Registries.ITEM, id("dabloon_store"),
+                new BlockItem(DABLOON_STORE, new Item.Settings())
+        );
+
+        DABLOON_STORE_BE = Registry.register(
+                Registries.BLOCK_ENTITY_TYPE, id("dabloon_store_be"),
+                FabricBlockEntityTypeBuilder.create(DabloonStoreBlockEntity::new, DABLOON_STORE).build(null)
         );
 
         /* --------- REGISTER: Vampire Blood Crystal Blocks --------- */

@@ -72,17 +72,16 @@ public final class RatFoodLogic {
 
     /** Share some food to the host and apply a small themed buff (not to the rat). */
     public static void shareWithHostAndBuff(ServerPlayerEntity rat, ServerPlayerEntity host, Item item) {
-        // Feed about 40% of what rat ate; cap is handled by HungerManager
-        int shareFood = Math.round(4 * 0.40f);   // typical foods are 2-6; this is a safe average
-        float shareSat = 0.6f;                   // small nudge of saturation
-        host.getHungerManager().add(shareFood, shareSat);
-
-        // Pick tiny buff by group (all effects short & level 0/1)
         StatusEffectInstance fx = pickBuffFor(item);
-
         if (fx != null) {
             host.addStatusEffect(fx);
         }
+
+        // Feed about 40% of what rat ate; hunger cap is handled by HungerManager.
+        // Buff application is intentionally independent of whether the host is already full.
+        int shareFood = Math.round(4 * 0.40f);
+        float shareSat = 0.6f;
+        host.getHungerManager().add(shareFood, shareSat);
     }
 
     private static StatusEffectInstance pickBuffFor(Item item) {
@@ -90,7 +89,7 @@ public final class RatFoodLogic {
         if (FRUITS_VEG.contains(item))        return new StatusEffectInstance(StatusEffects.REGENERATION, 6 * t, 0, true, true, true);
         if (BAKED_GOODS.contains(item))       return new StatusEffectInstance(StatusEffects.HASTE,        10 * t, 0, true, true, true);
         if (MEAT_COOKED.contains(item))       return new StatusEffectInstance(StatusEffects.STRENGTH,     8 * t, 0, true, true, true);
-        if (MEAT_RAW.contains(item))          return new StatusEffectInstance(StatusEffects.RESISTANCE,   5 * t, 0, true, true, true); // still "nice"
+        if (MEAT_RAW.contains(item))          return new StatusEffectInstance(StatusEffects.RESISTANCE,   5 * t, 0, true, true, true);
         if (FISH_COOKED.contains(item))       return new StatusEffectInstance(StatusEffects.DOLPHINS_GRACE, 6 * t, 0, true, true, true);
         if (FISH_RAW.contains(item))          return new StatusEffectInstance(StatusEffects.WATER_BREATHING, 8 * t, 0, true, true, true);
         if (STEWS.contains(item))             return new StatusEffectInstance(StatusEffects.ABSORPTION,   10 * t, 0, true, true, true);

@@ -1,0 +1,15 @@
+{
+  "targets": [ "outer_mech_beam" ],
+  "passes": [
+    {
+      "name": "odd:outer_mech_beam",
+      "intarget": "minecraft:main",
+      "outtarget": "outer_mech_beam"
+    },
+    {
+      "name": "blit",
+      "intarget": "outer_mech_beam",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

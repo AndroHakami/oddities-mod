@@ -46,7 +46,7 @@ public final class OwlSonarClient {
     private static final int WAVE_B = 255;
 
     public static void registerClient() {
-        OwlSonarFx.init();
+
         WorldRenderEvents.END.register(ctx -> renderWave(ctx.matrixStack(), ctx.tickDelta()));
     }
 

@@ -1,0 +1,15 @@
+{
+  "targets": [ "ufo_abduction_beam" ],
+  "passes": [
+    {
+      "name": "odd:ufo_abduction_beam",
+      "intarget": "minecraft:main",
+      "outtarget": "ufo_abduction_beam"
+    },
+    {
+      "name": "blit",
+      "intarget": "ufo_abduction_beam",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -12,7 +12,7 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.BlockPos;
-import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
+import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
 
 public class CourierPayScreenHandler extends ScreenHandler {
     private final SimpleInventory inv = new SimpleInventory(1);
@@ -25,7 +25,7 @@ public class CourierPayScreenHandler extends ScreenHandler {
     }
 
     public CourierPayScreenHandler(int syncId, PlayerInventory playerInv, int ghostId, BlockPos target, int tearsNeeded) {
-        super(GhostScreens.COURIER_PAY_HANDLER, syncId);
+        super(GhostRegistries.COURIER_PAY_HANDLER, syncId);
         this.ghostId = ghostId;
         this.target = target;
         this.tearsNeeded = tearsNeeded;

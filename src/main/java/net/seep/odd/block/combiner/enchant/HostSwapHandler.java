@@ -18,8 +18,8 @@ public final class HostSwapHandler {
 
     private static final Map<UUID, Long> cdUntil = new HashMap<>();
 
-    private static final int COOLDOWN_TICKS = 60;   // 3s
-    private static final double RANGE = 1000.0;
+    private static final int COOLDOWN_TICKS = 40;   // 3s
+    private static final double RANGE = 100.0;
     private static final double RANGE_SQ = RANGE * RANGE;
 
     public static void trySwap(ServerPlayerEntity p) {

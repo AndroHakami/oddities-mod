@@ -1,0 +1,15 @@
+{
+  "targets": [ "ufo_laser_ray" ],
+  "passes": [
+    {
+      "name": "odd:ufo_laser_ray",
+      "intarget": "minecraft:main",
+      "outtarget": "ufo_laser_ray"
+    },
+    {
+      "name": "blit",
+      "intarget": "ufo_laser_ray",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

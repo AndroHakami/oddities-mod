@@ -1,0 +1,65 @@
+{
+  "blend": { "func": "add", "srcrgb": "srcalpha", "dstrgb": "1-srcalpha" },
+  "vertex": "odd:star_ride_trail",
+  "fragment": "odd:star_ride_trail",
+  "attributes": [ "Position" ],
+  "samplers": [
+    { "name": "DiffuseSampler" },
+    { "name": "DepthSampler" }
+  ],
+  "uniforms": [
+    { "name": "ProjMat", "type": "matrix4x4", "count": 16,
+      "values": [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1] },
+    { "name": "InverseTransformMatrix", "type": "matrix4x4", "count": 16,
+      "values": [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1] },
+    { "name": "ModelViewMat", "type": "matrix4x4", "count": 16,
+      "values": [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1] },
+    { "name": "OutSize", "type": "float", "count": 2, "values": [1.0, 1.0] },
+    { "name": "CameraPosition", "type": "float", "count": 3, "values": [0,0,0] },
+
+    { "name": "Origin0", "type": "float", "count": 3, "values": [0,0,0] },
+    { "name": "Dir0",    "type": "float", "count": 3, "values": [0,0,1] },
+    { "name": "Length0", "type": "float", "count": 1, "values": [0] },
+    { "name": "Width0",  "type": "float", "count": 1, "values": [0] },
+    { "name": "Active0", "type": "float", "count": 1, "values": [0] },
+    { "name": "Seed0",   "type": "float", "count": 1, "values": [0] },
+
+    { "name": "Origin1", "type": "float", "count": 3, "values": [0,0,0] },
+    { "name": "Dir1",    "type": "float", "count": 3, "values": [0,0,1] },
+    { "name": "Length1", "type": "float", "count": 1, "values": [0] },
+    { "name": "Width1",  "type": "float", "count": 1, "values": [0] },
+    { "name": "Active1", "type": "float", "count": 1, "values": [0] },
+    { "name": "Seed1",   "type": "float", "count": 1, "values": [0] },
+
+    { "name": "Origin2", "type": "float", "count": 3, "values": [0,0,0] },
+    { "name": "Dir2",    "type": "float", "count": 3, "values": [0,0,1] },
+    { "name": "Length2", "type": "float", "count": 1, "values": [0] },
+    { "name": "Width2",  "type": "float", "count": 1, "values": [0] },
+    { "name": "Active2", "type": "float", "count": 1, "values": [0] },
+    { "name": "Seed2",   "type": "float", "count": 1, "values": [0] },
+
+    { "name": "Origin3", "type": "float", "count": 3, "values": [0,0,0] },
+    { "name": "Dir3",    "type": "float", "count": 3, "values": [0,0,1] },
+    { "name": "Length3", "type": "float", "count": 1, "values": [0] },
+    { "name": "Width3",  "type": "float", "count": 1, "values": [0] },
+    { "name": "Active3", "type": "float", "count": 1, "values": [0] },
+    { "name": "Seed3",   "type": "float", "count": 1, "values": [0] },
+
+    { "name": "Origin4", "type": "float", "count": 3, "values": [0,0,0] },
+    { "name": "Dir4",    "type": "float", "count": 3, "values": [0,0,1] },
+    { "name": "Length4", "type": "float", "count": 1, "values": [0] },
+    { "name": "Width4",  "type": "float", "count": 1, "values": [0] },
+    { "name": "Active4", "type": "float", "count": 1, "values": [0] },
+    { "name": "Seed4",   "type": "float", "count": 1, "values": [0] },
+
+    { "name": "Origin5", "type": "float", "count": 3, "values": [0,0,0] },
+    { "name": "Dir5",    "type": "float", "count": 3, "values": [0,0,1] },
+    { "name": "Length5", "type": "float", "count": 1, "values": [0] },
+    { "name": "Width5",  "type": "float", "count": 1, "values": [0] },
+    { "name": "Active5", "type": "float", "count": 1, "values": [0] },
+    { "name": "Seed5",   "type": "float", "count": 1, "values": [0] },
+
+    { "name": "iTime", "type": "float", "count": 1, "values": [0.0] },
+    { "name": "Intensity", "type": "float", "count": 1, "values": [0.0] }
+  ]
+}

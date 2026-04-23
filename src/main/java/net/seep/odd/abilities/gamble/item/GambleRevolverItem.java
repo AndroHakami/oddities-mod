@@ -179,6 +179,15 @@ public class GambleRevolverItem extends Item implements GeoItem {
     public void inventoryTick(ItemStack stack, World world, Entity entity, int slot, boolean selected) {
         if (world.isClient || !(entity instanceof ServerPlayerEntity sp)) return;
 
+        String modeName = GamblePower.getMode(sp).name();
+        if (!modeName.equals(stack.getOrCreateNbt().getString("gamble_mode"))) {
+            stack.getOrCreateNbt().putString("gamble_mode", modeName);
+        }
+
+        if ((sp.getMainHandStack() == stack || sp.getOffHandStack() == stack) && (world.getTime() % 20L == 0L)) {
+            GamblePower.syncMode(sp);
+        }
+
         if (isReloading(stack) && GamblePower.isPowerless(sp)) {
             stopReload(sp, stack);
             GamblePower.warnPowerlessOncePerSec(sp);

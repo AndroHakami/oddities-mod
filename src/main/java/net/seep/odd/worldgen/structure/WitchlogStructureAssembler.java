@@ -34,7 +34,8 @@ public final class WitchlogStructureAssembler {
      * - Y = top walking surface of the arena platform
      */
     private static final BlockPos ARENA_PLATFORM_OFFSET = new BlockPos(-30, -9, -30);
-    private static final BlockPos ARENA_POISON_MOAT_OFFSET = new BlockPos(-35, -20, -35);
+    private static final BlockPos ARENA_POISON_MOAT_OFFSET = new BlockPos(-50, -20, -50);
+    private static final BlockPos ARENA_BOTTOM_CAP_OFFSET = new BlockPos(-50, -20, -50);
     private static final BlockPos ARENA_LOWER_SHELL_OFFSET = new BlockPos(0, -20, 0);
     private static final BlockPos ARENA_UPPER_ROOF_OFFSET = new BlockPos(0, 0, 0);
 
@@ -56,16 +57,28 @@ public final class WitchlogStructureAssembler {
     private static final Identifier SHELL_LOWER_SOCKET_Q = id("witchlog_shell_lower_socket_q");
 
     private static final Identifier INTERIOR_EMPTY = id("witchlog_interior_empty_band");
+    private static final Identifier INTERIOR_EMPTY_WEST_SOCKET = id("witchlog_interior_empty_west_socket_band");
+
     private static final Identifier INTERIOR_DOUBLELEDGE = id("witchlog_interior_doubleledge_band");
+    private static final Identifier INTERIOR_DOUBLELEDGE_SOUTH_SOCKET = id("witchlog_interior_doubleledge_south_socket_band");
+    private static final Identifier INTERIOR_DOUBLELEDGE_EAST_SOCKET = id("witchlog_interior_doubleledge_east_socket_band");
+
     private static final Identifier INTERIOR_ROOMHUB = id("witchlog_interior_roomhub_band");
+    private static final Identifier INTERIOR_ROOMHUB_EAST_SOCKET = id("witchlog_interior_roomhub_east_socket_band");
+    private static final Identifier INTERIOR_ROOMHUB_NORTH_SOCKET = id("witchlog_interior_roomhub_north_socket_band");
+    private static final Identifier INTERIOR_ROOMHUB_SOUTH_SOCKET = id("witchlog_interior_roomhub_south_socket_band");
 
     private static final Identifier ARENA_PLATFORM_BAND = id("witchlog_arena_platform_band");
+    private static final Identifier ARENA_BOTTOM_CAP_BAND = id("witchlog_arena_bottom_cap_band");
     private static final Identifier ARENA_POISON_MOAT_BAND = id("witchlog_arena_poison_moat_band");
     private static final Identifier ARENA_SHELL_LOWER_Q = id("witchlog_arena_shell_lower_q");
     private static final Identifier ARENA_SHELL_UPPERROOF_Q = id("witchlog_arena_shell_upperroof_q");
 
     private static final Identifier TRANSITION_SHELL_Q = id("witchlog_transition_shell_q");
     private static final Identifier TRANSITION_INTERIOR_BAND = id("witchlog_transition_interior_band");
+
+    private static final Identifier BOGGY_WEB_SPRAWL = id("witchlog_boggy_web_sprawl");
+    private static final BlockPos BOGGY_WEB_SPRAWL_OFFSET = new BlockPos(-30, 0, -30);
 
     private static final BandPlan[] FULL_BAND_PLANS = new BandPlan[] {
             // 0
@@ -80,7 +93,7 @@ public final class WitchlogStructureAssembler {
                     SHELL_LOWER_SOCKET_Q,
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
-                    INTERIOR_ROOMHUB
+                    INTERIOR_ROOMHUB_EAST_SOCKET
             ),
 
             // 3
@@ -92,7 +105,7 @@ public final class WitchlogStructureAssembler {
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
-                    INTERIOR_DOUBLELEDGE
+                    INTERIOR_DOUBLELEDGE_SOUTH_SOCKET
             ),
 
             // 5
@@ -104,7 +117,7 @@ public final class WitchlogStructureAssembler {
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_SOCKET_Q,
-                    INTERIOR_EMPTY
+                    INTERIOR_EMPTY_WEST_SOCKET
             ),
 
             // 7
@@ -116,7 +129,7 @@ public final class WitchlogStructureAssembler {
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_SOCKET_Q,
                     SHELL_LOWER_PLAIN_Q,
-                    INTERIOR_ROOMHUB
+                    INTERIOR_ROOMHUB_NORTH_SOCKET
             ),
 
             // 9
@@ -128,7 +141,7 @@ public final class WitchlogStructureAssembler {
                     SHELL_LOWER_SOCKET_Q,
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
-                    INTERIOR_DOUBLELEDGE
+                    INTERIOR_DOUBLELEDGE_EAST_SOCKET
             ),
 
             // 11 - socket on SOUTH wall
@@ -137,7 +150,7 @@ public final class WitchlogStructureAssembler {
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
                     SHELL_LOWER_PLAIN_Q,
-                    INTERIOR_ROOMHUB
+                    INTERIOR_ROOMHUB_SOUTH_SOCKET
             )
     };
 
@@ -173,7 +186,11 @@ public final class WitchlogStructureAssembler {
 
     public static int placeFullTower(ServerWorld world, BlockPos towerBaseCenter) {
         clearTowerEnvelope(world, towerBaseCenter, FULL_TOWER_BAND_COUNT);
-        return placeTowerInternal(world, towerBaseCenter, FULL_TOWER_BAND_COUNT);
+
+        int placed = 0;
+        placed += placeTowerInternal(world, towerBaseCenter, FULL_TOWER_BAND_COUNT);
+        placed += placeBoggyWebSprawl(world, towerBaseCenter);
+        return placed;
     }
 
     public static int placeDefaultRooms(ServerWorld world, BlockPos arenaOrigin) {
@@ -190,38 +207,12 @@ public final class WitchlogStructureAssembler {
 
         BlockPos towerBaseCenter = arenaOrigin.add(TOWER_BASE_OFFSET);
         placed += placeTowerInternal(world, towerBaseCenter, FULL_TOWER_BAND_COUNT);
+        placed += placeBoggyWebSprawl(world, towerBaseCenter);
 
+        // Place rooms after the web so room carving can cleanly cut openings through it if needed.
         placed += placeRooms(world, buildDefaultRoomSockets(towerBaseCenter), WitchlogRoomTable.createDefault());
 
         return placed;
-    }
-
-    /**
-     * Debug helper: places the apothecary as a standalone room.
-     *
-     * thresholdCenter means:
-     * - center of the doorway threshold
-     * - Y = floor level at the doorway
-     *
-     * Default rotation used here is SOUTH-facing socket placement.
-     */
-    public static int placeApothecaryMedium(ServerWorld world, BlockPos thresholdCenter) {
-        WitchlogRoomTable roomTable = WitchlogRoomTable.createDefault();
-
-        for (WitchlogRoomTable.RoomDefinition room : roomTable.rooms()) {
-            if (room.key.equals("apothecary_medium")) {
-                RoomSocket socket = new RoomSocket(
-                        "debug_apothecary",
-                        WitchlogRoomTable.SocketType.MEDIUM,
-                        thresholdCenter,
-                        SocketFacing.SOUTH
-                );
-                return placeRoom(world, socket, room);
-            }
-        }
-
-        System.out.println("[Witchlog] Could not find room definition for apothecary_medium");
-        return 0;
     }
 
     public static int placeRooms(ServerWorld world, List<RoomSocket> sockets, WitchlogRoomTable roomTable) {
@@ -231,7 +222,6 @@ public final class WitchlogStructureAssembler {
         boolean[] occupied = new boolean[sockets.size()];
         Map<String, Integer> placedCounts = new HashMap<>();
 
-        // Required rooms first
         for (WitchlogRoomTable.RoomDefinition room : roomTable.rooms()) {
             for (int i = 0; i < room.requiredCount; i++) {
                 if (!roomTable.canPlace(room, placedCounts)) {
@@ -252,7 +242,6 @@ public final class WitchlogStructureAssembler {
             }
         }
 
-        // Weighted fill for remaining sockets
         for (int i = 0; i < sockets.size(); i++) {
             if (occupied[i]) {
                 continue;
@@ -279,15 +268,12 @@ public final class WitchlogStructureAssembler {
         BlockRotation finalRotation = combineRotation(socket.facing.rotation, room.authoringRotationOffset);
         BlockPos rotatedAnchor = rotateOffset(room.doorwayAnchor, finalRotation);
         BlockPos templatePos = socket.thresholdCenter.subtract(rotatedAnchor);
-
-        // Rooms SHOULD clear, because they carve into the trunk wall.
         return place(world, room.templateId, templatePos, finalRotation, true);
     }
 
     public static int placeBand(ServerWorld world, BlockPos bandOrigin, BandPlan plan) {
         int placed = 0;
 
-        // Structural tower pieces do NOT clear individually anymore.
         placed += place(world, plan.shell0, bandOrigin, BlockRotation.NONE, false);
         placed += place(world, plan.shell90, bandOrigin, BlockRotation.CLOCKWISE_90, false);
         placed += place(world, plan.shell180, bandOrigin, BlockRotation.CLOCKWISE_180, false);
@@ -313,11 +299,6 @@ public final class WitchlogStructureAssembler {
         return placed;
     }
 
-    /**
-     * Default placement no longer clears first.
-     * Use clearAreaFirst=true only for pieces that are meant to carve volume,
-     * like standalone rooms.
-     */
     public static int place(ServerWorld world, Identifier templateId, BlockPos pos, BlockRotation rotation) {
         return place(world, templateId, pos, rotation, false);
     }
@@ -364,6 +345,7 @@ public final class WitchlogStructureAssembler {
     private static int placeArenaInternal(ServerWorld world, BlockPos arenaOrigin) {
         int placed = 0;
 
+        placed += place(world, ARENA_BOTTOM_CAP_BAND, arenaOrigin.add(ARENA_BOTTOM_CAP_OFFSET), BlockRotation.NONE, false);
         placed += place(world, ARENA_PLATFORM_BAND, arenaOrigin.add(ARENA_PLATFORM_OFFSET), BlockRotation.NONE, false);
         placed += place(world, ARENA_POISON_MOAT_BAND, arenaOrigin.add(ARENA_POISON_MOAT_OFFSET), BlockRotation.NONE, false);
 
@@ -389,6 +371,11 @@ public final class WitchlogStructureAssembler {
         }
 
         return placed;
+    }
+
+
+    private static int placeBoggyWebSprawl(ServerWorld world, BlockPos towerBaseCenter) {
+        return place(world, BOGGY_WEB_SPRAWL, towerBaseCenter.add(BOGGY_WEB_SPRAWL_OFFSET), BlockRotation.NONE, false);
     }
 
     private static BlockRotation combineRotation(BlockRotation first, BlockRotation second) {
@@ -417,7 +404,6 @@ public final class WitchlogStructureAssembler {
     }
 
     private static void clearArenaEnvelope(ServerWorld world, BlockPos arenaOrigin) {
-        // Covers arena floor, poison basin, outer shell, and roof.
         clearBoxToAir(world,
                 arenaOrigin.getX() - OUTER_RADIUS,
                 arenaOrigin.getY() - 20,
@@ -624,17 +610,6 @@ public final class WitchlogStructureAssembler {
         }
     }
 
-    /**
-     * This rotation mapping assumes room templates are authored like this:
-     * - doorway is on the FRONT edge of the template
-     * - room extends "back" into +Z in local template space
-     *
-     * With that convention:
-     * - SOUTH uses NONE
-     * - NORTH uses 180
-     * - EAST uses CCW_90
-     * - WEST uses CW_90
-     */
     public enum SocketFacing {
         NORTH(BlockRotation.CLOCKWISE_180),
         EAST(BlockRotation.COUNTERCLOCKWISE_90),

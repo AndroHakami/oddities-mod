@@ -26,9 +26,9 @@ public class WizardMeteorEntity extends Entity {
     // ✅ much faster drop (missile)
     public static final int DROP_TICKS = 25;
 
-    public static final float IMPACT_RADIUS = 6.5f * 3.0f;
-    public static final float IMPACT_DAMAGE = 18.0f * 2.0f;
-    public static final double SHOCKWAVE_KB = 2.2;
+    public static final float IMPACT_RADIUS = 4.5f * 3.0f;
+    public static final float IMPACT_DAMAGE = 10.0f * 2.0f;
+    public static final double SHOCKWAVE_KB = 5.2;
 
     private UUID ownerId;
 

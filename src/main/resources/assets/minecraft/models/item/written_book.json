@@ -9,6 +9,11 @@
         "custom_model_data": 2001
       },
       "model": "odd:item/rotten_book"
+    },
+    {
+      "predicate": { "custom_model_data": 2101 },
+      "model": "odd:item/atheneum_book"
     }
+
   ]
 }

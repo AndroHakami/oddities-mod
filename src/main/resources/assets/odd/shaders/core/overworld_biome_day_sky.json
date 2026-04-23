@@ -1,0 +1,28 @@
+{
+  "blend": { "func": "add", "srcrgb": "srcalpha", "dstrgb": "1-srcalpha" },
+  "vertex": "odd:overworld_biome_day_sky",
+  "fragment": "odd:overworld_biome_day_sky",
+  "attributes": [ "Position" ],
+  "uniforms": [
+    { "name": "iTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "BlendAlpha", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "DayAmount", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "Rain", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Thunder", "type": "float", "count": 1, "values": [ 0.0 ] },
+
+    { "name": "SkyR", "type": "float", "count": 1, "values": [ 0.5 ] },
+    { "name": "SkyG", "type": "float", "count": 1, "values": [ 0.7 ] },
+    { "name": "SkyB", "type": "float", "count": 1, "values": [ 1.0 ] },
+
+    { "name": "FogR", "type": "float", "count": 1, "values": [ 0.8 ] },
+    { "name": "FogG", "type": "float", "count": 1, "values": [ 0.85 ] },
+    { "name": "FogB", "type": "float", "count": 1, "values": [ 0.95 ] },
+
+    { "name": "HorizonR", "type": "float", "count": 1, "values": [ 0.85 ] },
+    { "name": "HorizonG", "type": "float", "count": 1, "values": [ 0.90 ] },
+    { "name": "HorizonB", "type": "float", "count": 1, "values": [ 1.0 ] },
+
+    { "name": "InvProjMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "InvViewMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] }
+  ]
+}

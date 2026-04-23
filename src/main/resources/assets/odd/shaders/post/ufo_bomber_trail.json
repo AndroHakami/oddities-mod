@@ -1,0 +1,15 @@
+{
+  "targets": [ "ufo_bomber_trail" ],
+  "passes": [
+    {
+      "name": "odd:ufo_bomber_trail",
+      "intarget": "minecraft:main",
+      "outtarget": "ufo_bomber_trail"
+    },
+    {
+      "name": "blit",
+      "intarget": "ufo_bomber_trail",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

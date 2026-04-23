@@ -58,12 +58,7 @@ public final class WitchlogDebugCommand {
                                 WitchlogStructureAssembler::placeFullStructure
                         ))
 
-                        .then(subcommand(
-                                "room_apothecary",
-                                "doorway threshold center",
-                                16,
-                                WitchlogStructureAssembler::placeApothecaryMedium
-                        ))
+
         ));
     }
 

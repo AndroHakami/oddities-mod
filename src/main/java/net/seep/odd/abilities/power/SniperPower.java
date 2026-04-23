@@ -75,20 +75,28 @@ public final class SniperPower implements Power {
         };
     }
 
+
     @Override
-    public String slotLongDescription(String slot) {
+    public String longDescription() {
+        return "Strike down your opponents with a long ranged sniper, equipped with a grapple and a parachute nothing will stop you from landing your shots!";
+    }
+
+    @Override
+    public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" ->
-                    "Toggle Parachute ARM. When armed: hold Space mid-air to glide (server-authoritative).";
-            case "secondary" ->
-                    "Fire a grapple hook to a surface. You get pulled quickly toward it and can swing. Press Space to cancel early.";
-            default -> "Sniper";
+            case "primary" -> "PARACHUTE";
+            case "secondary" -> "GRAPPLE SHOT";
+            default -> Power.super.slotTitle(slot);
         };
     }
 
     @Override
-    public String longDescription() {
-        return "Sniper: parachute assist toggle + a fast grapple hook. (The sniper rifle is an item.)";
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Arm/Disarm your parachute, hold spac to hover in the air for a limited time while armed.";
+            case "secondary" -> "Fire a fast grapple shot to quickly reposition.";
+            default -> "Sun";
+        };
     }
 
     /** Server-side power check */

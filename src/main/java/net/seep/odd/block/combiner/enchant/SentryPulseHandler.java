@@ -27,7 +27,7 @@ public final class SentryPulseHandler {
     private static final Map<UUID, Integer> timer = new HashMap<>();
 
     // ~2 blocks radius
-    private static final double RADIUS = 4.05;
+    private static final double RADIUS = 5.05;
 
     // cyan dust transition (cyan -> slightly bluish)
     private static final DustColorTransitionParticleEffect CYAN_PULSE =
@@ -123,7 +123,7 @@ public final class SentryPulseHandler {
         if (targets.isEmpty()) return;
 
         // semi-strong, scaled by level + distance
-        double maxKb = 0.85 + (lvl - 1) * 0.25; // lvl1=0.85, lvl2=1.10
+        double maxKb = 1.85 + (lvl - 1) * 0.25; // lvl1=0.85, lvl2=1.10
 
         for (LivingEntity e : targets) {
             Vec3d to = e.getPos().subtract(origin);

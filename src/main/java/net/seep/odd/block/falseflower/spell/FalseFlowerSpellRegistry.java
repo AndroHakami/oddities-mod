@@ -15,18 +15,18 @@ public final class FalseFlowerSpellRegistry {
 
     static {
         // AURAS (activation timing ignored)
-        reg(FairySpell.AURA_LEVITATION, new LevitationEffect(), 0.06f, false, 0, 0);
-        reg(FairySpell.AURA_HEAVY,      new HeavyEffect(),      0.08f, false, 0, 0);
+        reg(FairySpell.AURA_LEVITATION, new LevitationEffect(), 0.005f, false, 0, 0);
+        reg(FairySpell.AURA_HEAVY,      new HeavyEffect(),      0.005f, false, 0, 0);
         reg(FairySpell.AURA_REGEN,      new RegenEffect(),      0.06f, false, 0, 0);
         reg(FairySpell.BLACKHOLE,       new BlackholeEffect(),  0.12f, false, 0, 0);
-        reg(FairySpell.BUBBLE,          new BubbleEffect(),     0.12f, false, 0, 0);
+        reg(FairySpell.BUBBLE,          new BubbleEffect(),     0.005f, false, 0, 0);
 
         reg(FairySpell.AREA_MINE,       new MineHasteEffect(),  0.08f, false, 0, 0);
         reg(FairySpell.CROP_GROWTH,     new GrowthEffect(),     0.08f, false, 0, 0);
 
         reg(FairySpell.MAGIC_BULLETS,   new MagicBulletsEffect(),   0.10f, false, 0, 0);
-        reg(FairySpell.WATER_BREATHING, new WaterBreathingEffect(), 0.06f, false, 0, 0);
-        reg(FairySpell.TINY_WORLD,      new TinyWorldEffect(),      0.10f, false, 0, 0);
+        reg(FairySpell.WATER_BREATHING, new WaterBreathingEffect(), 0.001f, false, 0, 0);
+        reg(FairySpell.TINY_WORLD,      new TinyWorldEffect(),      0.003f, false, 0, 0);
         reg(FairySpell.SWITCHERANO,     new SwitcheranoEffect(),    0.10f, false, 0, 0);
         reg(FairySpell.WEAKNESS,        new WeaknessEffect(),       0.08f, false, 0, 0);
 

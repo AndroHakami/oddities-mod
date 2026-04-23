@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [" V "," X "," X "],
+  "key": {
+    "X": { "item": "minecraft:stick" },
+    "V": { "item": "minecraft:obsidian" }
+  },
+  "result": { "item": "odd:necromancer_staff", "count": 1 }
+}

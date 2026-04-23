@@ -77,20 +77,27 @@ public final class FairyPower implements Power {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Cast Form: enter 3 inputs (↑↓←→). Inputs become ↑↓←→. "
-                            + "Soft-target False Flowers to imbue them.";
+                    "Enter a dance stance, dance to imbue a flower with magic.";
             case "secondary" ->
-                    "Manage Flowers: view magical False Flowers; activate/deactivate, rename, set radius (power), cleanse.";
+                    "Open a magic mangement menu, activate effects/deactivate effects";
             case "third" ->
-                    "Beam of Magic: channel a mana beam that recharges False Flowers you aim at. Drains mana while active.";
+                    "fire a magical beam to recharge flowers with mana";
             default -> "Fairy";
         };
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "DANCE OF THE FAIRY";
+            case "secondary" -> "MAGIC MANAGEMENT";
+            case "third" -> "BEAM OF MANA";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
 
     @Override
     public String longDescription() {
-        return "A tiny caster with creative-style flight that consumes mana. Place False Flowers and imbue them "
-                + "with spells using Cast Form combos. Channel a Beam of Magic to refill flowers.";
+        return "Tiny, fast and glittery, for every problem there is, the fairy got a spell for it!";
     }
 
     /* ---------------- Network IDs ---------------- */
@@ -146,8 +153,8 @@ public final class FairyPower implements Power {
 
     public static final float MANA_MAX = 100f;
 
-    public static float MANA_REGEN_PER_TICK = 0.030f;
-    public static float FLIGHT_DRAIN_PER_TICK = 0.30f;
+    public static float MANA_REGEN_PER_TICK = 0.090f;
+    public static float FLIGHT_DRAIN_PER_TICK = 0.150f;
     public static int MANA_SYNC_INTERVAL = 5;
 
     public static int SPARKLES_PER_TICK = 2;
@@ -203,8 +210,7 @@ public final class FairyPower implements Power {
     private static void ensureEnterFairy(ServerPlayerEntity p) {
         if (!FAIRY_ACTIVE.add(p.getUuid())) return;
 
-        applyHalfHearts(p);
-        applyPehkuiScale(p, 0.5f);
+
 
         float mana = getMana(p);
         if (mana <= 0f) {
@@ -218,8 +224,7 @@ public final class FairyPower implements Power {
     private static void ensureExitFairy(ServerPlayerEntity p) {
         if (!FAIRY_ACTIVE.remove(p.getUuid())) return;
 
-        clearHalfHearts(p);
-        applyPehkuiScale(p, 1.0f);
+
 
         CastLogic.toggleCastForm(p, false);
 
@@ -741,46 +746,5 @@ public final class FairyPower implements Power {
 
     /* ---------------- HP & Pehkui helpers ---------------- */
 
-    private static void applyHalfHearts(ServerPlayerEntity p) {
-        var inst = p.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
-        if (inst == null) return;
-        inst.removeModifier(HP_MOD_ID);
-        double target = 12.0; // 6 hearts
-        double delta = target - inst.getBaseValue();
-        inst.addPersistentModifier(new EntityAttributeModifier(HP_MOD_ID, "FairyHP", delta, EntityAttributeModifier.Operation.ADDITION));
-        if (p.getHealth() > 12f) p.setHealth(12f);
-    }
 
-    private static void clearHalfHearts(ServerPlayerEntity p) {
-        var inst = p.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH);
-        if (inst != null) inst.removeModifier(HP_MOD_ID);
-    }
-
-    private static final BiConsumer<Entity, Float> PEHKUI_SCALE_SET = findPehkuiSetter();
-
-    private static BiConsumer<Entity, Float> findPehkuiSetter() {
-        try {
-            Class<?> scaleTypesCl = Class.forName("virtuoel.pehkui.api.ScaleTypes");
-            Object BASE = scaleTypesCl.getField("BASE").get(null);
-
-            Class<?> scaleTypeCl = Class.forName("virtuoel.pehkui.api.ScaleType");
-            Method getScaleData = scaleTypeCl.getMethod("getScaleData", Entity.class);
-
-            Class<?> scaleDataCl = Class.forName("virtuoel.pehkui.api.ScaleData");
-            Method setScale = scaleDataCl.getMethod("setScale", float.class);
-
-            return (entity, scale) -> {
-                try {
-                    Object data = getScaleData.invoke(BASE, entity);
-                    setScale.invoke(data, scale);
-                } catch (Throwable ignored) {}
-            };
-        } catch (Throwable t) {
-            return (e, s) -> {};
-        }
-    }
-
-    public static void applyPehkuiScale(PlayerEntity p, float s) {
-        try { PEHKUI_SCALE_SET.accept(p, s); } catch (Throwable ignored) {}
-    }
 }

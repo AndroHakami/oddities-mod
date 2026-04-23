@@ -1,0 +1,15 @@
+{
+  "targets": [ "dabloon_store_holo" ],
+  "passes": [
+    {
+      "name": "odd:dabloon_store_holo",
+      "intarget": "minecraft:main",
+      "outtarget": "dabloon_store_holo"
+    },
+    {
+      "name": "blit",
+      "intarget": "dabloon_store_holo",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -4,7 +4,6 @@ import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -15,8 +14,6 @@ import net.seep.odd.item.ModItems;
 import net.seep.odd.shop.catalog.ShopCatalogManager;
 import net.seep.odd.shop.catalog.ShopEntry;
 
-import java.util.UUID;
-
 public final class ShopNetworking {
 
     public static final Identifier C2S_BUY = new Identifier(Oddities.MOD_ID, "shop_buy");
@@ -26,12 +23,11 @@ public final class ShopNetworking {
     public static final Identifier S2C_TOAST = new Identifier(Oddities.MOD_ID, "shop_toast");
     public static final Identifier S2C_PURCHASE_RESULT = new Identifier(Oddities.MOD_ID, "shop_purchase_result");
 
-    private static final String PET_TOKEN_KEY = "OddShopPetToken";
-
     public static void registerC2S() {
         ServerPlayNetworking.registerGlobalReceiver(C2S_BUY, (server, player, handler, buf, responseSender) -> {
             final String entryId = buf.readString(128);
-            server.execute(() -> handleBuy((ServerPlayerEntity) player, entryId));
+            final String petName = buf.isReadable() ? buf.readString(64) : "";
+            server.execute(() -> handleBuy((ServerPlayerEntity) player, entryId, petName));
         });
 
         ServerPlayNetworking.registerGlobalReceiver(C2S_PET_NAME, (server, player, handler, buf, responseSender) -> {
@@ -69,14 +65,14 @@ public final class ShopNetworking {
         ServerPlayNetworking.send(player, S2C_TOAST, buf);
     }
 
-    private static void sendPurchaseResult(ServerPlayerEntity player, ShopEntry entry, String petToken) {
+    private static void sendPurchaseResult(ServerPlayerEntity player, ShopEntry entry) {
         var buf = PacketByteBufs.create();
         buf.writeString(entry.id, 128);
-        buf.writeString(petToken == null ? "" : petToken, 128);
+        buf.writeString("", 128);
         ServerPlayNetworking.send(player, S2C_PURCHASE_RESULT, buf);
     }
 
-    private static void handleBuy(ServerPlayerEntity player, String entryId) {
+    private static void handleBuy(ServerPlayerEntity player, String entryId, String requestedPetName) {
         if (player.currentScreenHandler == null ||
                 !player.currentScreenHandler.getClass().getName().endsWith("DabloonsMachineScreenHandler")) {
             return;
@@ -104,7 +100,6 @@ public final class ShopNetworking {
             return;
         }
 
-        String petToken = "";
         boolean granted = false;
 
         if (entry.grantType == ShopEntry.GrantType.COMMAND) {
@@ -112,17 +107,12 @@ public final class ShopNetworking {
         } else {
             ItemStack out = createGrantedStack(entry);
             if (!out.isEmpty()) {
-                if (entry.pet) {
-                    petToken = UUID.randomUUID().toString();
-                    NbtCompound nbt = out.getOrCreateNbt();
-                    nbt.putString(PET_TOKEN_KEY, petToken);
+                giveOrDrop(player, out.copy());
+
+                if (entry.pet && requestedPetName != null && !requestedPetName.isBlank()) {
+                    giveNamedPetTag(player, requestedPetName);
                 }
 
-                ItemStack remainder = out.copy();
-                boolean insertedFully = player.getInventory().insertStack(remainder);
-                if (!insertedFully && !remainder.isEmpty()) {
-                    player.dropItem(remainder, false);
-                }
                 player.getInventory().markDirty();
                 granted = true;
             }
@@ -135,7 +125,7 @@ public final class ShopNetworking {
         }
 
         toast(player, "Purchased: " + entry.displayName + " (-" + price + ")");
-        sendPurchaseResult(player, entry, petToken);
+        sendPurchaseResult(player, entry);
         sendBalance(player);
     }
 
@@ -173,29 +163,40 @@ public final class ShopNetworking {
     }
 
     private static void handlePetName(ServerPlayerEntity player, String token, String rawName) {
-        String trimmed = rawName == null ? "" : rawName.trim();
-        if (token == null || token.isBlank()) return;
-
-        for (int i = 0; i < player.getInventory().size(); i++) {
-            ItemStack stack = player.getInventory().getStack(i);
-            if (stack.isEmpty() || !stack.hasNbt()) continue;
-
-            NbtCompound nbt = stack.getNbt();
-            if (nbt == null || !token.equals(nbt.getString(PET_TOKEN_KEY))) continue;
-
-            if (!trimmed.isEmpty()) {
-                stack.setCustomName(Text.literal(trimmed));
-                toast(player, "Pet named: " + trimmed);
-            }
-            nbt.remove(PET_TOKEN_KEY);
-            if (nbt.isEmpty()) {
-                stack.setNbt(null);
-            }
-            player.getInventory().markDirty();
+        if (player.currentScreenHandler == null ||
+                !player.currentScreenHandler.getClass().getName().endsWith("DabloonsMachineScreenHandler")) {
             return;
         }
 
-        toast(player, "Couldn't find that pet egg to rename.");
+        if (rawName == null || rawName.isBlank()) {
+            return;
+        }
+
+        giveNamedPetTag(player, rawName);
+        player.getInventory().markDirty();
+    }
+
+    private static void giveNamedPetTag(ServerPlayerEntity player, String rawName) {
+        String trimmed = rawName == null ? "" : rawName.trim();
+        if (trimmed.isBlank()) {
+            return;
+        }
+
+        ItemStack nameTag = new ItemStack(Items.NAME_TAG);
+        nameTag.setCustomName(Text.literal(trimmed));
+        giveOrDrop(player, nameTag);
+    }
+
+    private static void giveOrDrop(ServerPlayerEntity player, ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return;
+        }
+
+        ItemStack remainder = stack.copy();
+        boolean insertedFully = player.getInventory().insertStack(remainder);
+        if (!insertedFully && !remainder.isEmpty()) {
+            player.dropItem(remainder, false);
+        }
     }
 
     public static int countTotalDabloons(ServerPlayerEntity player) {

@@ -1,0 +1,15 @@
+{
+  "id": "rascal_race2",
+  "title": "Rascal Race_2",
+  "description": "Find the distant race start, mount the waiting star ride, and beat the rascal back to the librarian.",
+  "icon": "odd:textures/gui/quest_icons/rascal_race.png",
+  "unlockLevel": 0,
+  "questXp": 3,
+  "music": "odd:quest_fight",
+  "objective": {
+    "type": "race_return",
+    "entity": "odd:rascal",
+    "count": 2
+  },
+  "rewards": []
+}

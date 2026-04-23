@@ -111,10 +111,13 @@ public final class DruidPower implements Power {
 
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary" -> "Open a wheel and choose a form.";
+            case "primary" -> "Open the transform wheel and choose a form.";
             case "secondary" -> "Touch blocks to trigger strong growth.";
             default -> "";
         };
+    }
+    @Override public String longDescription() {
+        return "Shapeshift and create life out of nothing...with four forms there is nothing you cant adapt to!";
     }
 
     @Override public Identifier portraitTexture() {

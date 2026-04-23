@@ -1,10 +1,8 @@
 package net.seep.odd.item.custom;
 
 import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.fabricmc.loader.api.FabricLoader;
 
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -37,7 +35,6 @@ import net.seep.odd.sound.ModSounds;
 
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
-import software.bernie.geckolib.animatable.client.RenderProvider;
 import software.bernie.geckolib.constant.DataTickets;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.AnimatableManager;
@@ -45,7 +42,6 @@ import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.model.DefaultedItemGeoModel;
-import software.bernie.geckolib.renderer.GeoItemRenderer;
 import software.bernie.geckolib.util.GeckoLibUtil;
 import software.bernie.geckolib.util.RenderUtils;
 
@@ -105,10 +101,7 @@ public class GuitarItem extends SwordItem implements GeoItem {
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
-    private final Supplier<Object> renderProvider =
-            FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT
-                    ? GeoItem.makeRenderer(this)
-                    : () -> null;
+    private final Supplier<Object> renderProvider = GeoItemClientHooks.createRenderProvider(this);
 
     public GuitarItem(Settings settings) {
         super(ToolMaterials.DIAMOND, 3, -2.4f, settings);
@@ -369,16 +362,8 @@ public class GuitarItem extends SwordItem implements GeoItem {
 
     @Override
     public void createRenderer(Consumer<Object> consumer) {
-        consumer.accept(new RenderProvider() {
-            private GeoItemRenderer<?> renderer;
-            @Override
-            public GeoItemRenderer<?> getCustomRenderer() {
-                if (renderer == null) {
-                    renderer = new net.seep.odd.item.custom.client.GuitarItemRenderer();
-                }
-                return renderer;
-            }
-        });
+        GeoItemClientHooks.createGeoItemRenderer(consumer,
+                "net.seep.odd.item.custom.client.GuitarItemRenderer");
     }
 
     @Override
@@ -391,12 +376,7 @@ public class GuitarItem extends SwordItem implements GeoItem {
         return RenderUtils.getCurrentTick();
     }
 
-
-
-    @Environment(EnvType.CLIENT)
-    @SuppressWarnings("unused")
     private static PlayerEntity getClientPlayer() {
-        MinecraftClient mc = MinecraftClient.getInstance();
-        return mc != null ? mc.player : null;
+        return GeoItemClientHooks.getClientPlayerOrNull();
     }
 }

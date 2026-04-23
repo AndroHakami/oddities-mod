@@ -8,6 +8,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Direction;
@@ -15,7 +16,6 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import net.seep.odd.Oddities;
-import net.seep.odd.expeditions.Expeditions;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -101,7 +101,7 @@ public final class GateTeleportSystem {
 
             if (DEBUG) Oddities.LOGGER.info("[GateTP] HIT {} -> teleport attempt", p.getName().getString());
 
-            doTeleport(server, p);
+            doTeleport(server, p, foundGate);
         }
     }
 
@@ -131,9 +131,17 @@ public final class GateTeleportSystem {
         return Box.of(center, sx, h, sz);
     }
 
-    private static void doTeleport(MinecraftServer server, ServerPlayerEntity p) {
-        // Return support like your Void system (optional, but handy)
-        if (p.getWorld().getRegistryKey().equals(Expeditions.ROTTEN_ROOTS_WORLD)) {
+    private static void doTeleport(MinecraftServer server, ServerPlayerEntity p, BlockPos gateBase) {
+        Identifier destWorldId = new Identifier(Oddities.MOD_ID, "rotten_roots");
+        var be = p.getServerWorld().getBlockEntity(gateBase);
+        if (be instanceof DimensionalGateBlockEntity gateBe && gateBe.getDestWorldId() != null) {
+            destWorldId = gateBe.getDestWorldId();
+        }
+
+        RegistryKey<World> destKey = RegistryKey.of(net.minecraft.registry.RegistryKeys.WORLD, destWorldId);
+
+        // If the player is already in this gate's configured destination, return them.
+        if (p.getWorld().getRegistryKey().equals(destKey)) {
             ReturnSpot r = RETURN.remove(p.getUuid());
             if (r != null) {
                 teleport(p, server, r.dim, r.pos, r.yaw, r.pitch);
@@ -147,19 +155,17 @@ public final class GateTeleportSystem {
             return;
         }
 
-        // store return
         RETURN.put(p.getUuid(), new ReturnSpot(
                 p.getWorld().getRegistryKey(), p.getPos(), p.getYaw(), p.getPitch()
         ));
 
-        // EXACTLY like your command (Y=120)
-        ServerWorld dst = server.getWorld(Expeditions.ROTTEN_ROOTS_WORLD);
+        ServerWorld dst = server.getWorld(destKey);
         if (dst == null) {
-            Oddities.LOGGER.error("[GateTP] Rotten Roots world missing (server.getWorld returned null). Check JSON/world load.");
+            Oddities.LOGGER.error("[GateTP] Destination world missing for {} (server.getWorld returned null). Check dimension registration/load.", destWorldId);
             return;
         }
 
-        teleport(p, server, Expeditions.ROTTEN_ROOTS_WORLD, new Vec3d(0.5, 120.0, 0.5), p.getYaw(), p.getPitch());
+        teleport(p, server, destKey, new Vec3d(0.5, 120.0, 0.5), p.getYaw(), p.getPitch());
     }
 
     private static void teleport(ServerPlayerEntity p, MinecraftServer server,

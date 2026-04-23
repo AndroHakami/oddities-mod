@@ -48,11 +48,14 @@ public class CombinerBlockEntity extends BlockEntity implements NamedScreenHandl
     public static final int P_DIFF     = 5;
     public static final int P_SEED     = 6;
 
-    // ✅ tighter + fair window (client tick is used, so no ping fudge needed)
-    private static final int HIT_TOLERANCE_TICKS = 4;
+    // wider window so the QTE is a bit more forgiving for higher-ping players
+    private static final int HIT_TOLERANCE_TICKS = 12;
 
-    // ✅ anti-spam cooldown between hit packets
-    private static final int HIT_COOLDOWN_TICKS = 6;
+    // lighter anti-spam so quick follow-up presses do not get eaten as often
+    private static final int HIT_COOLDOWN_TICKS = 1;
+
+    // slightly longer total QTE so the client-local version has a fairer buffer
+    private static final int QTE_DURATION_TICKS = 96;
 
     // inventory: 0 gear, 1 trim template
     private final SimpleInventory inv = new SimpleInventory(2) {
@@ -66,7 +69,7 @@ public class CombinerBlockEntity extends BlockEntity implements NamedScreenHandl
     // qte state
     private boolean qteActive = false;
     private int qteTicks = 0;
-    private int qteDuration = 80;
+    private int qteDuration = QTE_DURATION_TICKS;
     private int qteSuccesses = 0;
     private int qteRequired = 1;
     private int qteDifficulty = 1;
@@ -187,7 +190,7 @@ public class CombinerBlockEntity extends BlockEntity implements NamedScreenHandl
 
         this.qteActive = true;
         this.qteTicks = 0;
-        this.qteDuration = 80;
+        this.qteDuration = QTE_DURATION_TICKS;
         this.qteSuccesses = 0;
         this.qteRequired = qteDifficulty;
 
@@ -343,11 +346,13 @@ public class CombinerBlockEntity extends BlockEntity implements NamedScreenHandl
         java.util.Random r = new java.util.Random(seed);
 
         int[] out = new int[difficulty];
-        int minGap = 7; // slightly cleaner spacing
+        int edgePadding = Math.min(16, Math.max(8, duration / 5));
+        int minGap = 8;
+        int safeSpan = Math.max(1, duration - (edgePadding * 2));
         int i = 0, attempts = 0;
 
         while (i < difficulty && attempts++ < 500) {
-            int m = 10 + r.nextInt(Math.max(1, duration - 20));
+            int m = edgePadding + r.nextInt(safeSpan);
             boolean ok = true;
             for (int j = 0; j < i; j++) {
                 if (Math.abs(out[j] - m) < minGap) { ok = false; break; }
@@ -356,7 +361,10 @@ public class CombinerBlockEntity extends BlockEntity implements NamedScreenHandl
         }
 
         // fallback if RNG spacing couldn't fill (rare)
-        while (i < difficulty) out[i++] = 10 + (i * (duration - 20) / Math.max(1, difficulty));
+        while (i < difficulty) {
+            out[i] = edgePadding + ((i + 1) * safeSpan / (difficulty + 1));
+            i++;
+        }
 
         java.util.Arrays.sort(out);
         return out;

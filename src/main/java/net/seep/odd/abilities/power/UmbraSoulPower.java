@@ -16,10 +16,10 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 
-import net.seep.odd.abilities.data.CooldownState;
-import net.seep.odd.abilities.net.UmbraNet;
 import net.seep.odd.abilities.astral.OddAirSwim;
 import net.seep.odd.abilities.astral.OddUmbraPhase;
+import net.seep.odd.abilities.data.CooldownState;
+import net.seep.odd.abilities.net.UmbraNet;
 import net.seep.odd.abilities.umbra.entity.ShadowKunaiEntity;
 import net.seep.odd.sound.ModSounds;
 import net.seep.odd.status.ModStatusEffects;
@@ -49,6 +49,32 @@ public final class UmbraSoulPower implements Power, ChargedPower {
     }
 
     @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "INTO THE SHADOWS";
+            case "secondary" -> "SHADOW KUNAI";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+    @Override
+    public String longDescription() {
+        return """
+               Fade in and out of combat by turning your body itself into shadow.
+
+               """;
+    }
+
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Enter a shadowy state where you swim through the air and phase through blocks.";
+            case "secondary" -> "Throw a shadowy kunai that teleports you to the location it hits, or swaps you out with an entity if the kunai strikes them directly.";
+            default -> "";
+        };
+    }
+
+    @Override
     public boolean hasSlot(String slot) {
         return "primary".equals(slot) || "secondary".equals(slot);
     }
@@ -56,7 +82,7 @@ public final class UmbraSoulPower implements Power, ChargedPower {
     /* ===================== SECONDARY CHARGES (kunai) ===================== */
 
     private static final int  KUNAI_MAX_CHARGES     = 2;
-    private static final int  KUNAI_RECHARGE_TICKS  = 20 * 6;   // 6s per charge
+    private static final int  KUNAI_RECHARGE_TICKS  = 20 * 6;
     private static final String KUNAI_CHARGE_KEY    = "umbra_soul#secondary";
 
     @Override public boolean usesCharges(String slot) { return "secondary".equals(slot); }
@@ -73,7 +99,7 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         if (fullAt <= now) return KUNAI_MAX_CHARGES;
 
         long debt = fullAt - now;
-        int missing = (int) ((debt + KUNAI_RECHARGE_TICKS - 1L) / (long)KUNAI_RECHARGE_TICKS);
+        int missing = (int) ((debt + KUNAI_RECHARGE_TICKS - 1L) / (long) KUNAI_RECHARGE_TICKS);
         int charges = KUNAI_MAX_CHARGES - missing;
         return Math.max(0, Math.min(KUNAI_MAX_CHARGES, charges));
     }
@@ -99,19 +125,22 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         long fullAt = cds.getLastUse(p.getUuid(), KUNAI_CHARGE_KEY);
 
         cds.setLastUse(p.getUuid(), KUNAI_CHARGE_KEY, Math.max(now, fullAt - KUNAI_RECHARGE_TICKS));
-
     }
 
     /* ===================== KUNAI BEHAVIOR ===================== */
 
     public static final int   KUNAI_MAX_LIFE_TICKS = 20 * 2;
-    public static final float KUNAI_SPEED         = 2.8f;
-    public static final float KUNAI_DAMAGE        = 2.0f;
-    public static final float SWAP_MAX_HEALTH     = 100.0f;
+    public static final float KUNAI_SPEED          = 2.8f;
+    public static final float KUNAI_DAMAGE         = 2.0f;
+    public static final float SWAP_MAX_HEALTH      = 100.0f;
 
     public static boolean canSwapWith(LivingEntity target) {
         if (target instanceof ServerPlayerEntity) return true;
         return target.getMaxHealth() <= SWAP_MAX_HEALTH;
+    }
+
+    public static boolean isAbilityInvisible(LivingEntity entity) {
+        return entity instanceof OddUmbraPhase phase && phase.oddities$isUmbraPhasing();
     }
 
     /* ========================= POWERLESS gating ========================= */
@@ -137,7 +166,7 @@ public final class UmbraSoulPower implements Power, ChargedPower {
     /* ===================== SHADOW CONFIG (primary) ===================== */
 
     private static final int MAX_ENERGY      = 20 * 15;
-    private static final int DRAIN_PER_TICK  = 12;
+    private static final int DRAIN_PER_TICK  = 8;
     private static final int REGEN_PER_TICK  = 4;
     private static final int HUD_SYNC_PERIOD = 0;
 
@@ -165,6 +194,18 @@ public final class UmbraSoulPower implements Power, ChargedPower {
 
     private static final Map<UUID, State> STATES = new HashMap<>();
     private static @NotNull State S(ServerPlayerEntity p) { return STATES.computeIfAbsent(p.getUuid(), k -> new State()); }
+
+    @Override
+    public void forceDisable(ServerPlayerEntity player) {
+        State s = S(player);
+        if (s.shadowActive) {
+            stopShadow(player, s);
+            return;
+        }
+
+        if (player instanceof OddAirSwim air) air.oddities$setAirSwim(false);
+        if (player instanceof OddUmbraPhase ph) ph.oddities$setUmbraPhasing(false);
+    }
 
     /* ===================== PRIMARY (SHADOW) ===================== */
 
@@ -196,7 +237,6 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         p.setNoGravity(true);
         p.fallDistance = 0;
 
-        // ✅ sound when entering shadow
         p.getWorld().playSound(null, p.getBlockPos(), ModSounds.UMBRA_SHADOW_SHIFT, SoundCategory.PLAYERS, 0.9f, 1.0f);
 
         s.shadowActive = true;
@@ -217,7 +257,6 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         p.setInvulnerable(false);
         p.fallDistance = 0;
 
-        // ✅ same sound, different pitch when exiting
         p.getWorld().playSound(null, p.getBlockPos(), ModSounds.UMBRA_SHADOW_SHIFT, SoundCategory.PLAYERS, 0.9f, 0.72f);
 
         s.shadowActive = false;
@@ -230,11 +269,7 @@ public final class UmbraSoulPower implements Power, ChargedPower {
     public void activateSecondary(ServerPlayerEntity player) {
         if (blockIfPowerless(player)) return;
 
-        State s = S(player);
-        if (s.shadowActive) return;
-
         if (!spendKunaiCharge(player)) {
-
             return;
         }
 
@@ -250,16 +285,24 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         sw.spawnEntity(kunai);
 
         player.swingHand(Hand.MAIN_HAND, true);
-        sw.playSound(null, player.getBlockPos(), net.seep.odd.sound.ModSounds.SHADOW_KUNAI_THROW,
-                SoundCategory.PLAYERS, 0.90f, 0.50f);
-
-
+        sw.playSound(
+                null,
+                player.getBlockPos(),
+                ModSounds.SHADOW_KUNAI_THROW,
+                SoundCategory.PLAYERS,
+                0.90f,
+                0.50f
+        );
     }
 
     /* ===================== SERVER TICK ===================== */
 
     public static void serverTick(ServerPlayerEntity p) {
         State s = S(p);
+
+        if (!s.shadowActive && p instanceof OddUmbraPhase ph && ph.oddities$isUmbraPhasing()) {
+            ph.oddities$setUmbraPhasing(false);
+        }
 
         if (!s.shadowActive && s.pendingShadowGravityRestore) {
             if (s.shadowGravityDelayTicks > 0) {
@@ -274,6 +317,7 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         if (s.shadowActive) {
             s.energy = Math.max(0, s.energy - DRAIN_PER_TICK);
 
+            if (p instanceof OddUmbraPhase ph) ph.oddities$setUmbraPhasing(true);
             p.setInvisible(true);
             p.setNoGravity(true);
             p.setInvulnerable(true);
@@ -289,10 +333,8 @@ public final class UmbraSoulPower implements Power, ChargedPower {
         } else {
             if (s.shadowRegenDelayTicks > 0) {
                 s.shadowRegenDelayTicks--;
-            } else {
-                if (p.isOnGround() || !p.isFallFlying()) {
-                    s.energy = Math.min(MAX_ENERGY, s.energy + REGEN_PER_TICK);
-                }
+            } else if (p.isOnGround() || !p.isFallFlying()) {
+                s.energy = Math.min(MAX_ENERGY, s.energy + REGEN_PER_TICK);
             }
         }
 

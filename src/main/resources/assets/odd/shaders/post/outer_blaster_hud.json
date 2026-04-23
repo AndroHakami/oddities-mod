@@ -1,0 +1,16 @@
+
+{
+  "targets": [ "outer_blaster_hud_target" ],
+  "passes": [
+    {
+      "name": "odd:outer_blaster_hud",
+      "intarget": "minecraft:main",
+      "outtarget": "outer_blaster_hud_target"
+    },
+    {
+      "name": "blit",
+      "intarget": "outer_blaster_hud_target",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

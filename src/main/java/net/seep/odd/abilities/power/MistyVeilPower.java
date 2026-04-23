@@ -62,9 +62,8 @@ public final class MistyVeilPower implements Power {
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary" -> "Condense a mist to glide through the air by holding space mid-air [Press ability button to toggle ON/OFF]";
-            case "secondary" -> "Condense a swifty and regenerative bubble on an ally, protecting them from dangerous prey for 20 seconds.";
-            case "overview" -> "Mist Veil hides you from hostile entities. Glide with Mist Steps or protect someone with your Mist Bubble!";
+            case "primary" -> "Condense a mist to glide through the air.";
+            case "secondary" -> "Condense a misty bubble on the targeted entity, providing them a temporary mist veil along side regeneration and speed!";
             default -> "Misty Veil";
         };
     }
@@ -72,8 +71,7 @@ public final class MistyVeilPower implements Power {
     @Override
     public String longDescription() {
         return """
-           Mist Veil hides you from hostile entities (as a status effect).
-           Glide with mist steps or protect someone else with your Mist Bubble!
+The Mist Veil protects you from hostile mobs vision, protect your allies and navigate the world with ease using mist powered abilites!
            """;
     }
 

@@ -12,6 +12,214 @@
       "odd:shy_guy_rage"
     ]
   },
+  "core_tick": {
+    "subtitle": "odd.core_tick",
+    "sounds": [
+      "odd:core_tick"
+    ]
+  },
+  "core_fast_tick": {
+    "subtitle": "odd.core_fast_tick",
+    "sounds": [
+      "odd:core_fast_tick"
+    ]
+  },
+  "pact_link": {
+    "subtitle": "odd.pact_link",
+    "sounds": [
+      "odd:pact_link"
+    ]
+  },
+  "shift_clap": {
+    "subtitle": "odd.shift_clap",
+    "sounds": [
+      "odd:shift_clap"
+    ]
+  },
+  "pact_teleport": {
+    "subtitle": "odd.pact_teleport",
+    "sounds": [
+      "odd:pact_teleport"
+    ]
+  },
+  "zero_bounce": {
+    "subtitle": "odd.zero_bounce",
+    "sounds": [
+      "odd:zero_bounce"
+    ]
+  },
+  "zero_tick": {
+    "subtitle": "odd.zero_tick",
+    "sounds": [
+      "odd:zero_tick"
+    ]
+  },
+  "blockade_stomp": {
+    "subtitle": "odd.blockade_stomp",
+    "sounds": [
+      "odd:blockade_stomp"
+    ]
+  },
+  "fist_punch": {
+    "subtitle": "odd.fist_punch",
+    "sounds": [
+      "odd:fist_punch"
+    ]
+  },
+  "fist_punch_strong": {
+    "subtitle": "odd.fist_punch_strong",
+    "sounds": [
+      "odd:fist_punch_strong"
+    ]
+  },
+  "him": {
+    "subtitle": "odd.him",
+    "sounds": [
+      "odd:him"
+    ]
+  },
+  "fist_punch_strong_charge": {
+    "subtitle": "odd.fist_punch_strong_charge",
+    "sounds": [
+      "odd:fist_punch_strong_charge"
+    ]
+  },
+  "ufo_slice": {
+    "subtitle": "odd.ufo_slice",
+    "sounds": [
+      "odd:ufo_slice"
+    ]
+  },
+  "quest_screen": {
+    "subtitle": "odd.quest_screen",
+    "sounds": [
+      {
+        "name": "odd:quest_screen",
+        "stream": true
+      }
+    ]
+  },
+  "quest_silly": {
+    "subtitle": "odd.quest_silly",
+    "sounds": [
+      {
+        "name": "odd:quest_silly",
+        "stream": true
+      }
+    ]
+  },
+  "quest_him": {
+    "subtitle": "odd.quest_him",
+    "sounds": [
+      {
+        "name": "odd:quest_him",
+        "stream": true
+      }
+    ]
+  },
+  "quest_run": {
+    "subtitle": "odd.quest_run",
+    "sounds": [
+      {
+        "name": "odd:quest_run",
+        "stream": true
+      }
+    ]
+  },
+  "countdown": {
+    "subtitle": "odd.countdown",
+    "sounds": [
+      "odd:countdown"
+    ]
+  },
+  "quest_fight": {
+    "subtitle": "odd.quest_fight",
+    "sounds": [
+      {
+        "name": "odd:quest_fight",
+        "stream": true
+      }
+    ]
+  },
+
+  "mech_walk": {
+    "subtitle": "odd.mech_walk",
+    "sounds": [
+      "odd:mech_walk"
+    ]
+  },
+  "mech_run": {
+    "subtitle": "odd.mech_run",
+    "sounds": [
+      "odd:mech_run"
+    ]
+  },
+  "mech_spawn": {
+    "subtitle": "odd.mech_spawn",
+    "sounds": [
+      "odd:mech_spawn"
+    ]
+  },
+  "mech_extender_out": {
+    "subtitle": "odd.mech_extender_out",
+    "sounds": [
+      "odd:mech_extender_out"
+    ]
+  },
+  "mech_laser_charge": {
+    "subtitle": "odd.mech_laser_charge",
+    "sounds": [
+      "odd:mech_laser_charge"
+    ]
+  },
+  "mech_laser_loop": {
+    "subtitle": "odd.mech_laser_loop",
+    "sounds": [
+      "odd:mech_laser_loop"
+    ]
+  },
+  "outer_blaster_overheat": {
+    "subtitle": "odd.outer_blaster_overheat",
+    "sounds": [
+      "odd:outer_blaster_overheat"
+    ]
+  },
+  "outer_blaster_fire": {
+    "subtitle": "odd.outer_blaster_fire",
+    "sounds": [
+      "odd:outer_blaster_fire"
+    ]
+  },
+  "outer_blaster_explosion": {
+    "subtitle": "odd.outer_blaster_explosion",
+    "sounds": [
+      "odd:outer_blaster_explosion"
+    ]
+  },
+  "mech_left_cannon_fire": {
+    "subtitle": "odd.mech_left_cannon_fire",
+    "sounds": [
+      "odd:mech_left_cannon_fire"
+    ]
+  },
+  "mech_right_cannon_fire": {
+    "subtitle": "odd.mech_right_cannon_fire",
+    "sounds": [
+      "odd:mech_right_cannon_fire"
+    ]
+  },
+  "alien_bomb_falling": {
+    "subtitle": "odd.alien_bomb_falling",
+    "sounds": [
+      "odd:alien_bomb_falling"
+    ]
+  },
+  "alien_bomb_explosion": {
+    "subtitle": "odd.alien_bomb_explosion",
+    "sounds": [
+      "odd:alien_bomb_explosion"
+    ]
+  },
   "mask_insert": {
     "subtitle": "odd.mask_insert",
     "sounds": [
@@ -532,14 +740,62 @@
       "odd:alien_invasion"
     ]
   },
+  "alien_invasion_2": {
+    "subtitle": "odd.alien_invasion_2",
+    "sounds": [
+      "odd:alien_invasion_2"
+    ]
+  },
+  "alien_invasion_3": {
+    "subtitle": "odd.alien_invasion_3",
+    "sounds": [
+      "odd:alien_invasion_3"
+    ]
+  },
+  "alien_invasion_boss": {
+    "subtitle": "odd.alien_invasion_boss",
+    "sounds": [
+      "odd:alien_invasion_boss"
+    ]
+  },
   "drill_charge": {
-    "subtitle": "drill_charge",
+    "subtitle": "odd.drill_charge",
     "sounds": [
       "odd:drill_charge"
     ]
   },
+  "granny": {
+    "subtitle": "odd.granny",
+    "sounds": [
+      "odd:granny"
+    ]
+  },
+  "granny_theme": {
+    "subtitle": "odd.granny_theme",
+    "sounds": [
+      "odd:granny_theme"
+    ]
+  },
+  "granny_alert": {
+    "subtitle": "odd.granny_alert",
+    "sounds": [
+      "odd:granny_alert"
+    ]
+  },
+  "granny_caught": {
+    "subtitle": "odd.granny_caught",
+    "sounds": [
+      "odd:granny_caught"
+    ]
+  },
+  "bell_ring": {
+    "subtitle": "odd.bell_ring",
+    "sounds": [
+      "odd:bell_ring"
+    ]
+  },
   "drill_ready": {
-    "subtitle": "drill_ready",
+    "subtitle": "odd.drill_ready",
     "sounds": [
       "odd:drill_ready"
     ]

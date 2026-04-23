@@ -5,11 +5,23 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.PillarBlock;
+import net.minecraft.server.world.ServerWorld;
+import net.minecraft.structure.StructurePlacementData;
+import net.minecraft.structure.StructureTemplate;
+import net.minecraft.structure.StructureTemplateManager;
+import net.minecraft.util.BlockMirror;
+import net.minecraft.util.BlockRotation;
+import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3i;
 import net.minecraft.world.ChunkRegion;
 import net.minecraft.world.HeightLimitView;
 import net.minecraft.world.Heightmap;
@@ -26,6 +38,7 @@ import net.minecraft.world.gen.noise.NoiseConfig;
 import net.seep.odd.block.ModBlocks;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -41,6 +54,11 @@ import java.util.concurrent.Executor;
  * - Rare single-block replacements (only when placing a shelf):
  *   - quartz (semi-rare)
  *   - diamond (very rare)
+ *
+ * Librarian alcoves:
+ * - Template id: odd:librarian_area
+ * - Dropped into shelf walls, flush with the facade.
+ * - Tuning is intentionally exposed in the LIBRARIAN_* constants below.
  */
 public final class AtheneumChunkGenerator extends ChunkGenerator {
 
@@ -53,6 +71,9 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
 
     public static final Codec<AtheneumChunkGenerator> CODEC = CONFIG_CODEC.codec();
 
+    private static final Identifier LIBRARIAN_AREA_ID = new Identifier("odd", "librarian_area");
+    private static final long LIBRARIAN_AREA_SALT = 0x4C49425241524941L; // "LIBRARIA"
+
     private final long seed;
 
     // ======== constants ========
@@ -62,6 +83,25 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
 
     // Macro maze cell size
     private static final int CELL = 12;
+
+    /* ===================== librarian area tuning =====================
+     * Make these bigger/smaller to control how often the structure appears.
+     *
+     * SPACING_CHUNKS  = minimum broad spacing between spawn cells.
+     * CHANCE          = 1 in N spawn cells will actually try to place one.
+     * SEARCH_ATTEMPTS = how hard a chosen cell searches for a valid shelf wall.
+     */
+    private static final int LIBRARIAN_AREA_SPACING_CHUNKS = 7;
+    private static final int LIBRARIAN_AREA_CHANCE = 2; // 1 in 2 cells
+    private static final int LIBRARIAN_AREA_CELL_MARGIN_BLOCKS = 16;
+    private static final int LIBRARIAN_AREA_SEARCH_RADIUS = 18;
+    private static final int LIBRARIAN_AREA_SEARCH_ATTEMPTS = 96;
+    private static final int LIBRARIAN_AREA_FRONT_CLEARANCE = 3;
+
+    private static final int LIBRARIAN_AREA_WIDTH = 7;
+    private static final int LIBRARIAN_AREA_DEPTH = 5;
+    private static final int LIBRARIAN_AREA_HEIGHT = 5;
+    private static final int LIBRARIAN_AREA_HALF_WIDTH = LIBRARIAN_AREA_WIDTH / 2;
 
     public AtheneumChunkGenerator(BiomeSource biomeSource, long seed) {
         super(biomeSource);
@@ -92,7 +132,12 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
     }
 
     @Override public int getSeaLevel() { return 0; }
-    @Override public void buildSurface(ChunkRegion region, StructureAccessor sa, NoiseConfig nc, Chunk chunk) {}
+
+    @Override
+    public void buildSurface(ChunkRegion region, StructureAccessor sa, NoiseConfig nc, Chunk chunk) {
+        placeLibrarianAreas(region, chunk);
+    }
+
     @Override public void populateEntities(ChunkRegion region) {}
 
     @Override public int getMinimumY() { return -64; }
@@ -123,6 +168,18 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
             this.open = open;
             this.inRoom = inRoom;
             this.inCorridor = inCorridor;
+        }
+    }
+
+    private static final class LibrarianPlacement {
+        final BlockPos origin;
+        final BlockRotation rotation;
+        final BlockBox boundingBox;
+
+        LibrarianPlacement(BlockPos origin, BlockRotation rotation, BlockBox boundingBox) {
+            this.origin = origin;
+            this.rotation = rotation;
+            this.boundingBox = boundingBox;
         }
     }
 
@@ -203,6 +260,189 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
         if (openW) return Direction.WEST;
         if (openS) return Direction.SOUTH;
         return Direction.NORTH;
+    }
+
+    /* ===================== librarian area placement ===================== */
+
+    private void placeLibrarianAreas(ChunkRegion region, Chunk chunk) {
+        ServerWorld serverWorld = region.toServerWorld();
+        StructureTemplateManager manager = serverWorld.getServer().getStructureTemplateManager();
+        Optional<StructureTemplate> optional = manager.getTemplate(LIBRARIAN_AREA_ID);
+        if (optional.isEmpty()) return;
+
+        StructureTemplate template = optional.get();
+        ChunkPos chunkPos = chunk.getPos();
+        int bottomY = chunk.getBottomY();
+
+        BlockBox chunkBox = new BlockBox(
+                chunkPos.getStartX(),
+                bottomY,
+                chunkPos.getStartZ(),
+                chunkPos.getEndX(),
+                bottomY + getWorldHeight() - 1,
+                chunkPos.getEndZ()
+        );
+
+        int cellX0 = Math.floorDiv(chunkPos.x, LIBRARIAN_AREA_SPACING_CHUNKS) - 1;
+        int cellX1 = Math.floorDiv(chunkPos.x, LIBRARIAN_AREA_SPACING_CHUNKS) + 1;
+        int cellZ0 = Math.floorDiv(chunkPos.z, LIBRARIAN_AREA_SPACING_CHUNKS) - 1;
+        int cellZ1 = Math.floorDiv(chunkPos.z, LIBRARIAN_AREA_SPACING_CHUNKS) + 1;
+
+        for (int cellX = cellX0; cellX <= cellX1; cellX++) {
+            for (int cellZ = cellZ0; cellZ <= cellZ1; cellZ++) {
+                LibrarianPlacement placement = findLibrarianPlacementForCell(cellX, cellZ, bottomY);
+                if (placement == null || !placement.boundingBox.intersects(chunkBox)) {
+                    continue;
+                }
+
+                StructurePlacementData data = new StructurePlacementData()
+                        .setRotation(placement.rotation)
+                        .setMirror(BlockMirror.NONE)
+                        .setIgnoreEntities(false)
+                        .setUpdateNeighbors(false)
+                        .setBoundingBox(chunkBox);
+
+                template.place(region, placement.origin, BlockPos.ORIGIN, data,
+                        serverWorld.getRandom(), Block.NOTIFY_LISTENERS);
+            }
+        }
+    }
+
+    private LibrarianPlacement findLibrarianPlacementForCell(int cellX, int cellZ, int bottomY) {
+        long cellHash = scrambleId(seed ^ LIBRARIAN_AREA_SALT, cellX * 73471 + cellZ * 193513);
+        if (LIBRARIAN_AREA_CHANCE > 1 && Math.floorMod(cellHash, LIBRARIAN_AREA_CHANCE) != 0L) {
+            return null;
+        }
+
+        int cellSize = LIBRARIAN_AREA_SPACING_CHUNKS * 16;
+        int baseX = cellX * cellSize;
+        int baseZ = cellZ * cellSize;
+        int usable = Math.max(1, cellSize - (LIBRARIAN_AREA_CELL_MARGIN_BLOCKS * 2));
+
+        int centerX = baseX + LIBRARIAN_AREA_CELL_MARGIN_BLOCKS + Math.floorMod((int) (cellHash >>> 11), usable);
+        int centerZ = baseZ + LIBRARIAN_AREA_CELL_MARGIN_BLOCKS + Math.floorMod((int) (cellHash >>> 27), usable);
+
+        int directionOffset = Math.floorMod((int) (cellHash >>> 42), 4);
+        Direction[] order = new Direction[] {
+                horizontalByIndex(directionOffset),
+                horizontalByIndex(directionOffset + 1),
+                horizontalByIndex(directionOffset + 2),
+                horizontalByIndex(directionOffset + 3)
+        };
+
+        for (int attempt = 0; attempt < LIBRARIAN_AREA_SEARCH_ATTEMPTS; attempt++) {
+            long attemptHash = scrambleId(cellHash, 1013 + attempt * 31);
+            int dx = Math.floorMod((int) (attemptHash >>> 7), LIBRARIAN_AREA_SEARCH_RADIUS * 2 + 1) - LIBRARIAN_AREA_SEARCH_RADIUS;
+            int dz = Math.floorMod((int) (attemptHash >>> 21), LIBRARIAN_AREA_SEARCH_RADIUS * 2 + 1) - LIBRARIAN_AREA_SEARCH_RADIUS;
+
+            int x = centerX + dx;
+            int z = centerZ + dz;
+
+            for (Direction face : order) {
+                if (isValidLibrarianFacade(x, z, face)) {
+                    return createLibrarianPlacement(x, z, face, bottomY + BEDROCK_LAYERS);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private LibrarianPlacement createLibrarianPlacement(int facadeCenterX, int facadeCenterZ, Direction face, int floorY) {
+        BlockRotation rotation = rotationForFront(face);
+        Vec3i rotatedFrontCenter = rotateLocalPos(3, 4, rotation, LIBRARIAN_AREA_WIDTH, LIBRARIAN_AREA_DEPTH);
+        Vec3i rotatedSize = rotatedSize(LIBRARIAN_AREA_WIDTH, LIBRARIAN_AREA_HEIGHT, LIBRARIAN_AREA_DEPTH, rotation);
+
+        // Nudge the alcove 1 block upward and 1 block outward so it sits better in the shelf wall.
+        BlockPos origin = new BlockPos(
+                facadeCenterX - rotatedFrontCenter.getX() + face.getOffsetX(),
+                floorY + 1,
+                facadeCenterZ - rotatedFrontCenter.getZ() + face.getOffsetZ()
+        );
+
+        BlockBox box = new BlockBox(
+                origin.getX(),
+                origin.getY(),
+                origin.getZ(),
+                origin.getX() + rotatedSize.getX() - 1,
+                origin.getY() + rotatedSize.getY() - 1,
+                origin.getZ() + rotatedSize.getZ() - 1
+        );
+
+        return new LibrarianPlacement(origin, rotation, box);
+    }
+
+    private boolean isValidLibrarianFacade(int centerX, int centerZ, Direction face) {
+        Direction inward = face.getOpposite();
+        Direction right = face.rotateYClockwise();
+
+        // Need a full 7-wide shelf wall strip to cut into.
+        for (int w = -LIBRARIAN_AREA_HALF_WIDTH; w <= LIBRARIAN_AREA_HALF_WIDTH; w++) {
+            int wallX = centerX + right.getOffsetX() * w;
+            int wallZ = centerZ + right.getOffsetZ() * w;
+            if (isOpen(wallX, wallZ)) {
+                return false;
+            }
+        }
+
+        // Need the whole 5-deep body to be embedded inside the wall mass.
+        for (int d = 1; d < LIBRARIAN_AREA_DEPTH; d++) {
+            for (int w = -LIBRARIAN_AREA_HALF_WIDTH; w <= LIBRARIAN_AREA_HALF_WIDTH; w++) {
+                int bodyX = centerX + right.getOffsetX() * w + inward.getOffsetX() * d;
+                int bodyZ = centerZ + right.getOffsetZ() * w + inward.getOffsetZ() * d;
+                if (isOpen(bodyX, bodyZ)) {
+                    return false;
+                }
+            }
+        }
+
+        // Need open walk space in front so the alcove actually opens into the library.
+        for (int d = 1; d <= LIBRARIAN_AREA_FRONT_CLEARANCE; d++) {
+            for (int w = -2; w <= 2; w++) {
+                int frontX = centerX + right.getOffsetX() * w + face.getOffsetX() * d;
+                int frontZ = centerZ + right.getOffsetZ() * w + face.getOffsetZ() * d;
+                if (!isOpen(frontX, frontZ)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static Direction horizontalByIndex(int index) {
+        return switch (Math.floorMod(index, 4)) {
+            case 0 -> Direction.NORTH;
+            case 1 -> Direction.EAST;
+            case 2 -> Direction.SOUTH;
+            default -> Direction.WEST;
+        };
+    }
+
+    private static BlockRotation rotationForFront(Direction face) {
+        return switch (face) {
+            case SOUTH -> BlockRotation.NONE;
+            case WEST -> BlockRotation.CLOCKWISE_90;
+            case NORTH -> BlockRotation.CLOCKWISE_180;
+            case EAST -> BlockRotation.COUNTERCLOCKWISE_90;
+            default -> BlockRotation.NONE;
+        };
+    }
+
+    private static Vec3i rotateLocalPos(int x, int z, BlockRotation rotation, int sizeX, int sizeZ) {
+        return switch (rotation) {
+            case NONE -> new Vec3i(x, 0, z);
+            case CLOCKWISE_90 -> new Vec3i(sizeZ - 1 - z, 0, x);
+            case CLOCKWISE_180 -> new Vec3i(sizeX - 1 - x, 0, sizeZ - 1 - z);
+            case COUNTERCLOCKWISE_90 -> new Vec3i(z, 0, sizeX - 1 - x);
+        };
+    }
+
+    private static Vec3i rotatedSize(int sizeX, int sizeY, int sizeZ, BlockRotation rotation) {
+        return switch (rotation) {
+            case CLOCKWISE_90, COUNTERCLOCKWISE_90 -> new Vec3i(sizeZ, sizeY, sizeX);
+            default -> new Vec3i(sizeX, sizeY, sizeZ);
+        };
     }
 
     /* ===================== layout / maze ===================== */
@@ -392,10 +632,11 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
         long rr = scrambleId(seed, (int)(x * 911L ^ z * 3571L ^ y * 101L));
 
         // very rare
-        if ((rr & 8191L) == 0L) return ModBlocks.SUSPICIOUS_BOOKSHELF.getDefaultState();
+        if ((rr & 3091L) == 0L) return ModBlocks.SUSPICIOUS_BOOKSHELF.getDefaultState();
 
         // semi-rare
         if ((rr & 511L) == 0L) return ModBlocks.DABLOON_BOOKSHELF.getDefaultState();
+        if ((rr & 911L) == 0L) return ModBlocks.STARRY_BOOKSHELF.getDefaultState();
 
         // default shelf = DREAM_BOOKSHELF
         return ModBlocks.DREAM_BOOKSHELF.getDefaultState();
@@ -409,6 +650,13 @@ public final class AtheneumChunkGenerator extends ChunkGenerator {
     }
 
     private static long scrambleId(long seed, int salt) {
+        long h = seed ^ (salt * 0x9E3779B97F4A7C15L);
+        h ^= (h >>> 30); h *= 0xBF58476D1CE4E5B9L;
+        h ^= (h >>> 27); h *= 0x94D049BB133111EBL;
+        return h ^ (h >>> 31);
+    }
+
+    private static long scrambleId(long seed, long salt) {
         long h = seed ^ (salt * 0x9E3779B97F4A7C15L);
         h ^= (h >>> 30); h *= 0xBF58476D1CE4E5B9L;
         h ^= (h >>> 27); h *= 0x94D049BB133111EBL;

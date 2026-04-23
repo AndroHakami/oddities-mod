@@ -34,7 +34,7 @@ public class FairySparklesParticle extends SpriteBillboardParticle {
         this.gravityStrength = 0.0f;
 
         // Small, light, floaty sparkles
-        this.scale = 0.10f + this.random.nextFloat() * 0.18f;
+        this.scale = 0.05f + this.random.nextFloat() * 0.18f;
         this.maxAge = 14 + this.random.nextInt(14);
 
         // Start translucent

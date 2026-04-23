@@ -101,7 +101,7 @@ public final class MuteBladeHandler {
             target.velocityModified = true;
 
             // a bit of magic damage (tuned)
-            target.damage(sw.getDamageSources().magic(), 4.0f);
+            target.damage(sw.getDamageSources().magic(), 7.0f);
 
             return ActionResult.PASS;
         });

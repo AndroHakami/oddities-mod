@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.particle.ParticleTypes;
@@ -22,6 +23,7 @@ import net.minecraft.world.RaycastContext;
 import net.minecraft.world.World;
 
 import net.seep.odd.abilities.looker.LookerNet;
+import net.seep.odd.abilities.looker.OddLookerInvisibility;
 import net.seep.odd.sound.ModSounds;
 import net.seep.odd.status.ModStatusEffects;
 
@@ -39,11 +41,9 @@ public final class LookerPower implements Power, ChargedPower {
     private static final int    BLINK_MAX_CHARGES    = 3;
     private static final int    BLINK_RECHARGE_T     = 20 * 6;
 
-    private static final int    INVIS_MAX_TICKS      = 20 * 8; // 8s full
-    private static final int    INVIS_DRAIN_PER_T    = 1;      // drain per tick
-    private static final int    INVIS_RECHARGE_PER_T = 1;      // regen per tick
-
-    // ✅ bumped from 12 -> 40 so it won’t “blink off” if any tick path stutters
+    private static final int    INVIS_MAX_TICKS      = 20 * 8;
+    private static final int    INVIS_DRAIN_PER_T    = 1;
+    private static final int    INVIS_RECHARGE_PER_T = 1;
     private static final int    INVIS_PULSE_TICKS    = 40;
 
     private static final float  HITBOX_HEIGHT_SCALE  = 1.25f;
@@ -69,14 +69,25 @@ public final class LookerPower implements Power, ChargedPower {
         };
     }
 
-    @Override public String longDescription() {
-        return "Blink a short distance (charges). Toggle invisibility on a draining meter. Hitbox height +25% (visual height unchanged).";
+    @Override public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary"   -> "Teleport in the direction you are looking.";
+            case "secondary" -> "Toggle to turn truly invisible, hiding armour.";
+            default          -> "Looker";
+        };
     }
 
-    @Override public String slotLongDescription(String slot) {
-        return "primary".equals(slot)
-                ? "Blink: 5 blocks. 3 charges, 6s recharge each."
-                : "Invisibility: toggle ON/OFF; drains meter and recharges when off.";
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "DONT BLINK";
+            case "secondary" -> "EYES CLOSED";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+    @Override public String longDescription() {
+        return "Tal, dark, and... handsome?, you are hard to miss, teleport away from the gazes and sneak behind unsuspecting players.";
     }
 
     /* =================== POWERLESS override =================== */
@@ -104,12 +115,10 @@ public final class LookerPower implements Power, ChargedPower {
 
     private static boolean tickRegistered = false;
 
-    /** Call this at least once during common init (we call it from installPersistHooks). */
     public static void ensureTickHook() {
         if (tickRegistered) return;
         tickRegistered = true;
 
-        // also ensure net C2S exists
         LookerNet.registerC2S();
 
         ServerTickEvents.END_SERVER_TICK.register((MinecraftServer server) -> {
@@ -127,8 +136,8 @@ public final class LookerPower implements Power, ChargedPower {
 
     public static void onUnassigned(ServerPlayerEntity player) {
         setHitboxHeight(player, 1.0f);
-        St st = ST.get(player.getUuid());
-        if (st != null && st.invisOn) setInvisible(player, st, false);
+        forceStop(player);
+        clearTrackedInvisibility(player);
     }
 
     private static void setHitboxHeight(ServerPlayerEntity p, float factor) {
@@ -139,23 +148,38 @@ public final class LookerPower implements Power, ChargedPower {
         p.calculateDimensions();
     }
 
-    /** Call once during common init. */
     public static void installPersistHooks() {
         ensureTickHook();
 
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayerEntity p = handler.player;
             if (hasLooker(p)) setHitboxHeight(p, HITBOX_HEIGHT_SCALE);
+            if (!hasLooker(p)) clearTrackedInvisibility(p);
         });
 
         ServerPlayerEvents.AFTER_RESPAWN.register((oldP, newP, alive) -> {
             if (hasLooker(newP)) setHitboxHeight(newP, HITBOX_HEIGHT_SCALE);
+            clearTrackedInvisibility(newP);
         });
     }
 
     private static boolean hasLooker(ServerPlayerEntity p) {
         String id = net.seep.odd.abilities.PowerAPI.get(p);
         return Powers.get(id) instanceof LookerPower;
+    }
+
+    public static boolean isAbilityInvisible(LivingEntity entity) {
+        return entity instanceof OddLookerInvisibility looker && looker.oddities$isLookerInvisible();
+    }
+
+    private static void setTrackedInvisibility(ServerPlayerEntity p, boolean on) {
+        if (p instanceof OddLookerInvisibility looker) {
+            looker.oddities$setLookerInvisible(on);
+        }
+    }
+
+    private static void clearTrackedInvisibility(ServerPlayerEntity p) {
+        setTrackedInvisibility(p, false);
     }
 
     /* ---------- charges ---------- */
@@ -197,7 +221,6 @@ public final class LookerPower implements Power, ChargedPower {
             pos = pos.add(dir.multiply(-0.25));
         }
 
-        // black dust instead of portal
         if (!w.isClient) {
             var sw = (net.minecraft.server.world.ServerWorld) w;
             Vec3d from = p.getPos().add(0, p.getHeight() * 0.5, 0);
@@ -221,14 +244,12 @@ public final class LookerPower implements Power, ChargedPower {
             warnOncePerSec(p, "§cYou are powerless.");
             return;
         }
-        netToggleInvis(p); // use the same path as C2S
+        netToggleInvis(p);
     }
 
-    /** Called by C2S packet OR server-side ability activation. */
     public static void netToggleInvis(ServerPlayerEntity p) {
         ensureTickHook();
 
-        // must be active looker to toggle (prevents packet abuse)
         if (!hasLooker(p)) return;
 
         St st = S(p);
@@ -247,14 +268,16 @@ public final class LookerPower implements Power, ChargedPower {
 
     private static void setInvisible(ServerPlayerEntity p, St st, boolean on) {
         st.invisOn = on;
+        setTrackedInvisibility(p, on);
+
         if (on) {
             applyShortInvis(p);
             p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BELL_USE, SoundCategory.PLAYERS, 0.7f, 1.8f);
         } else {
             p.removeStatusEffect(StatusEffects.INVISIBILITY);
             p.getWorld().playSound(null, p.getBlockPos(), SoundEvents.BLOCK_BELL_USE, SoundCategory.PLAYERS, 0.6f, 0.6f);
-
         }
+
         LookerNet.sendOverlay(p, on, st.invisMeter, INVIS_MAX_TICKS);
     }
 
@@ -264,18 +287,27 @@ public final class LookerPower implements Power, ChargedPower {
 
     /* ---------- server tick: drain/regen ---------- */
     public static void serverTick(ServerPlayerEntity p) {
-        // Only tick while Looker is the active power
         String id = net.seep.odd.abilities.PowerAPI.get(p);
-        if (!(Powers.get(id) instanceof LookerPower)) return;
-
+        boolean activeLooker = Powers.get(id) instanceof LookerPower;
         St st = S(p);
+
+        if (!activeLooker) {
+            if (st.invisOn) {
+                setInvisible(p, st, false);
+            } else {
+                clearTrackedInvisibility(p);
+            }
+            return;
+        }
 
         if (isPowerless(p)) {
             if (st.invisOn) setInvisible(p, st, false);
+            else clearTrackedInvisibility(p);
             return;
         }
 
         if (st.invisOn) {
+            setTrackedInvisibility(p, true);
             applyShortInvis(p);
 
             st.invisMeter = Math.max(0, st.invisMeter - INVIS_DRAIN_PER_T);
@@ -285,15 +317,18 @@ public final class LookerPower implements Power, ChargedPower {
                 LookerNet.sendOverlay(p, true, st.invisMeter, INVIS_MAX_TICKS);
             }
         } else {
+            clearTrackedInvisibility(p);
             st.invisMeter = Math.min(INVIS_MAX_TICKS, st.invisMeter + INVIS_RECHARGE_PER_T);
         }
     }
 
-    /* ---------- helper for power swaps ---------- */
     public static void forceStop(ServerPlayerEntity p) {
         ensureTickHook();
         St st = S(p);
         if (st.invisOn) setInvisible(p, st, false);
-        else LookerNet.sendOverlay(p, false, st.invisMeter, INVIS_MAX_TICKS);
+        else {
+            clearTrackedInvisibility(p);
+            LookerNet.sendOverlay(p, false, st.invisMeter, INVIS_MAX_TICKS);
+        }
     }
 }

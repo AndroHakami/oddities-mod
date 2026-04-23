@@ -34,14 +34,14 @@ public final class OwlPower implements Power {
 
     // ===== Flight tuning =====
     public static final int   FLIGHT_METER_MAX_TICKS       = 10 * 10;  // 10s
-    public static final float FLIGHT_DRAIN_PER_TICK        = 1.0f;
+    public static final float FLIGHT_DRAIN_PER_TICK        = 0.7f;
     public static final float FLIGHT_RECHARGE_PER_TICK     = 0.35f;
 
-    public static final float FLIGHT_PUSH_PER_TICK         = 0.060f;   // slightly stronger
+    public static final float FLIGHT_PUSH_PER_TICK         = 0.090f;   // slightly stronger
     public static final double FLIGHT_MAX_HORIZ_SPEED      = 1.9;      // horizontal cap (NOT total cap)
 
     // NEW: climb authority (this is what makes “fly up” feel powered)
-    private static final double FLIGHT_LIFT_BASE           = 0.020;    // always helps a bit
+    private static final double FLIGHT_LIFT_BASE           = 0.040;    // always helps a bit
     private static final double FLIGHT_LIFT_LOOK_SCALE     = 0.095;    // extra lift when looking up
     private static final double FLIGHT_SINK_FLOOR          = -0.30;    // don’t sink faster than this while powered
     private static final double FLIGHT_MAX_UP              = 0.85;     // max upward velocity cap
@@ -87,22 +87,30 @@ public final class OwlPower implements Power {
             default          -> new Identifier("odd", "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override
+    public String longDescription() {
+        return "Fly across the land and strike opponents from above, nothing hides from the owl's gaze!";
+    }
 
     @Override
-    public String slotLongDescription(String slot) {
+    public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" ->
-                    "TOGGLE: Sonar vision. While ON: pulse wave on enable and show living entities within 100m.";
-            case "secondary" ->
-                    "TOGGLE: Owl Flight ENABLE/DISABLE. When disabled you cannot start Owl flight (and it cancels if active).";
-            default -> "Owl";
+            case "primary" -> "NATURAL SENSES";
+            case "secondary" -> "READY WINGS";
+            default -> Power.super.slotTitle(slot);
         };
     }
 
     @Override
-    public String longDescription() {
-        return "Owl: powered flight + meter (jump to start/cancel) and a sonar-vision mode.";
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Enter a focus mode to see nearby entities through walls.";
+            case "secondary" -> "Toggle on your flight, press space once while midair to start flying.";
+            default -> "Owl";
+        };
     }
+
+
 
     public static boolean hasOwl(PlayerEntity player) {
         if (!(player instanceof ServerPlayerEntity sp)) return false;

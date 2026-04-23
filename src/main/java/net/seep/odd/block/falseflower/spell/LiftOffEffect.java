@@ -8,7 +8,9 @@ import net.minecraft.particle.ParticleTypes;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.util.math.*;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Vec3d;
 import net.seep.odd.block.falseflower.FalseFlowerBlockEntity;
 
 public final class LiftOffEffect implements FalseFlowerSpellEffect {
@@ -19,8 +21,8 @@ public final class LiftOffEffect implements FalseFlowerSpellEffect {
         for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, box, Entity::isAlive)) {
             if (!FalseFlowerSpellUtil.insideSphere(e.getPos(), c, R)) continue;
 
-            e.addVelocity(0.0, 1.65, 0.0);
-            e.velocityDirty = true;
+            FalseFlowerSpellUtil.addVelocitySafe(e, 0.0, 1.65, 0.0);
+            e.fallDistance = 0.0f;
 
             w.spawnParticles(ParticleTypes.CLOUD,
                     e.getX(), e.getY(), e.getZ(),

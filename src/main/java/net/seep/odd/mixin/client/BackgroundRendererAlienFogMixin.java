@@ -27,7 +27,7 @@ public abstract class BackgroundRendererAlienFogMixin {
         RenderSystem.setShaderFogColor(0.01f, 0.012f, 0.018f, 1.0f);
 
         // tighter fog distances for “no atmosphere” / invasion vibe
-        float end = Math.max(28.0f, viewDistance * 0.45f);
+        float end = Math.max(28.0f, viewDistance * 0.95f);
         RenderSystem.setShaderFogStart(0.0f);
         RenderSystem.setShaderFogEnd(end);
     }

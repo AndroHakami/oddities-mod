@@ -23,7 +23,7 @@ public final class ArtificerCondenserRegistry {
 
     // ==== instances (common-safe) ====
     public static final Block CONDENSER_BLOCK = new CondenserBlock(
-            FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).strength(3.0f).requiresTool().nonOpaque()
+            FabricBlockSettings.copyOf(Blocks.IRON_BLOCK).strength(1.0f).requiresTool().nonOpaque()
     );
     public static final BlockItem CONDENSER_ITEM = new BlockItem(CONDENSER_BLOCK, new Item.Settings());
 

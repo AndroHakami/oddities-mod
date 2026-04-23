@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["XXX","XVX","XXX"],
+  "key": {
+    "X": { "item": "minecraft:copper_block" },
+    "V": { "item": "create:cogwheel" }
+  },
+  "result": { "item": "odd:condenser", "count": 1 }
+}

@@ -79,7 +79,7 @@ public final class SunPower implements Power, DeferredCooldownPower {
 
     @Override
     public String longDescription() {
-        return "Charge sunlight while under the open daytime sky. Primary toggles a giant radiant form. Secondary holds and throws a growing pocket sun.";
+        return "Child of the sun, charge sunlight while under the open daytime sky.";
     }
 
     @Override
@@ -95,7 +95,7 @@ public final class SunPower implements Power, DeferredCooldownPower {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" -> "Toggle a larger empowered form that drains your sunlight bar.";
-            case "secondary" -> "Hold to grow a pocket sun for up to 8 seconds, then throw it on release.";
+            case "secondary" -> "Conjure an expanding sun that grows for up to 8 seconds, then press again to throw it.";
             default -> "Sun";
         };
     }

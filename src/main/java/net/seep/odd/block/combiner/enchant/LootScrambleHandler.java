@@ -25,9 +25,9 @@ public final class LootScrambleHandler {
 
     // ======= CONFIG =======
     /** 0.5% per valuable STACK (not per item-count). */
-    private static final double SPEED_PER_VALUABLE = 0.005;
+    private static final double SPEED_PER_VALUABLE = 0.075;
     /** hard cap so it can’t go insane */
-    private static final double MAX_SPEED_BONUS = 0.25; // 25%
+    private static final double MAX_SPEED_BONUS = 0.65; // 25%
 
     /** refresh often enough but not every tick */
     private static final int CHECK_EVERY_TICKS = 10;

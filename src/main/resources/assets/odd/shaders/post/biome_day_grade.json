@@ -1,0 +1,15 @@
+{
+  "targets": [ "odd_biome_day_grade" ],
+  "passes": [
+    {
+      "name": "odd:biome_day_grade",
+      "intarget": "minecraft:main",
+      "outtarget": "odd_biome_day_grade"
+    },
+    {
+      "name": "blit",
+      "intarget": "odd_biome_day_grade",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

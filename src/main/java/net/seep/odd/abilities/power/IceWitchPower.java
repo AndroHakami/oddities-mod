@@ -56,14 +56,23 @@ public final class IceWitchPower implements Power {
 
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Hold Jump in mid-air for true Elytra flight (no elytra). Propelled where you look. Consumes mana and auto-stops at 0.";
-            case "secondary" -> "Fire an ice bolt; on impact it plants a chilling sigil that slows and freezes foes.";
+            case "primary"   -> "Toggle flight state, hold space to ride your staff and surge upward!";
+            case "secondary" -> "Fire an ice bolt, on impact creates a chilling sigil that slows and freezes foes.";
             default          -> "Ice Witch";
         };
     }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "COLD PROPULSION";
+            case "secondary" -> "BLIZZARD";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
 
     @Override public String longDescription() {
-        return "Attacks freeze; you have a mana bar. Soar with Elytra physics without an elytra, and fire an ice bolt that plants a damaging frost circle on impact.";
+        return "Manipulate the cold to freeze enemies and surge forward, hit enemies with an empty hand to extinguish their flame!";
     }
 
     /* =================== POWERLESS override =================== */

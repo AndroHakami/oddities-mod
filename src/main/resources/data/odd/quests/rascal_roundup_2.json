@@ -1,0 +1,15 @@
+{
+  "id": "rascal_roundup_2",
+  "title": "Rascal Roundup 2",
+  "description": "The Atheneum is in chaos. Calm 8 rascals and bring them back to the librarian.",
+  "icon": "odd:textures/gui/quest_icons/rascal_roundup.png",
+  "unlockLevel": 1,
+  "sortOrder": 2,
+  "questXp": 2,
+  "music": "odd:quest_silly",
+  "objective": {
+    "type": "calm_return",
+    "entity": "odd:rascal",
+    "count": 8  },
+  "rewards": []
+}

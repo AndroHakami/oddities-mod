@@ -1,8 +1,13 @@
 // src/main/java/net/seep/odd/block/falseflower/spell/FalseFlowerSpellUtil.java
 package net.seep.odd.block.falseflower.spell;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageTypes;
+import net.minecraft.network.packet.s2c.play.EntityVelocityUpdateS2CPacket;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
@@ -42,23 +47,38 @@ public final class FalseFlowerSpellUtil {
         return (r << 16) | (g << 8) | b;
     }
 
-    /** Version-safe magic-ish damage. */
-    public static void damageMagicSafe(ServerWorld w, LivingEntity e, float amt) {
+    /**
+     * Dedicated-server safe magic damage.
+     *
+     * Do NOT use reflection here: reflection method names are not remapped in
+     * production jars, which can make the spell work in dev/client but fail on a
+     * dedicated server.
+     */
+    public static boolean damageMagicSafe(ServerWorld w, LivingEntity e, float amt) {
         try {
-            Object ds = w.getDamageSources();
-            var m = ds.getClass().getMethod("magic");
-            DamageSource src = (DamageSource) m.invoke(ds);
-            e.damage(src, amt);
-            return;
+            DamageSource magic = new DamageSource(
+                    w.getRegistryManager()
+                            .get(RegistryKeys.DAMAGE_TYPE)
+                            .entryOf(DamageTypes.MAGIC)
+            );
+            return e.damage(magic, amt);
         } catch (Throwable ignored) {}
 
         try {
-            Object ds = w.getDamageSources();
-            var m = ds.getClass().getMethod("generic");
-            DamageSource src = (DamageSource) m.invoke(ds);
-            e.damage(src, amt);
+            DamageSource generic = new DamageSource(
+                    w.getRegistryManager()
+                            .get(RegistryKeys.DAMAGE_TYPE)
+                            .entryOf(DamageTypes.GENERIC)
+            );
+            return e.damage(generic, amt);
         } catch (Throwable ignored) {}
+
+        // last-resort fallback so the bullets still work even if damage source creation changes
+        if (e.isInvulnerable()) return false;
+        e.setHealth(Math.max(0.0f, e.getHealth() - amt));
+        return true;
     }
+
     public static boolean insideSphere(Vec3d p, Vec3d center, double radius) {
         return p.squaredDistanceTo(center) <= (radius * radius);
     }
@@ -85,5 +105,18 @@ public final class FalseFlowerSpellUtil {
             Object data = getScaleData.invoke(BASE, e);
             setScale.invoke(data, s);
         } catch (Throwable ignored) {}
+    }
+
+    /**
+     * Applies motion in a way that reliably reaches players as well as mobs.
+     */
+    public static void addVelocitySafe(Entity e, double x, double y, double z) {
+        e.setVelocity(e.getVelocity().add(x, y, z));
+        e.velocityDirty = true;
+        e.velocityModified = true;
+
+        if (e instanceof ServerPlayerEntity sp) {
+            sp.networkHandler.sendPacket(new EntityVelocityUpdateS2CPacket(sp));
+        }
     }
 }

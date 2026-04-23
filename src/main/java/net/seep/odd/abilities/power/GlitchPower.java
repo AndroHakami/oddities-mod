@@ -93,7 +93,7 @@ public final class GlitchPower implements Power, HoldReleasePower {
     }
 
     @Override public long cooldownTicks() { return 0; }
-    @Override public long secondaryCooldownTicks() { return 20 * 25; }
+    @Override public long secondaryCooldownTicks() { return 20 * 15; }
 
     /* =================== UI: icons / descriptions =================== */
 
@@ -108,15 +108,14 @@ public final class GlitchPower implements Power, HoldReleasePower {
 
     @Override
     public String longDescription() {
-        return "Telekinesis: hold to seize an entity and drag it around using a draining meter. " +
-                "Glitch Wall: hold to aim a circular wall of glitch blocks, tilt/rotate it with WASD, release to place for 10 seconds.";
+        return "Through a unfixed bug, your abilities now allow you to mess with the files directly! take control of mob's velocities and manipulate the air to create glitches";
     }
 
     @Override
     public String slotTitle(String slot) {
         return switch (slot) {
-            case "primary" -> "TELEKINESIS";
-            case "secondary" -> "GLITCH WALL";
+            case "primary" -> "MOVEMENT ERROR";
+            case "secondary" -> "FIRE-WALL";
             default -> Power.super.slotTitle(slot);
         };
     }
@@ -125,18 +124,9 @@ public final class GlitchPower implements Power, HoldReleasePower {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Hold to mark an entity and move it with smoothing.\n" +
-                            "Meter drains while active.\n" +
-                            "MAX HP > 60: heavier control.\n" +
-                            "MAX HP > 100: only slows.\n" +
-                            "Scroll up/down to push/pull distance.\n" +
-                            "While active: heavy momentum damping + slight zoom.";
+                    "Take control of an entity and freely move it around.";
             case "secondary" ->
-                    "Hold: freeze midair + preview a circular wall (radius 4).\n" +
-                            "Scroll up/down moves placement distance (1..16).\n" +
-                            "A/D rotates (yaw) 45° steps.\n" +
-                            "W/S tilts (pitch) 45° steps (can lay flat at 90°).\n" +
-                            "Release: place wall for 10s; it then breaks into glitch particles.";
+                    "Create a temporary blocky disturbance in the air";
             default -> "Glitch";
         };
     }

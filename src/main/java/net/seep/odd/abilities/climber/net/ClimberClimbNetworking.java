@@ -65,13 +65,13 @@ public final class ClimberClimbNetworking {
 
             // Send all existing states to the joiner
             for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-                boolean active = ClimberPower.hasClimber(p);
+                boolean active = ClimberPower.canUsePassiveClimb(p);
                 sendTo(joiner, p.getUuid(), active);
                 LAST_SENT.put(p.getUuid(), active);
             }
 
             // Broadcast the joiner’s state to everyone (including them)
-            boolean joinerActive = ClimberPower.hasClimber(joiner);
+            boolean joinerActive = ClimberPower.canUsePassiveClimb(joiner);
             broadcast(server, joiner.getUuid(), joinerActive);
             LAST_SENT.put(joiner.getUuid(), joinerActive);
         });
@@ -87,7 +87,7 @@ public final class ClimberClimbNetworking {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
                 UUID id = p.getUuid();
-                boolean active = ClimberPower.hasClimber(p);
+                boolean active = ClimberPower.canUsePassiveClimb(p);
                 boolean prev = LAST_SENT.getOrDefault(id, false);
 
                 if (active != prev) {

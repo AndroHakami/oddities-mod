@@ -1,0 +1,7 @@
+{
+  "targets": [ "quest_area_marker" ],
+  "passes": [
+    { "name": "odd:quest_area_marker", "intarget": "minecraft:main", "outtarget": "quest_area_marker" },
+    { "name": "blit", "intarget": "quest_area_marker", "outtarget": "minecraft:main" }
+  ]
+}

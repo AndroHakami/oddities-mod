@@ -139,18 +139,29 @@ public final class NecromancerPower implements Power {
         };
     }
 
-    @Override public String longDescription() { return "Summon undead hordes, fire a fear ray, and detonate corpses."; }
+    @Override public String longDescription() { return "Summon undead hordes, and manipulate the dead and living with your necromancer abilities!"; }
 
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Summoning Mode: press to enter. Requires Necromancer Staff equipped. LMB = zombies, RMB = skeletons. Slowness III + guard while aiming.";
+                    "Summon a horde of short-living undead mobs, summoned undead mobs leave a temporary corpse when killed.";
             case "secondary" ->
-                    "Ray Of Fear: shoots regardless of target; applies Weakness IV + Darkness + Speed I for 3 seconds if it hits.";
+                    "Fire a ray of fear, terrifies entities/players on hit.";
             case "third" ->
-                    "Exploding Corpses: after a 3s wind-up, detonate all your corpses within 30 blocks.";
-            default -> "";
+                    "Detonate corpses within a large area around you!";
+            default -> "Necromancer";
+        };
+    }
+
+
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "BRING THE DEAD";
+            case "secondary" -> "RAY OF FEAR";
+            case "third" -> "EXPLODING CORPSES";
+            default -> Power.super.slotTitle(slot);
         };
     }
 

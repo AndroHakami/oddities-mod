@@ -7,10 +7,13 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
@@ -25,6 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class GamblePower implements Power {
+    public static final Identifier PKT_SYNC_MODE = new Identifier(Oddities.MOD_ID, "gamble_mode_sync");
     @Override public String id() { return "gamble"; }
     @Override public boolean hasSlot(String slot) { return "primary".equals(slot) || "secondary".equals(slot); }
     @Override public long cooldownTicks() { return 5; }
@@ -48,7 +52,7 @@ public final class GamblePower implements Power {
         };
     }
 
-    @Override public String longDescription() { return "Revolver fueled by hearts. Toggle bullet mode and reload with the secondary slot."; }
+    @Override public String longDescription() { return "Revolver fueled by hearts. Driven by compassion, use your soul to buff allies and debuff enemies, or simply blast them away with your LOVE. Gamble away!"; }
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary"   -> "Toggle bullet mode: Debuff / Buff / Shoot";
@@ -65,6 +69,18 @@ public final class GamblePower implements Power {
 
     public static GambleMode getMode(PlayerEntity p) { return S(p).mode; }
     public static void setMode(PlayerEntity p, GambleMode m) { S(p).mode = m; }
+
+    public static GambleMode modeByOrdinal(int ordinal) {
+        GambleMode[] values = GambleMode.values();
+        return (ordinal >= 0 && ordinal < values.length) ? values[ordinal] : GambleMode.SHOOT;
+    }
+
+    public static void syncMode(ServerPlayerEntity player) {
+        if (player == null) return;
+        PacketByteBuf out = PacketByteBufs.create();
+        out.writeVarInt(getMode(player).ordinal());
+        ServerPlayNetworking.send(player, PKT_SYNC_MODE, out);
+    }
 
     /* =================== POWERLESS override =================== */
 
@@ -107,6 +123,7 @@ public final class GamblePower implements Power {
 
         St st = S(p);
         st.mode = st.mode.next();
+        syncMode(p);
         p.sendMessage(Text.literal("Gamble mode: " + st.mode.display()), true);
     }
 

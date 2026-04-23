@@ -14,6 +14,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.sound.EntityTrackingSoundInstance;
 import net.minecraft.client.sound.MovingSoundInstance;
 import net.minecraft.client.sound.SoundInstance;
 import net.minecraft.sound.SoundCategory;
@@ -23,6 +24,11 @@ import net.minecraft.util.math.random.Random;
 
 import net.seep.odd.Oddities;
 import net.seep.odd.sound.ModSounds;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.UUID;
 
 @Environment(EnvType.CLIENT)
 public final class ZeroBlastChargeFx {
@@ -45,6 +51,9 @@ public final class ZeroBlastChargeFx {
 
     // === NEW: local loop sound so the caster can hear charging ===
     private static ChargeLoopSound loop;
+
+    // Remote listeners hear a tracked client loop tied to the charging player.
+    private static final Map<UUID, RemoteChargeLoopSound> remoteLoops = new HashMap<>();
 
     public static void init() {
         if (inited) return;
@@ -100,6 +109,37 @@ public final class ZeroBlastChargeFx {
         stopLoopNow();
     }
 
+    public static void onRemoteChargeStart(UUID who) {
+        MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || mc.player == null || mc.world == null || mc.getSoundManager() == null || who == null) return;
+        if (who.equals(mc.player.getUuid())) return; // local caster already has the personal loop
+
+        cleanupRemoteLoops();
+
+        RemoteChargeLoopSound existing = remoteLoops.get(who);
+        if (existing != null && !existing.isFinished()) return;
+
+        var tracked = mc.world.getPlayerByUuid(who);
+        if (tracked == null || tracked.isRemoved()) return;
+
+        RemoteChargeLoopSound created = new RemoteChargeLoopSound(tracked);
+        remoteLoops.put(who, created);
+        mc.getSoundManager().play(created);
+    }
+
+    public static void onRemoteChargeStop(UUID who) {
+        if (who == null) return;
+        RemoteChargeLoopSound loop = remoteLoops.remove(who);
+        if (loop != null) loop.stopNow();
+    }
+
+    public static void stopAllRemoteLoops() {
+        for (RemoteChargeLoopSound loop : remoteLoops.values()) {
+            if (loop != null) loop.stopNow();
+        }
+        remoteLoops.clear();
+    }
+
     public static void kickFireShake(float ratio) {
         float r = MathHelper.clamp(ratio, 0f, 1f);
         ScreenShake.kick(1.9f + 1.6f * r, 18);
@@ -119,6 +159,7 @@ public final class ZeroBlastChargeFx {
 
         // Keep loop alive while active; it will self-stop if invalid
         if (active) startLoopIfNeeded();
+        cleanupRemoteLoops();
     }
 
     private static void render(float tickDelta) {
@@ -140,6 +181,15 @@ public final class ZeroBlastChargeFx {
         if (uZoom != null) uZoom.set(zoom);
 
         shader.render(tickDelta);
+    }
+
+    private static void cleanupRemoteLoops() {
+        Iterator<Map.Entry<UUID, RemoteChargeLoopSound>> it = remoteLoops.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, RemoteChargeLoopSound> e = it.next();
+            RemoteChargeLoopSound sound = e.getValue();
+            if (sound == null || sound.isFinished()) it.remove();
+        }
     }
 
     private static void startLoopIfNeeded() {
@@ -196,6 +246,46 @@ public final class ZeroBlastChargeFx {
 
         @Override public boolean isDone() { return stopped; }
         void stopNow() { stopped = true; }
+    }
+
+    private static final class RemoteChargeLoopSound extends EntityTrackingSoundInstance {
+        private final net.minecraft.entity.Entity tracked;
+        private boolean finished = false;
+
+        RemoteChargeLoopSound(net.minecraft.entity.Entity tracked) {
+            super(ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS, 0.45f, 0.98f, tracked, Random.create().nextLong());
+            this.tracked = tracked;
+            this.repeat = true;
+            this.repeatDelay = 0;
+            this.attenuationType = SoundInstance.AttenuationType.LINEAR;
+            this.relative = false;
+        }
+
+        @Override
+        public void tick() {
+            super.tick();
+            if (finished) return;
+
+            MinecraftClient mc = MinecraftClient.getInstance();
+            if (mc == null || mc.world == null || mc.isPaused() || tracked == null || tracked.isRemoved()) {
+                stopNow();
+                return;
+            }
+
+            this.volume = 0.45f;
+            this.pitch = 0.98f;
+        }
+
+        boolean isFinished() {
+            return finished;
+        }
+
+        void stopNow() {
+            if (finished) return;
+            finished = true;
+            this.volume = 0f;
+            this.setDone();
+        }
     }
 
     private static final class ScreenShake {

@@ -2,6 +2,7 @@ package net.seep.odd.expeditions.rottenroots;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -22,7 +23,6 @@ public final class RottenRootsCommands {
         d.register(CommandManager.literal("rottenroots")
                 .requires(src -> src.hasPermissionLevel(2))
 
-                // /rottenroots portal [seconds]
                 .then(CommandManager.literal("portal")
                         .executes(ctx -> spawnPortal(ctx.getSource(), 10))
                         .then(CommandManager.argument("seconds", IntegerArgumentType.integer(1, 120))
@@ -30,65 +30,64 @@ public final class RottenRootsCommands {
                         )
                 )
 
-                // /rottenroots tp
                 .then(CommandManager.literal("tp")
-                        .executes(ctx -> tpToDimension(ctx.getSource()))
+                        .executes(ctx -> tpToDimension(ctx.getSource(), null))
+                        .then(CommandManager.argument("player", EntityArgumentType.player())
+                                .executes(ctx -> tpToDimension(ctx.getSource(), EntityArgumentType.getPlayer(ctx, "player")))
+                        )
                 )
 
-                // /rottenroots return
                 .then(CommandManager.literal("return")
-                        .executes(ctx -> returnToOverworld(ctx.getSource()))
+                        .executes(ctx -> returnToOverworld(ctx.getSource(), null))
+                        .then(CommandManager.argument("player", EntityArgumentType.player())
+                                .executes(ctx -> returnToOverworld(ctx.getSource(), EntityArgumentType.getPlayer(ctx, "player")))
+                        )
                 )
 
-                // /rottenroots overworld
                 .then(CommandManager.literal("overworld")
-                        .executes(ctx -> returnToOverworld(ctx.getSource()))
+                        .executes(ctx -> returnToOverworld(ctx.getSource(), null))
+                        .then(CommandManager.argument("player", EntityArgumentType.player())
+                                .executes(ctx -> returnToOverworld(ctx.getSource(), EntityArgumentType.getPlayer(ctx, "player")))
+                        )
                 )
         );
     }
 
-    private static int tpToDimension(ServerCommandSource src) {
-        ServerPlayerEntity p = src.getPlayer();
-        if (p == null) {
-            src.sendError(Text.literal("Player-only command."));
-            return 0;
-        }
+    public static boolean teleportPlayerToRottenRoots(ServerPlayerEntity p) {
+        if (p == null) return false;
 
         MinecraftServer server = p.getServer();
         if (server == null) {
-            src.sendError(Text.literal("Server unavailable."));
-            return 0;
+            p.sendMessage(Text.literal("Server unavailable."), true);
+            return false;
         }
 
         ServerWorld dst = server.getWorld(Expeditions.ROTTEN_ROOTS_WORLD);
         if (dst == null) {
-            src.sendError(Text.literal("Rotten Roots world is not loaded / missing JSON."));
-            return 0;
+            p.sendMessage(Text.literal("Rotten Roots world is not loaded / missing JSON."), true);
+            return false;
         }
 
-        // safe-ish spawn: mid-air among roots
+        p.stopRiding();
+        p.setVelocity(Vec3d.ZERO);
+        p.fallDistance = 0f;
         p.teleport(dst, 0.5, 120.0, 0.5, p.getYaw(), p.getPitch());
-        src.sendFeedback(() -> Text.literal("Teleported to Rotten Roots."), true);
-        return 1;
+        return true;
     }
 
-    private static int returnToOverworld(ServerCommandSource src) {
-        ServerPlayerEntity p = src.getPlayer();
-        if (p == null) {
-            src.sendError(Text.literal("Player-only command."));
-            return 0;
-        }
+    public static boolean returnPlayerToOverworld(ServerPlayerEntity p) {
+        if (p == null) return false;
 
         MinecraftServer server = p.getServer();
         if (server == null) {
-            src.sendError(Text.literal("Server unavailable."));
-            return 0;
+            p.sendMessage(Text.literal("Server unavailable."), true);
+            return false;
         }
 
         ServerWorld overworld = server.getWorld(World.OVERWORLD);
         if (overworld == null) {
-            src.sendError(Text.literal("Overworld is not loaded."));
-            return 0;
+            p.sendMessage(Text.literal("Overworld is not loaded."), true);
+            return false;
         }
 
         BlockPos spawn = overworld.getSpawnPos();
@@ -100,8 +99,42 @@ public final class RottenRootsCommands {
                 overworld.getTopY(Heightmap.Type.MOTION_BLOCKING_NO_LEAVES, x, z)
         );
 
+        p.stopRiding();
+        p.setVelocity(Vec3d.ZERO);
+        p.fallDistance = 0f;
         p.teleport(overworld, x + 0.5, y + 0.1, z + 0.5, p.getYaw(), p.getPitch());
-        src.sendFeedback(() -> Text.literal("Returned to the Overworld."), true);
+        return true;
+    }
+
+    private static int tpToDimension(ServerCommandSource src, ServerPlayerEntity target) {
+        ServerPlayerEntity p = target != null ? target : src.getPlayer();
+        if (p == null) {
+            src.sendError(Text.literal("Player-only command."));
+            return 0;
+        }
+
+        if (!teleportPlayerToRottenRoots(p)) {
+            src.sendError(Text.literal("Failed to teleport to Rotten Roots."));
+            return 0;
+        }
+
+        src.sendFeedback(() -> Text.literal("Teleported " + p.getName().getString() + " to Rotten Roots."), true);
+        return 1;
+    }
+
+    private static int returnToOverworld(ServerCommandSource src, ServerPlayerEntity target) {
+        ServerPlayerEntity p = target != null ? target : src.getPlayer();
+        if (p == null) {
+            src.sendError(Text.literal("Player-only command."));
+            return 0;
+        }
+
+        if (!returnPlayerToOverworld(p)) {
+            src.sendError(Text.literal("Failed to return to the Overworld."));
+            return 0;
+        }
+
+        src.sendFeedback(() -> Text.literal("Returned " + p.getName().getString() + " to the Overworld."), true);
         return 1;
     }
 

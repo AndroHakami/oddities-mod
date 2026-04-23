@@ -1,8 +1,6 @@
 package net.seep.odd.item.custom;
 
 import net.minecraft.item.ArmorMaterial;
-import software.bernie.geckolib.renderer.GeoArmorRenderer;
-import net.seep.odd.item.custom.client.LuigiHatRenderer;
 
 public class LuigiHatItem extends AbstractBounceHatItem {
     public LuigiHatItem(ArmorMaterial material, Settings settings) {
@@ -10,7 +8,7 @@ public class LuigiHatItem extends AbstractBounceHatItem {
     }
 
     @Override
-    protected GeoArmorRenderer<?> createArmorRenderer() {
-        return new LuigiHatRenderer();
+    protected String getArmorRendererClassName() {
+        return "net.seep.odd.item.custom.client.LuigiHatRenderer";
     }
 }

@@ -1,6 +1,8 @@
 package net.seep.odd.abilities.power;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import net.minecraft.entity.Entity;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -14,8 +16,10 @@ import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.status.ModStatusEffects;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 public final class RiderPower implements Power {
@@ -54,13 +58,13 @@ public final class RiderPower implements Power {
     }
 
     @Override public String longDescription() {
-        return "Summon a two-seat car (left driver). Drift with CTRL+A/D to charge a boost (x1/x2/x3), reverse, honk (R), and do a charged jump with SPACE. Secondary detonates the car.";
+        return "Summon a four seated car... with some explosive properties and a sick radio!";
     }
 
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Summon a really cool car";
-            case "secondary" -> "Explode your really cool car";
+            case "primary"   -> "Summon a four seater that drifts and navigats through any terrain.";
+            case "secondary" -> "Overcharge the car's engine to the max, blowing it up.";
             default -> "";
         };
     }
@@ -93,6 +97,14 @@ public final class RiderPower implements Power {
 
         if (!(player.getWorld() instanceof ServerWorld sw)) return;
 
+        RiderCarEntity existing = findCar(sw, player);
+        if (existing != null && existing.isAlive()) {
+            if (player.getVehicle() == existing) player.stopRiding();
+            existing.discard();
+            clearCarReference(player.getUuid(), existing.getUuid());
+            return;
+        }
+
         RiderCarEntity car = getOrCreateCar(sw, player);
         if (car == null) return;
 
@@ -103,8 +115,6 @@ public final class RiderPower implements Power {
             // ✅ emit from the car (entity position), not player/blockpos
             sw.playSound(null, car.getX(), car.getY(), car.getZ(),
                     SoundEvents.ENTITY_MINECART_RIDING, SoundCategory.PLAYERS, 0.8f, 1.1f);
-        } else {
-
         }
     }
 
@@ -150,6 +160,14 @@ public final class RiderPower implements Power {
         return pow instanceof RiderPower;
     }
 
+    public static void clearCarReference(UUID ownerUuid, UUID carUuid) {
+        if (ownerUuid == null) return;
+        UUID current = CAR_BY_PLAYER.get(ownerUuid);
+        if (carUuid == null || Objects.equals(current, carUuid)) {
+            CAR_BY_PLAYER.remove(ownerUuid);
+        }
+    }
+
     private static RiderCarEntity getOrCreateCar(ServerWorld sw, ServerPlayerEntity owner) {
         RiderCarEntity existing = findCar(sw, owner);
         if (existing != null && existing.isAlive()) return existing;
@@ -167,9 +185,45 @@ public final class RiderPower implements Power {
     }
 
     private static RiderCarEntity findCar(ServerWorld sw, ServerPlayerEntity owner) {
-        UUID id = CAR_BY_PLAYER.get(owner.getUuid());
-        if (id == null) return null;
-        var e = sw.getEntity(id);
-        return (e instanceof RiderCarEntity rc) ? rc : null;
+        return findCar(owner.getServer(), owner.getUuid());
+    }
+
+    private static RiderCarEntity findCar(MinecraftServer server, UUID ownerUuid) {
+        if (server == null || ownerUuid == null) return null;
+
+        UUID mappedId = CAR_BY_PLAYER.get(ownerUuid);
+        if (mappedId != null) {
+            for (ServerWorld world : server.getWorlds()) {
+                Entity e = world.getEntity(mappedId);
+                if (e instanceof RiderCarEntity rc && rc.isAlive()) {
+                    return rc;
+                }
+            }
+            CAR_BY_PLAYER.remove(ownerUuid);
+        }
+
+        RiderCarEntity found = null;
+        ArrayList<RiderCarEntity> extras = new ArrayList<>();
+
+        for (ServerWorld world : server.getWorlds()) {
+            for (Entity e : world.iterateEntities()) {
+                if (!(e instanceof RiderCarEntity rc) || !rc.isAlive()) continue;
+                if (!ownerUuid.equals(rc.getOwner())) continue;
+
+                if (found == null) {
+                    found = rc;
+                } else {
+                    extras.add(rc);
+                }
+            }
+        }
+
+        if (found != null) {
+            CAR_BY_PLAYER.put(ownerUuid, found.getUuid());
+        }
+        for (RiderCarEntity extra : extras) {
+            extra.discard();
+        }
+        return found;
     }
 }

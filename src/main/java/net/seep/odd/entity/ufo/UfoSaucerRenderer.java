@@ -5,13 +5,14 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.client.render.entity.EntityRendererFactory;
+import net.seep.odd.entity.ufo.client.UfoClientFx;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 import software.bernie.geckolib.renderer.layer.AutoGlowingGeoLayer;
 
 public final class UfoSaucerRenderer extends GeoEntityRenderer<UfoSaucerEntity> {
     public UfoSaucerRenderer(EntityRendererFactory.Context ctx) {
         super(ctx, new UfoSaucerModel());
-        // Auto-detects "<base>_glow.png"
+        UfoClientFx.init();
         this.addRenderLayer(new AutoGlowingGeoLayer<>(this));
         this.shadowRadius = 0.6f;
     }

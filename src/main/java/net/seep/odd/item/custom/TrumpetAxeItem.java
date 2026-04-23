@@ -1,7 +1,6 @@
 // FILE: src/main/java/net/seep/odd/item/custom/TrumpetAxeItem.java
 package net.seep.odd.item.custom;
 
-import net.minecraft.client.render.item.BuiltinModelItemRenderer;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
@@ -21,11 +20,9 @@ import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
-import net.seep.odd.item.custom.client.TrumpetAxeRenderer;
 import net.seep.odd.sound.ModSounds;
 import software.bernie.geckolib.animatable.GeoItem;
 import software.bernie.geckolib.animatable.SingletonGeoAnimatable;
-import software.bernie.geckolib.animatable.client.RenderProvider;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
 import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.animation.AnimationController;
@@ -51,7 +48,7 @@ public class TrumpetAxeItem extends AxeItem implements GeoItem {
     private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("idle");
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
-    private final Supplier<Object> renderProvider = GeoItem.makeRenderer(this);
+    private final Supplier<Object> renderProvider = GeoItemClientHooks.createRenderProvider(this);
 
     public TrumpetAxeItem(Settings settings) {
         super(ToolMaterials.DIAMOND, 5.0F, -3.0F, settings);
@@ -214,18 +211,8 @@ public class TrumpetAxeItem extends AxeItem implements GeoItem {
 
     @Override
     public void createRenderer(Consumer<Object> consumer) {
-        consumer.accept(new RenderProvider() {
-            private TrumpetAxeRenderer renderer;
-
-            @Override
-            public BuiltinModelItemRenderer getCustomRenderer() {
-                if (this.renderer == null) {
-                    this.renderer = new TrumpetAxeRenderer();
-                }
-
-                return this.renderer;
-            }
-        });
+        GeoItemClientHooks.createBuiltinItemRenderer(consumer,
+                "net.seep.odd.item.custom.client.TrumpetAxeRenderer");
     }
 
     @Override

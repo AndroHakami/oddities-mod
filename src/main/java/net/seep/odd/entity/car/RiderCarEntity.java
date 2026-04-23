@@ -33,6 +33,7 @@ import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.*;
 import net.minecraft.world.World;
 
+import net.seep.odd.abilities.power.RiderPower;
 import net.seep.odd.particles.OddParticles;
 import net.seep.odd.sound.ModSounds;
 
@@ -167,8 +168,8 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
     private static final double RAM_AABB_EXPAND = 0.6;
     private static final float  RAM_KB_BASE     = 0.6f;
     private static final float  RAM_KB_PER_BPS  = 0.03f;
-    private static final float  RAM_DMG_BASE    = 2.0f;
-    private static final float  RAM_DMG_PER_BPS = 0.35f;
+    private static final float  RAM_DMG_BASE    = 6.0f;
+    private static final float  RAM_DMG_PER_BPS = 0.85f;
     private static final int    RAM_IFRAMES_T   = 8;
     private final Map<UUID, Integer> ramIframes = new HashMap<>();
 
@@ -380,6 +381,14 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         nbt.putInt("RadioIdx", radioIdx);
     }
 
+    @Override
+    public void remove(RemovalReason reason) {
+        if (!this.getWorld().isClient) {
+            RiderPower.clearCarReference(this.owner, this.getUuid());
+        }
+        super.remove(reason);
+    }
+
     public int getDriftTicksClient() { return this.dataTracker.get(DRIFT_TICK); }
 
     /* ===== main tick ===== */
@@ -388,6 +397,14 @@ public class RiderCarEntity extends LivingEntity implements GeoEntity {
         super.tick();
 
         if (!getWorld().isClient) {
+            if (owner != null && getWorld() instanceof ServerWorld sw) {
+                ServerPlayerEntity ownerPlayer = sw.getServer().getPlayerManager().getPlayer(owner);
+                if (ownerPlayer == null || ownerPlayer.isRemoved()) {
+                    this.discard();
+                    return;
+                }
+            }
+
             if (this.age <= 1) yawDegrees = this.getYaw();
 
             // decay ramming i-frames

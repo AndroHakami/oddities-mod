@@ -125,7 +125,7 @@ public final class VexSwordEffect {
             spawnBurst(sw, center);
 
             // 1 magic damage (delayed)
-            target.damage(sw.getDamageSources().magic(), 1.0f);
+            target.damage(sw.getDamageSources().magic(), 3.0f);
         }
     }
 

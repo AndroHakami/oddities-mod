@@ -21,6 +21,7 @@ import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.item.ArmorItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.Registries;
@@ -34,7 +35,6 @@ import net.seep.odd.shop.ShopNetworking;
 import net.seep.odd.shop.catalog.ShopEntry;
 import org.joml.Quaternionf;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -120,12 +120,16 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     private ShopEntry confirmEntry;
     private int page = 0;
 
-    private boolean renameOverlay = false;
-    private String renameToken = "";
     private TextFieldWidget petNameField;
+    private String pendingPetName = "";
 
     private float confirmAnim = 0.0f;
-    private float renameAnim = 0.0f;
+
+    private float stylePreviewYaw = 16.0f;
+    private float stylePreviewPitch = -6.0f;
+    private boolean stylePreviewDragging = false;
+    private double lastStyleDragX = 0.0;
+    private double lastStyleDragY = 0.0;
 
     public DabloonsMachineScreen(ScreenHandler handler, PlayerInventory inventory, Text title) {
         super(handler, inventory, title);
@@ -139,13 +143,7 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         this.titleX = 0;
         this.titleY = 0;
 
-        Rect renameModal = renameModalRect();
-        int fieldW = 150;
-        int fieldH = 18;
-        int fieldX = renameModal.x + (renameModal.w - fieldW) / 2;
-        int fieldY = renameModal.y + 58;
-
-        this.petNameField = new TextFieldWidget(this.textRenderer, fieldX, fieldY, fieldW, fieldH, Text.literal("Pet name"));
+        this.petNameField = new TextFieldWidget(this.textRenderer, 0, 0, 86, 18, Text.literal("Pet name"));
         this.petNameField.setMaxLength(32);
         this.petNameField.setVisible(false);
         this.addDrawableChild(this.petNameField);
@@ -182,16 +180,17 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
             this.viewMode = ViewMode.CATEGORY;
             this.confirmEntry = null;
             this.confirmAnim = 0.0f;
-
-            if (purchaseResult.petToken() != null && !purchaseResult.petToken().isBlank()) {
-                openRenameOverlay(purchaseResult.petToken());
-            }
+            this.pendingPetName = "";
+            this.stylePreviewYaw = 16.0f;
+            this.stylePreviewPitch = -6.0f;
+            this.stylePreviewDragging = false;
+            hidePetNameField();
         }
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double amount) {
-        if (renameOverlay || viewMode != ViewMode.CATEGORY) return false;
+        if (viewMode != ViewMode.CATEGORY) return false;
 
         List<ShopEntry> entries = ClientShopState.entriesFor(currentCategory);
         int pageCount = Math.max(1, (int) Math.ceil(entries.size() / (double) ITEMS_PER_PAGE));
@@ -213,6 +212,7 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     @Override
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         tickAnimations();
+        syncPetNameField();
 
         renderBackground(context);
         drawBackdrop(context, delta);
@@ -227,21 +227,42 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         }
 
         drawBottomBalanceBar(context, mouseX, mouseY);
-
-        if (renameOverlay) {
-            drawRenameOverlay(context, mouseX, mouseY);
-            if (petNameField != null) {
-                petNameField.render(context, mouseX, mouseY, delta);
-            }
-        }
-
         drawToast(context);
         drawTooltips(context, mouseX, mouseY);
+
+        if (isPetConfirmOpen() && petNameField != null) {
+            petNameField.render(context, mouseX, mouseY, delta);
+        }
     }
 
     private void tickAnimations() {
-        this.confirmAnim = MathHelper.lerp(0.22f, this.confirmAnim, this.viewMode == ViewMode.CONFIRM ? 1.0f : 0.0f);
-        this.renameAnim = MathHelper.lerp(0.22f, this.renameAnim, this.renameOverlay ? 1.0f : 0.0f);
+        this.confirmAnim = MathHelper.lerp(0.16f, this.confirmAnim, this.viewMode == ViewMode.CONFIRM ? 1.0f : 0.0f);
+    }
+
+    private void syncPetNameField() {
+        if (petNameField == null) return;
+
+        if (isPetConfirmOpen()) {
+            Rect field = petNameFieldRect();
+            petNameField.setX(field.x);
+            petNameField.setY(field.y);
+            petNameField.setVisible(true);
+            petNameField.setEditable(true);
+        } else {
+            hidePetNameField();
+        }
+    }
+
+    private void hidePetNameField() {
+        if (petNameField == null) return;
+        petNameField.setVisible(false);
+        petNameField.setFocused(false);
+    }
+
+    private boolean isPetConfirmOpen() {
+        return viewMode == ViewMode.CONFIRM
+                && confirmEntry != null
+                && currentCategory == ShopEntry.Category.PETS;
     }
 
     private void drawBackdrop(DrawContext context, float delta) {
@@ -259,13 +280,13 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         int contentW = this.backgroundWidth - 16;
         int contentH = this.backgroundHeight - 30 - BOTTOM_BAR_H - 8;
 
-        if (viewMode != ViewMode.ROOT || renameOverlay) {
+        if (viewMode != ViewMode.ROOT) {
             if (!tryRenderGifBackground(context, CATEGORY_GIFS.get(currentCategory), contentX, contentY, contentW, contentH, delta)) {
                 drawOptionalTexture(context, CATEGORY_BACKGROUNDS.get(currentCategory), contentX, contentY, contentW, contentH);
             }
             context.fill(contentX, contentY, contentX + contentW, contentY + contentH, 0x5A0A0A0A);
         } else {
-            context.fill(contentX, contentY, contentX + contentW, contentY + contentH, 0x66080808);
+            context.fill(contentX, contentY, contentX + contentW, contentY + contentH, 0x14080808);
         }
     }
 
@@ -274,7 +295,7 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         int headerY = this.y + 8;
         context.drawText(this.textRenderer, Text.literal("DABLOON SHOP"), headerX, headerY, 0xFFF7E6A4, true);
 
-        if (viewMode != ViewMode.ROOT || renameOverlay) {
+        if (viewMode != ViewMode.ROOT) {
             String cat = switch (currentCategory) {
                 case WEAPONS -> "WEAPONS";
                 case PETS -> "PETS";
@@ -302,7 +323,7 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
             boolean hovered = rect.contains(mouseX, mouseY);
 
             float hover = rootHoverLerps.getOrDefault(category, 0f);
-            hover = MathHelper.lerp(0.22f, hover, hovered ? 1f : 0f);
+            hover = MathHelper.lerp(0.18f, hover, hovered ? 1f : 0f);
             rootHoverLerps.put(category, hover);
 
             drawCategoryButton(context, rect, category, hover, time);
@@ -315,20 +336,13 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
             return;
         }
 
-        boolean hovered = hover > 0.5f;
-        int fill = hovered ? 0xD0343434 : 0xC61E1E1E;
-        int border = hovered ? 0xFF2C2C2C : 0xFF000000;
-
-        context.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, fill);
-        context.drawBorder(rect.x, rect.y, rect.w, rect.h, border);
-
         String label = switch (category) {
             case WEAPONS -> "WEAPONS";
             case PETS -> "PETS";
             case STYLES -> "STYLES";
-            case MISC -> "MISC";
+            case MISC -> "OTHER";
         };
-        int color = hovered ? 0xFFFFFFFF : 0xFFECECEC;
+        int color = hover > 0.5f ? 0xFFFFFFFF : 0xFFECECEC;
         context.drawCenteredTextWithShadow(this.textRenderer, label, rect.x + rect.w / 2, rect.y + rect.h / 2 - 4, color);
     }
 
@@ -337,15 +351,15 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         Rect prev = prevPageRect();
         Rect next = nextPageRect();
 
-        drawSmallButton(context, home, "HOME", home.contains(mouseX, mouseY));
+        drawSmallButton(context, home, "HOME", home.contains(mouseX, mouseY), 1.0f);
 
         List<ShopEntry> entries = ClientShopState.entriesFor(currentCategory);
         int pageCount = Math.max(1, (int) Math.ceil(entries.size() / (double) ITEMS_PER_PAGE));
         this.page = MathHelper.clamp(this.page, 0, pageCount - 1);
 
         if (pageCount > 1) {
-            drawSmallButton(context, prev, "<", prev.contains(mouseX, mouseY));
-            drawSmallButton(context, next, ">", next.contains(mouseX, mouseY));
+            drawSmallButton(context, prev, "<", prev.contains(mouseX, mouseY), 1.0f);
+            drawSmallButton(context, next, ">", next.contains(mouseX, mouseY), 1.0f);
             String pageText = "PAGE " + (page + 1) + "/" + pageCount;
             context.drawCenteredTextWithShadow(this.textRenderer, pageText, this.x + this.backgroundWidth / 2, this.y + 36, 0xFFFFFFFF);
         }
@@ -370,27 +384,83 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
 
     private void drawShopEntry(DrawContext context, Rect rect, ShopEntry entry, boolean hovered, float time) {
         float hover = hoverLerps.getOrDefault(entry.id, 0f);
-        hover = MathHelper.lerp(0.22f, hover, hovered ? 1f : 0f);
+        hover = MathHelper.lerp(0.18f, hover, hovered ? 1f : 0f);
         hoverLerps.put(entry.id, hover);
 
         int lift = Math.round(hover * 2.0f);
         int fill = hovered ? 0xD7383838 : 0xBF1D1D1D;
-        context.fill(rect.x, rect.y - lift, rect.x + rect.w, rect.y + rect.h - lift, fill);
-        context.drawBorder(rect.x, rect.y - lift, rect.w, rect.h, hovered ? 0xFFF7E6A4 : 0xFF000000);
+        int drawY = rect.y - lift;
+        context.fill(rect.x, drawY, rect.x + rect.w, drawY + rect.h, fill);
+        context.drawBorder(rect.x, drawY, rect.w, rect.h, hovered ? 0xFFF7E6A4 : 0xFF000000);
 
         float previewScale = 0.85f + hover * 0.12f;
-        int previewCenterX = rect.x + rect.w / 2;
-        int previewCenterY = rect.y + 27 - lift;
+        Rect previewRect = slotPreviewRect(rect, lift, entry);
+        int previewCenterX = previewRect.x + previewRect.w / 2;
+        int previewCenterY = previewRect.y + previewRect.h / 2;
 
+        context.enableScissor(previewRect.x, previewRect.y, previewRect.x + previewRect.w, previewRect.y + previewRect.h);
         if (entry.previewType == ShopEntry.PreviewType.ENTITY && entry.previewEntityType != null && !entry.previewEntityType.isBlank()) {
-            drawSpinningEntity(context, entry.previewEntityType, previewCenterX, previewCenterY + 14, Math.round(20f * previewScale), time, hover * 0.6f);
+            drawCardEntityPreview(context, entry.previewEntityType, previewRect, time, hover, previewScale);
+        } else if (entry.previewType == ShopEntry.PreviewType.ARMOUR) {
+            drawArmourPreview(
+                    context,
+                    entry,
+                    createPreviewStack(entry),
+                    previewCenterX,
+                    previewRect.y + previewRect.h + 4,
+                    Math.max(15, Math.round(18.0f * previewScale)),
+                    time,
+                    hover * 0.25f
+            );
         } else {
-            String previewItem = getPreviewItemId(entry);
-            drawSpinningItem(context, previewItem, previewCenterX, previewCenterY, previewScale, time, hover * 0.6f);
+            drawSpinningItem(context, getPreviewItemId(entry), previewCenterX, previewCenterY + 1, previewScale * 0.92f, time, hover * 0.25f);
+        }
+        context.disableScissor();
+
+        drawCenteredTrimmedText(context, this.textRenderer, entry.displayName, rect.x + rect.w / 2, drawY + rect.h - 21, rect.w - 8, 0xFFFFFFFF);
+        drawPrice(context, rect.x + 8, drawY + rect.h - 11, entry.price, false, 1.0f);
+    }
+
+    private Rect slotPreviewRect(Rect rect, int lift, ShopEntry entry) {
+        int drawY = rect.y - lift;
+
+        if (entry.previewType == ShopEntry.PreviewType.ENTITY) {
+            return new Rect(rect.x + 4, drawY + 4, rect.w - 8, 38);
+        }
+        if (entry.previewType == ShopEntry.PreviewType.ARMOUR) {
+            return new Rect(rect.x + 7, drawY + 4, rect.w - 14, 33);
+        }
+        return new Rect(rect.x + 10, drawY + 7, rect.w - 20, 26);
+    }
+
+    private void drawCardEntityPreview(DrawContext context, String entityTypeId, Rect previewRect, float time, float hover, float previewScale) {
+        Entity ent = getOrCreatePreviewEntity(entityTypeId);
+        if (!(ent instanceof LivingEntity living)) {
+            return;
         }
 
-        drawCenteredTrimmedText(context, this.textRenderer, entry.displayName, rect.x + rect.w / 2, rect.y + rect.h - 21 - lift, rect.w - 8, 0xFFFFFFFF);
-        drawPrice(context, rect.x + 8, rect.y + rect.h - 11 - lift, entry.price, false);
+        float entityHeight = Math.max(0.35f, living.getHeight());
+        float entityWidth = Math.max(0.35f, living.getWidth());
+
+        float heightFit = (previewRect.h - 4) / entityHeight;
+        float widthFit = (previewRect.w - 6) / Math.max(entityWidth * 1.55f, entityWidth + 0.15f);
+        int renderSize = MathHelper.clamp(
+                Math.round(Math.min(heightFit, widthFit) * (0.96f + hover * 0.04f) * previewScale),
+                16,
+                44
+        );
+
+        int renderY = previewRect.y + previewRect.h - 2;
+        if (entityHeight < 0.8f) {
+            renderY -= 1;
+        }
+        if (entityWidth > entityHeight * 1.25f) {
+            renderY -= 2;
+        }
+
+        float fakeMouseX = (float) (Math.sin(time * 0.020f) * 9.0f) + hover * 1.8f;
+        float fakeMouseY = (float) (Math.cos(time * 0.017f) * 1.2f);
+        InventoryScreen.drawEntity(context, previewRect.x + previewRect.w / 2, renderY, renderSize, fakeMouseX, fakeMouseY, living);
     }
 
     private void drawConfirmScreen(DrawContext context, int mouseX, int mouseY, float delta) {
@@ -400,8 +470,7 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         int contentH = this.backgroundHeight - 30 - BOTTOM_BAR_H - 8;
 
         float anim = easeOutCubic(this.confirmAnim);
-        int scrimColor = applyAlpha(0xD4000000, anim);
-        context.fill(contentX, contentY, contentX + contentW, contentY + contentH, scrimColor);
+        context.fill(contentX, contentY, contentX + contentW, contentY + contentH, applyAlpha(0xD8000000, anim));
 
         if (confirmEntry != null) {
             drawConfirmModal(context, mouseX, mouseY, delta, confirmEntry);
@@ -409,18 +478,34 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     }
 
     private Rect confirmModalRect() {
-        return new Rect(this.x + (this.backgroundWidth - 300) / 2, this.y + 40, 300, 176);
+        return new Rect(this.x + (this.backgroundWidth - 308) / 2, this.y + 38, 308, 182);
     }
 
-    private Rect renameModalRect() {
-        return new Rect(this.x + (this.backgroundWidth - 252) / 2, this.y + 82, 252, 122);
+    private Rect petNameFieldRect() {
+        Rect modal = confirmModalRect();
+        return new Rect(modal.x + 178, modal.y + 86, 108, 18);
+    }
+
+    private Rect stylePreviewBoxRect() {
+        return stylePreviewBoxRect(confirmModalRect());
+    }
+
+    private Rect stylePreviewBoxRect(Rect modal) {
+        return new Rect(modal.x + (modal.w - 132) / 2, modal.y + 28, 132, 84);
+    }
+
+    private boolean isStylePreviewActive() {
+        return viewMode == ViewMode.CONFIRM
+                && confirmEntry != null
+                && currentCategory == ShopEntry.Category.STYLES
+                && confirmEntry.previewType == ShopEntry.PreviewType.ARMOUR;
     }
 
     private void drawConfirmModal(DrawContext context, int mouseX, int mouseY, float delta, ShopEntry entry) {
         Rect modal = confirmModalRect();
         float anim = easeOutCubic(this.confirmAnim);
-        float scale = 0.94f + 0.06f * anim;
-        float offsetY = (1.0f - anim) * 8.0f;
+        float scale = 0.95f + 0.05f * anim;
+        float offsetY = (1.0f - anim) * 7.0f;
 
         var matrices = context.getMatrices();
         matrices.push();
@@ -440,12 +525,11 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         String title = this.textRenderer.trimToWidth(entry.displayName, modal.w - 20);
         context.drawCenteredTextWithShadow(this.textRenderer, title, left + modal.w / 2, top + 10, applyAlpha(0xFFFFFFFF, anim));
 
-        ItemStack previewStack = createPreviewStack(entry);
-        boolean weaponLayout = currentCategory == ShopEntry.Category.WEAPONS && !previewStack.isEmpty();
-        if (weaponLayout) {
-            drawWeaponConfirmContent(context, modal, previewStack, entry, delta, anim);
-        } else {
-            drawGenericConfirmContent(context, modal, entry, delta, anim);
+        switch (currentCategory) {
+            case WEAPONS -> drawWeaponConfirmContent(context, modal, entry, delta, anim);
+            case PETS -> drawPetConfirmContent(context, modal, entry, delta, anim);
+            case STYLES -> drawStyleConfirmContent(context, modal, entry, delta, anim);
+            case MISC -> drawMiscConfirmContent(context, modal, entry, delta, anim);
         }
 
         drawSmallButton(context, confirmBuyRect(), "BUY", confirmBuyRect().contains(mouseX, mouseY), anim);
@@ -454,117 +538,130 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         matrices.pop();
     }
 
-    private void drawWeaponConfirmContent(DrawContext context, Rect modal, ItemStack previewStack, ShopEntry entry, float delta, float alphaFactor) {
+    private void drawWeaponConfirmContent(DrawContext context, Rect modal, ShopEntry entry, float delta, float alphaFactor) {
         int left = modal.x;
         int top = modal.y;
-
-        int previewCenterX = left + 90;
-        int previewCenterY = top + 60;
         float time = getTimeTicks(delta);
-        float bob = (float) Math.sin(time * 0.14f) * 2.0f;
 
-        drawSpinningItem(context, getPreviewItemId(entry), previewCenterX, Math.round(previewCenterY + bob), 2.55f, time, 0.18f);
+        drawSpinningItem(context, getPreviewItemId(entry), left + 84, top + 64, 2.95f, time, 0.12f);
 
-        int previewPanelX = left + 20;
-        int previewPanelY = top + 30;
-        int previewPanelW = 132;
-        int previewPanelH = 58;
-        context.fill(previewPanelX, previewPanelY, previewPanelX + previewPanelW, previewPanelY + previewPanelH, applyAlpha(0x26000000, alphaFactor));
-        context.drawBorder(previewPanelX, previewPanelY, previewPanelW, previewPanelH, applyAlpha(0x332A2A2A, alphaFactor));
+        context.fill(left + 20, top + 28, left + 150, top + 88, applyAlpha(0x22000000, alphaFactor));
+        context.drawBorder(left + 20, top + 28, 130, 60, applyAlpha(0x332A2A2A, alphaFactor));
 
-        int descX = left + 18;
+        List<String> descLines = wrapText(entry.description, 134, 4);
+        if (descLines.isEmpty()) descLines = List.of("No description set.");
         int descY = top + 96;
-        int descW = 136;
-        List<String> descLines = wrapText(getEntryDescription(entry), descW, 3);
-        if (descLines.isEmpty()) {
-            descLines = List.of("No description set.");
-        }
-
-        int textY = descY;
         for (String line : descLines) {
             int lineW = this.textRenderer.getWidth(line);
-            int drawX = left + 20 + (descW - lineW) / 2;
-            context.drawText(this.textRenderer, line, drawX, textY, applyAlpha(0xFFD8D8D8, alphaFactor), false);
-            textY += 10;
+            int drawX = left + 18 + (136 - lineW) / 2;
+            context.drawText(this.textRenderer, line, drawX, descY, applyAlpha(0xFFD8D8D8, alphaFactor), false);
+            descY += 10;
         }
 
-        int dividerY = top + 128;
-        context.fill(left + 18, dividerY, left + 150, dividerY + 1, applyAlpha(0x44F7E6A4, alphaFactor));
-
-        WeaponStats stats = readWeaponStats(previewStack);
-        int statsX = left + 170;
+        WeaponStats stats = readWeaponStats(createPreviewStack(entry));
+        int statsX = left + 172;
         int statsY = top + 34;
-        int statsW = 108;
-        int statsH = 74;
+        int statsW = 112;
+        int statsH = 72;
 
-        context.fill(statsX, statsY, statsX + statsW, statsY + statsH, applyAlpha(0x3A000000, alphaFactor));
+        context.fill(statsX, statsY, statsX + statsW, statsY + statsH, applyAlpha(0x36000000, alphaFactor));
         context.drawBorder(statsX, statsY, statsW, statsH, applyAlpha(0x55303030, alphaFactor));
         context.drawCenteredTextWithShadow(this.textRenderer, "STATS", statsX + statsW / 2, statsY + 6, applyAlpha(0xFFF7E6A4, alphaFactor));
 
-        drawStatRow(context, statsX + 8, statsY + 20, new ItemStack(Items.IRON_SWORD), "Damage", stats.attackDamage(), 0.0, 16.0, alphaFactor);
-        drawStatRow(context, statsX + 8, statsY + 44, new ItemStack(Items.CLOCK), "Speed", stats.attackSpeed(), 0.0, 4.0, alphaFactor);
+        drawStatRow(context, statsX + 8, statsY + 22, new ItemStack(Items.IRON_SWORD), "Damage", stats.attackDamage(), 0.0, 16.0, alphaFactor);
+        drawStatRow(context, statsX + 8, statsY + 46, new ItemStack(Items.CLOCK), "Speed", stats.attackSpeed(), 0.0, 4.0, alphaFactor);
 
-        context.drawCenteredTextWithShadow(this.textRenderer, "Confirm purchase?", left + modal.w / 2, top + 132, applyAlpha(0xFFECECEC, alphaFactor));
-        drawPrice(context, left + modal.w / 2, top + 145, entry.price, true, alphaFactor);
+        context.drawCenteredTextWithShadow(this.textRenderer, "Confirm purchase?", left + modal.w / 2, top + 136, applyAlpha(0xFFECECEC, alphaFactor));
+        drawPrice(context, left + modal.w / 2, top + 149, entry.price, true, alphaFactor);
     }
 
-    private void drawGenericConfirmContent(DrawContext context, Rect modal, ShopEntry entry, float delta, float alphaFactor) {
+    private void drawPetConfirmContent(DrawContext context, Rect modal, ShopEntry entry, float delta, float alphaFactor) {
         int left = modal.x;
         int top = modal.y;
-        int centerX = left + modal.w / 2;
         float time = getTimeTicks(delta);
 
         if (entry.previewType == ShopEntry.PreviewType.ENTITY && entry.previewEntityType != null && !entry.previewEntityType.isBlank()) {
-            drawSpinningEntity(context, entry.previewEntityType, centerX, top + 78, 48, time, 0.2f);
+            drawSpinningEntity(context, entry.previewEntityType, left + 84, top + 88, 48, time, 0.08f);
         } else {
-            drawSpinningItem(context, getPreviewItemId(entry), centerX, top + 66, 2.2f, time, 0.2f);
+            drawSpinningItem(context, getPreviewItemId(entry), left + 84, top + 66, 2.25f, time, 0.12f);
         }
 
-        List<String> descLines = wrapText(getEntryDescription(entry), modal.w - 40, 3);
-        int descStartY = top + 100;
+        List<String> descLines = wrapText(entry.description, 136, 4);
+        if (descLines.isEmpty()) descLines = List.of("No description set.");
+        int descY = top + 104;
         for (String line : descLines) {
-            context.drawCenteredTextWithShadow(this.textRenderer, line, centerX, descStartY, applyAlpha(0xFFD8D8D8, alphaFactor));
-            descStartY += 10;
+            int lineW = this.textRenderer.getWidth(line);
+            int drawX = left + 18 + (136 - lineW) / 2;
+            context.drawText(this.textRenderer, line, drawX, descY, applyAlpha(0xFFD8D8D8, alphaFactor), false);
+            descY += 10;
         }
 
-        context.drawCenteredTextWithShadow(this.textRenderer, "Confirm purchase?", centerX, top + 134, applyAlpha(0xFFECECEC, alphaFactor));
-        drawPrice(context, centerX, top + 147, entry.price, true, alphaFactor);
+        int boxX = left + 176;
+        int boxY = top + 42;
+        int boxW = 108;
+        int boxH = 70;
+        context.fill(boxX, boxY, boxX + boxW, boxY + boxH, applyAlpha(0x36000000, alphaFactor));
+        context.drawBorder(boxX, boxY, boxW, boxH, applyAlpha(0x55303030, alphaFactor));
+
+        context.drawCenteredTextWithShadow(this.textRenderer, "PET NAME", boxX + boxW / 2, boxY + 8, applyAlpha(0xFFF7E6A4, alphaFactor));
+        context.drawCenteredTextWithShadow(this.textRenderer, "Free first name", boxX + boxW / 2, boxY + 24, applyAlpha(0xFFD8D8D8, alphaFactor));
+        context.drawCenteredTextWithShadow(this.textRenderer, "Optional", boxX + boxW / 2, boxY + 34, applyAlpha(0xFFD8D8D8, alphaFactor));
+
+        context.drawCenteredTextWithShadow(this.textRenderer, "Confirm purchase?", left + modal.w / 2, top + 136, applyAlpha(0xFFECECEC, alphaFactor));
+        drawPrice(context, left + modal.w / 2, top + 149, entry.price, true, alphaFactor);
     }
 
-    private void drawRenameOverlay(DrawContext context, int mouseX, int mouseY) {
-        int contentX = this.x + 8;
-        int contentY = this.y + 30;
-        int contentW = this.backgroundWidth - 16;
-        int contentH = this.backgroundHeight - 30 - BOTTOM_BAR_H - 8;
-
-        float anim = easeOutCubic(this.renameAnim);
-        context.fill(contentX, contentY, contentX + contentW, contentY + contentH, applyAlpha(0xD0000000, anim));
-
-        Rect modal = renameModalRect();
-
-        var matrices = context.getMatrices();
-        matrices.push();
-        matrices.translate(modal.x + modal.w / 2f, modal.y + modal.h / 2f + (1.0f - anim) * 8.0f, 0.0f);
-        matrices.scale(0.95f + 0.05f * anim, 0.95f + 0.05f * anim, 1.0f);
-        matrices.translate(-(modal.x + modal.w / 2f), -(modal.y + modal.h / 2f), 0.0f);
-
+    private void drawStyleConfirmContent(DrawContext context, Rect modal, ShopEntry entry, float delta, float alphaFactor) {
         int left = modal.x;
         int top = modal.y;
-        int right = left + modal.w;
-        int bottom = top + modal.h;
+        float time = getTimeTicks(delta);
 
-        context.fill(left - 4, top - 4, right + 4, bottom + 4, applyAlpha(0xCC000000, anim));
-        context.fill(left, top, right, bottom, applyAlpha(0xF0191919, anim));
-        context.drawBorder(left, top, modal.w, modal.h, applyAlpha(0xFFF7E6A4, anim));
+        Rect box = stylePreviewBoxRect(modal);
+        context.fill(box.x, box.y, box.x + box.w, box.y + box.h, applyAlpha(0x30000000, alphaFactor));
+        context.drawBorder(box.x, box.y, box.w, box.h, applyAlpha(0x66505050, alphaFactor));
 
-        context.drawCenteredTextWithShadow(this.textRenderer, "NAME YOUR PET", left + modal.w / 2, top + 10, applyAlpha(0xFFFFFFFF, anim));
-        context.drawCenteredTextWithShadow(this.textRenderer, "Free first name for this pet.", left + modal.w / 2, top + 28, applyAlpha(0xFFD8D8D8, anim));
-        context.drawCenteredTextWithShadow(this.textRenderer, "You can rename it later with a name tag.", left + modal.w / 2, top + 40, applyAlpha(0xFFD8D8D8, anim));
+        context.enableScissor(box.x + 1, box.y + 1, box.x + box.w - 1, box.y + box.h - 1);
+        if (entry.previewType == ShopEntry.PreviewType.ARMOUR) {
+            drawArmourPreview(context, entry, createPreviewStack(entry), box.x + box.w / 2, box.y + box.h + 20, 46, time, 0.08f);
+        } else {
+            drawSpinningItem(context, getPreviewItemId(entry), box.x + box.w / 2, box.y + box.h / 2 + 2, 2.0f, time, 0.12f);
+        }
+        context.disableScissor();
 
-        drawSmallButton(context, renameConfirmRect(), "CONFIRM", renameConfirmRect().contains(mouseX, mouseY), anim);
-        drawSmallButton(context, renameSkipRect(), "SKIP", renameSkipRect().contains(mouseX, mouseY), anim);
+        List<String> descLines = wrapText(entry.description, modal.w - 40, 2);
+        if (descLines.isEmpty()) descLines = List.of("No description set.");
 
-        matrices.pop();
+        int descY = box.y + box.h + 8;
+        for (String line : descLines) {
+            context.drawCenteredTextWithShadow(this.textRenderer, line, left + modal.w / 2, descY, applyAlpha(0xFFD8D8D8, alphaFactor));
+            descY += 10;
+        }
+
+        if (entry.previewType == ShopEntry.PreviewType.ARMOUR) {
+            context.drawCenteredTextWithShadow(this.textRenderer, "Drag to rotate", left + modal.w / 2, top + 126, applyAlpha(0xFFC7C7C7, alphaFactor));
+        }
+
+        context.drawCenteredTextWithShadow(this.textRenderer, "Confirm purchase?", left + modal.w / 2, top + 138, applyAlpha(0xFFECECEC, alphaFactor));
+        drawPrice(context, left + modal.w / 2, top + 151, entry.price, true, alphaFactor);
+    }
+
+    private void drawMiscConfirmContent(DrawContext context, Rect modal, ShopEntry entry, float delta, float alphaFactor) {
+        int left = modal.x;
+        int top = modal.y;
+        float time = getTimeTicks(delta);
+
+        drawSpinningItem(context, getPreviewItemId(entry), left + modal.w / 2, top + 60, 2.35f, time, 0.12f);
+
+        List<String> descLines = wrapText(entry.description, modal.w - 40, 4);
+        if (descLines.isEmpty()) descLines = List.of("No description set.");
+        int descY = top + 96;
+        for (String line : descLines) {
+            context.drawCenteredTextWithShadow(this.textRenderer, line, left + modal.w / 2, descY, applyAlpha(0xFFD8D8D8, alphaFactor));
+            descY += 10;
+        }
+
+        context.drawCenteredTextWithShadow(this.textRenderer, "Confirm purchase?", left + modal.w / 2, top + 136, applyAlpha(0xFFECECEC, alphaFactor));
+        drawPrice(context, left + modal.w / 2, top + 149, entry.price, true, alphaFactor);
     }
 
     private void drawBottomBalanceBar(DrawContext context, int mouseX, int mouseY) {
@@ -608,7 +705,6 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     }
 
     private void drawTooltips(DrawContext context, int mouseX, int mouseY) {
-        if (renameOverlay) return;
         if (viewMode != ViewMode.CATEGORY) return;
 
         List<ShopEntry> entries = ClientShopState.entriesFor(currentCategory);
@@ -625,10 +721,6 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         }
     }
 
-    private void drawSmallButton(DrawContext context, Rect rect, String label, boolean hovered) {
-        drawSmallButton(context, rect, label, hovered, 1.0f);
-    }
-
     private void drawSmallButton(DrawContext context, Rect rect, String label, boolean hovered, float alphaFactor) {
         int fill = hovered ? 0xCE373737 : 0xB91F1F1F;
         int border = hovered ? 0xFFF7E6A4 : 0xFF000000;
@@ -637,10 +729,6 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         context.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, applyAlpha(fill, alphaFactor));
         context.drawBorder(rect.x, rect.y, rect.w, rect.h, applyAlpha(border, alphaFactor));
         context.drawCenteredTextWithShadow(this.textRenderer, label, rect.x + rect.w / 2, rect.y + rect.h / 2 - 4, applyAlpha(textColor, alphaFactor));
-    }
-
-    private void drawPrice(DrawContext context, int x, int y, int price, boolean centered) {
-        drawPrice(context, x, y, price, centered, 1.0f);
     }
 
     private void drawPrice(DrawContext context, int x, int y, int price, boolean centered, float alphaFactor) {
@@ -658,23 +746,18 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     }
 
     private void drawStatRow(DrawContext context, int x, int y, ItemStack icon, String label, double value, double min, double max, float alphaFactor) {
-        int iconX = x;
-        int iconY = y - 2;
-        context.drawItem(icon, iconX, iconY);
+        context.drawItem(icon, x, y - 2);
 
         String valueText = formatNumber(value);
         context.drawText(this.textRenderer, label, x + 20, y, applyAlpha(0xFFFFFFFF, alphaFactor), false);
-        context.drawText(this.textRenderer, valueText, x + 72, y, applyAlpha(0xFFF7E6A4, alphaFactor), false);
+        context.drawText(this.textRenderer, valueText, x + 70, y, applyAlpha(0xFFF7E6A4, alphaFactor), false);
 
         int barX = x + 20;
         int barY = y + 10;
         int barW = 72;
         int barH = 5;
 
-        float t = 0.0f;
-        if (max > min) {
-            t = (float) ((value - min) / (max - min));
-        }
+        float t = max > min ? (float) ((value - min) / (max - min)) : 0.0f;
         t = MathHelper.clamp(t, 0.0f, 1.0f);
 
         context.fill(barX, barY, barX + barW, barY + barH, applyAlpha(0xFF101010, alphaFactor));
@@ -688,75 +771,27 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         this.viewMode = ViewMode.CATEGORY;
         this.confirmEntry = null;
         this.confirmAnim = 0.0f;
-        closeRenameOverlay();
+        this.pendingPetName = "";
+        this.stylePreviewYaw = 16.0f;
+        this.stylePreviewPitch = -6.0f;
+        this.stylePreviewDragging = false;
+        if (petNameField != null) {
+            petNameField.setText("");
+            petNameField.setFocused(false);
+        }
+        hidePetNameField();
     }
 
-    private void openRenameOverlay(String token) {
-        this.renameOverlay = true;
-        this.renameToken = token;
-        this.viewMode = ViewMode.CATEGORY;
-        this.confirmEntry = null;
-        this.renameAnim = 0.0f;
-
-        if (this.petNameField != null) {
-            Rect modal = renameModalRect();
-            this.petNameField.setX(modal.x + (modal.w - this.petNameField.getWidth()) / 2);
-            this.petNameField.setY(modal.y + 58);
-            this.petNameField.setVisible(true);
-            this.petNameField.setEditable(true);
-            this.petNameField.setText("");
-            this.petNameField.setFocused(true);
-            this.setFocused(this.petNameField);
-        }
-    }
-
-    private void closeRenameOverlay() {
-        this.renameOverlay = false;
-        this.renameToken = "";
-        this.renameAnim = 0.0f;
-        if (this.petNameField != null) {
-            this.petNameField.setVisible(false);
-            this.petNameField.setFocused(false);
-            this.petNameField.setText("");
-        }
-    }
-
-    private void submitPetRename(boolean allowBlank) {
-        if (!renameOverlay || renameToken.isBlank()) {
-            closeRenameOverlay();
-            return;
-        }
-
-        String name = petNameField == null ? "" : petNameField.getText().trim();
-        if (!allowBlank && name.isBlank()) {
-            return;
-        }
-
+    private void sendPetRenameNow(String token, String name) {
         var buf = PacketByteBufs.create();
-        buf.writeString(renameToken, 128);
-        buf.writeString(name, 64);
+        buf.writeString(token, 128);
+        buf.writeString(name == null ? "" : name.trim(), 64);
         ClientPlayNetworking.send(ShopNetworking.C2S_PET_NAME, buf);
-        closeRenameOverlay();
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
-
-        if (renameOverlay) {
-            if (petNameField != null && petNameField.mouseClicked(mouseX, mouseY, button)) {
-                return true;
-            }
-            if (renameConfirmRect().contains(mouseX, mouseY)) {
-                submitPetRename(false);
-                return true;
-            }
-            if (renameSkipRect().contains(mouseX, mouseY)) {
-                submitPetRename(true);
-                return true;
-            }
-            return true;
-        }
 
         if (viewMode == ViewMode.ROOT) {
             ShopEntry.Category[] categories = {
@@ -776,10 +811,32 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         }
 
         if (viewMode == ViewMode.CONFIRM) {
+            if (isStylePreviewActive() && stylePreviewBoxRect().contains(mouseX, mouseY)) {
+                this.stylePreviewDragging = true;
+                this.lastStyleDragX = mouseX;
+                this.lastStyleDragY = mouseY;
+                return true;
+            }
+
+            if (isPetConfirmOpen() && petNameField != null) {
+                boolean clickedField = petNameField.mouseClicked(mouseX, mouseY, button);
+                petNameField.setFocused(clickedField || petNameFieldRect().contains(mouseX, mouseY));
+                if (clickedField) {
+                    return true;
+                }
+            }
+
             if (confirmEntry != null) {
                 if (confirmBuyRect().contains(mouseX, mouseY)) {
+                    if (currentCategory == ShopEntry.Category.PETS && petNameField != null) {
+                        this.pendingPetName = petNameField.getText().trim();
+                    } else {
+                        this.pendingPetName = "";
+                    }
+
                     var buf = PacketByteBufs.create();
                     buf.writeString(confirmEntry.id, 128);
+                    buf.writeString(this.pendingPetName, 64);
                     ClientPlayNetworking.send(ShopNetworking.C2S_BUY, buf);
                     return true;
                 }
@@ -787,9 +844,19 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
                     this.viewMode = ViewMode.CATEGORY;
                     this.confirmEntry = null;
                     this.confirmAnim = 0.0f;
+                    this.pendingPetName = "";
+                    this.stylePreviewYaw = 16.0f;
+                    this.stylePreviewPitch = -6.0f;
+                    this.stylePreviewDragging = false;
+                    if (petNameField != null) {
+                        petNameField.setText("");
+                        petNameField.setFocused(false);
+                    }
+                    hidePetNameField();
                     return true;
                 }
             }
+
             return true;
         }
 
@@ -797,6 +864,15 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
             this.viewMode = ViewMode.ROOT;
             this.confirmEntry = null;
             this.confirmAnim = 0.0f;
+            this.pendingPetName = "";
+            this.stylePreviewYaw = 16.0f;
+            this.stylePreviewPitch = -6.0f;
+            this.stylePreviewDragging = false;
+            if (petNameField != null) {
+                petNameField.setText("");
+                petNameField.setFocused(false);
+            }
+            hidePetNameField();
             return true;
         }
 
@@ -822,6 +898,14 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
                 this.confirmEntry = entries.get(i);
                 this.viewMode = ViewMode.CONFIRM;
                 this.confirmAnim = 0.0f;
+                this.pendingPetName = "";
+                this.stylePreviewDragging = false;
+
+                if (petNameField != null) {
+                    petNameField.setText("");
+                    petNameField.setFocused(currentCategory == ShopEntry.Category.PETS);
+                }
+
                 return true;
             }
         }
@@ -831,27 +915,24 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
 
     @Override
     public boolean charTyped(char chr, int modifiers) {
-        if (renameOverlay && petNameField != null && petNameField.isVisible()) {
-            return petNameField.charTyped(chr, modifiers);
+        if (isPetConfirmOpen() && petNameField != null && petNameField.isVisible() && petNameField.isFocused()) {
+            if (petNameField.charTyped(chr, modifiers)) {
+                return true;
+            }
         }
         return super.charTyped(chr, modifiers);
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (renameOverlay) {
-            if (petNameField != null && petNameField.keyPressed(keyCode, scanCode, modifiers)) {
+        if (isPetConfirmOpen() && petNameField != null && petNameField.isVisible()) {
+            if (this.client != null && this.client.options.inventoryKey.matchesKey(keyCode, scanCode) && petNameField.isFocused()) {
                 return true;
             }
-            if (keyCode == 257 || keyCode == 335) {
-                submitPetRename(false);
+
+            if (petNameField.keyPressed(keyCode, scanCode, modifiers)) {
                 return true;
             }
-            if (keyCode == 256) {
-                submitPetRename(true);
-                return true;
-            }
-            return super.keyPressed(keyCode, scanCode, modifiers);
         }
 
         if (keyCode == 256) {
@@ -859,12 +940,35 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
                 viewMode = ViewMode.CATEGORY;
                 confirmEntry = null;
                 confirmAnim = 0.0f;
+                pendingPetName = "";
+                stylePreviewYaw = 16.0f;
+                stylePreviewPitch = -6.0f;
+                stylePreviewDragging = false;
+                if (petNameField != null) {
+                    petNameField.setText("");
+                    petNameField.setFocused(false);
+                }
+                hidePetNameField();
                 return true;
             }
             if (viewMode == ViewMode.CATEGORY) {
                 viewMode = ViewMode.ROOT;
                 return true;
             }
+        }
+
+        if (viewMode == ViewMode.CONFIRM && (keyCode == 257 || keyCode == 335) && confirmEntry != null) {
+            if (currentCategory == ShopEntry.Category.PETS && petNameField != null) {
+                this.pendingPetName = petNameField.getText().trim();
+            } else {
+                this.pendingPetName = "";
+            }
+
+            var buf = PacketByteBufs.create();
+            buf.writeString(confirmEntry.id, 128);
+            buf.writeString(this.pendingPetName, 64);
+            ClientPlayNetworking.send(ShopNetworking.C2S_BUY, buf);
+            return true;
         }
 
         if (viewMode == ViewMode.CATEGORY) {
@@ -882,6 +986,26 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         }
 
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (button == 0 && this.stylePreviewDragging && isStylePreviewActive()) {
+            this.stylePreviewYaw += (float) ((mouseX - this.lastStyleDragX) * 2.0);
+            this.stylePreviewPitch = MathHelper.clamp(this.stylePreviewPitch + (float) ((mouseY - this.lastStyleDragY) * 1.4), -20.0f, 25.0f);
+            this.lastStyleDragX = mouseX;
+            this.lastStyleDragY = mouseY;
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            this.stylePreviewDragging = false;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     private Rect slotRect(int localIndex) {
@@ -920,22 +1044,12 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
 
     private Rect confirmBuyRect() {
         Rect modal = confirmModalRect();
-        return new Rect(modal.x + 36, modal.y + modal.h - 24, 90, 18);
+        return new Rect(modal.x + 38, modal.y + modal.h - 24, 90, 18);
     }
 
     private Rect confirmCancelRect() {
         Rect modal = confirmModalRect();
-        return new Rect(modal.x + modal.w - 126, modal.y + modal.h - 24, 90, 18);
-    }
-
-    private Rect renameConfirmRect() {
-        Rect modal = renameModalRect();
-        return new Rect(modal.x + 30, modal.y + modal.h - 28, 86, 18);
-    }
-
-    private Rect renameSkipRect() {
-        Rect modal = renameModalRect();
-        return new Rect(modal.x + modal.w - 84, modal.y + modal.h - 28, 54, 18);
+        return new Rect(modal.x + modal.w - 128, modal.y + modal.h - 24, 90, 18);
     }
 
     private Rect bottomBarRect() {
@@ -979,13 +1093,10 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     }
 
     private boolean drawRootBannerTexture(DrawContext context, Identifier texture, Rect rect, float hover, float time) {
-        if (!hasTexture(texture)) {
-            return false;
-        }
+        if (!hasTexture(texture)) return false;
 
         int shadowPad = 1 + Math.round(hover * 2f);
-        int shadowAlpha = MathHelper.clamp((int) (24 + hover * 18f), 0, 255);
-        int borderColor = blendColor(0xFF050505, 0xFF242424, hover);
+        int shadowAlpha = MathHelper.clamp((int) (16 + hover * 14f), 0, 255);
 
         context.fill(
                 rect.x - shadowPad,
@@ -994,8 +1105,6 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
                 rect.y + rect.h + shadowPad,
                 (shadowAlpha << 24)
         );
-
-        context.fill(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0xC9121212);
 
         int innerX = rect.x + ROOT_CARD_PADDING;
         int innerY = rect.y + ROOT_CARD_PADDING;
@@ -1012,15 +1121,11 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
 
         drawTextureScaled(context, texture, drawX, drawY, drawW, drawH, ROOT_BUTTON_TEX_W, ROOT_BUTTON_TEX_H);
 
-        int darkOverlayAlpha = MathHelper.clamp((int) (14 - hover * 6f), 6, 14);
-        context.fill(innerX, innerY, innerX + innerW, innerY + innerH, darkOverlayAlpha << 24);
-
-        int softHighlightAlpha = MathHelper.clamp((int) (hover * 8f), 0, 255);
+        int softHighlightAlpha = MathHelper.clamp((int) (hover * 10f), 0, 255);
         if (softHighlightAlpha > 0) {
-            context.fill(innerX, innerY, innerX + innerW, innerY + innerH, (softHighlightAlpha << 24) | 0x00FFFFFF);
+            context.fill(drawX, drawY, drawX + drawW, drawY + drawH, (softHighlightAlpha << 24) | 0x00FFFFFF);
         }
 
-        context.drawBorder(rect.x, rect.y, rect.w, rect.h, borderColor);
         return true;
     }
 
@@ -1065,11 +1170,20 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         ItemStack stack = new ItemStack(Registries.ITEM.get(id), 1);
         var matrices = context.getMatrices();
         matrices.push();
-        matrices.translate(centerX, centerY, 200);
+
+        float bob = (float) Math.sin(time * 0.08f) * 0.8f;
+        matrices.translate(centerX, centerY + bob, 200);
+
         float s = 20.0f * scale;
         matrices.scale(s, s, s);
-        float spin = time * 0.09f;
-        matrices.multiply(new Quaternionf().rotationXYZ(0.35f, spin + tilt, -tilt * 0.18f));
+
+        float spin = time * 0.032f;
+        Quaternionf rotation = new Quaternionf()
+                .rotateY(spin + tilt * 0.08f)
+                .rotateX(0.18f)
+                .rotateZ(-0.04f);
+
+        matrices.multiply(rotation);
 
         var itemRenderer = MinecraftClient.getInstance().getItemRenderer();
         var immediate = MinecraftClient.getInstance().getBufferBuilders().getEntityVertexConsumers();
@@ -1088,61 +1202,146 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
     }
 
     private void drawSpinningEntity(DrawContext context, String entityTypeId, int x, int y, int size, float time, float tilt) {
-        if (client == null || client.world == null) return;
-
-        Entity ent = entityPreviewCache.get(entityTypeId);
-        if (ent == null) {
-            Identifier id = Identifier.tryParse(entityTypeId);
-            if (id == null || !Registries.ENTITY_TYPE.containsId(id)) return;
-            EntityType<?> type = Registries.ENTITY_TYPE.get(id);
-            ent = type.create(client.world);
-            if (ent == null) return;
-            entityPreviewCache.put(entityTypeId, ent);
-        }
-
+        Entity ent = getOrCreatePreviewEntity(entityTypeId);
         if (!(ent instanceof LivingEntity living)) return;
 
-        float fakeMouseX = (float) (Math.sin(time * 0.08f) * 8.0f) + tilt * 18f;
-        float fakeMouseY = (float) (Math.cos(time * 0.05f) * 4.0f);
+        float fakeMouseX = (float) (Math.sin(time * 0.020f) * 18.0f) + tilt * 4.0f;
+        float fakeMouseY = (float) (Math.cos(time * 0.017f) * 3.0f);
         InventoryScreen.drawEntity(context, x, y, size, fakeMouseX, fakeMouseY, living);
     }
 
-    private float getTimeTicks(float delta) {
-        return (client == null || client.world == null) ? 0f : (client.world.getTime() + delta);
+    private Entity getOrCreatePreviewEntity(String entityTypeId) {
+        if (client == null || client.world == null) return null;
+
+        Entity ent = entityPreviewCache.get(entityTypeId);
+        if (ent != null) {
+            return ent;
+        }
+
+        Identifier id = Identifier.tryParse(entityTypeId);
+        if (id == null || !Registries.ENTITY_TYPE.containsId(id)) return null;
+
+        EntityType<?> type = Registries.ENTITY_TYPE.get(id);
+        ent = type.create(client.world);
+        if (ent == null) return null;
+
+        entityPreviewCache.put(entityTypeId, ent);
+        return ent;
     }
 
-    private int blendColor(int from, int to, float t) {
-        t = MathHelper.clamp(t, 0f, 1f);
+    private void drawArmourPreview(DrawContext context, ShopEntry entry, ItemStack armourStack, int x, int y, int size, float time, float tilt) {
+        if (client == null || client.player == null || armourStack == null || armourStack.isEmpty()) {
+            return;
+        }
 
-        int a1 = (from >> 24) & 0xFF;
-        int r1 = (from >> 16) & 0xFF;
-        int g1 = (from >> 8) & 0xFF;
-        int b1 = from & 0xFF;
+        EquipmentSlot targetSlot = getArmourSlot(entry, armourStack);
+        if (targetSlot == null) {
+            Identifier id = Registries.ITEM.getId(armourStack.getItem());
+            drawSpinningItem(context, id.toString(), x, y - 10, 2.0f, time, tilt);
+            return;
+        }
 
-        int a2 = (to >> 24) & 0xFF;
-        int r2 = (to >> 16) & 0xFF;
-        int g2 = (to >> 8) & 0xFF;
-        int b2 = to & 0xFF;
+        ShopEntry.PreviewArmourSlot focus = entry != null && entry.previewArmourSlot != null
+                ? entry.previewArmourSlot
+                : ShopEntry.PreviewArmourSlot.AUTO;
 
-        int a = Math.round(a1 + (a2 - a1) * t);
-        int r = Math.round(r1 + (r2 - r1) * t);
-        int g = Math.round(g1 + (g2 - g1) * t);
-        int b = Math.round(b1 + (b2 - b1) * t);
+        int focusedSize = size;
+        int focusedY = y;
 
-        return (a << 24) | (r << 16) | (g << 8) | b;
+        boolean interactive = viewMode == ViewMode.CONFIRM
+                && currentCategory == ShopEntry.Category.STYLES
+                && confirmEntry == entry;
+
+        if (interactive) {
+            switch (focus) {
+                case HEAD -> {
+                    focusedSize = Math.round(size * 1.18f);
+                    focusedY = y + 6;
+                }
+                case CHEST -> {
+                    focusedSize = Math.round(size * 1.08f);
+                    focusedY = y + 4;
+                }
+                case LEGS -> {
+                    focusedSize = Math.round(size * 1.00f);
+                    focusedY = y + 2;
+                }
+                case FEET -> {
+                    focusedSize = Math.round(size * 0.92f);
+                    focusedY = y - 6;
+                }
+                default -> focusedY = y + 2;
+            }
+        } else {
+            switch (focus) {
+                case HEAD -> {
+                    focusedSize = Math.round(size * 1.08f);
+                    focusedY = y + 3;
+                }
+                case CHEST -> focusedY = y + 2;
+                case LEGS -> focusedY = y + 1;
+                case FEET -> focusedY = y - 3;
+                default -> { }
+            }
+        }
+
+        Map<EquipmentSlot, ItemStack> saved = new EnumMap<>(EquipmentSlot.class);
+        EquipmentSlot[] slots = new EquipmentSlot[]{
+                EquipmentSlot.HEAD,
+                EquipmentSlot.CHEST,
+                EquipmentSlot.LEGS,
+                EquipmentSlot.FEET,
+                EquipmentSlot.MAINHAND,
+                EquipmentSlot.OFFHAND
+        };
+
+        try {
+            for (EquipmentSlot slot : slots) {
+                saved.put(slot, client.player.getEquippedStack(slot).copy());
+                client.player.equipStack(slot, ItemStack.EMPTY);
+            }
+
+            client.player.equipStack(targetSlot, armourStack.copy());
+
+            float lookX;
+            float lookY;
+            if (interactive) {
+                lookX = this.stylePreviewYaw + (this.stylePreviewDragging ? 0.0f : (float) Math.sin(time * 0.035f) * 8.0f);
+                lookY = this.stylePreviewPitch;
+            } else {
+                lookX = (float) (Math.sin(time * 0.018f) * 14.0f) + tilt * 3.0f;
+                lookY = (float) (Math.cos(time * 0.014f) * 2.5f);
+            }
+
+            InventoryScreen.drawEntity(context, x, focusedY, focusedSize, lookX, lookY, client.player);
+        } finally {
+            for (EquipmentSlot slot : slots) {
+                ItemStack restore = saved.get(slot);
+                if (restore != null) {
+                    client.player.equipStack(slot, restore);
+                }
+            }
+        }
     }
 
-    private int applyAlpha(int color, float alphaFactor) {
-        alphaFactor = MathHelper.clamp(alphaFactor, 0.0f, 1.0f);
-        int a = (color >>> 24) & 0xFF;
-        int rgb = color & 0x00FFFFFF;
-        int newA = MathHelper.clamp(Math.round(a * alphaFactor), 0, 255);
-        return (newA << 24) | rgb;
+    private EquipmentSlot getArmourSlot(ItemStack stack) {
+        if (stack.getItem() instanceof ArmorItem armorItem) {
+            return armorItem.getSlotType();
+        }
+        return null;
     }
 
-    private float easeOutCubic(float t) {
-        t = MathHelper.clamp(t, 0.0f, 1.0f);
-        return 1.0f - (float) Math.pow(1.0f - t, 3.0);
+    private EquipmentSlot getArmourSlot(ShopEntry entry, ItemStack stack) {
+        if (entry != null && entry.previewArmourSlot != null && entry.previewArmourSlot != ShopEntry.PreviewArmourSlot.AUTO) {
+            return switch (entry.previewArmourSlot) {
+                case HEAD -> EquipmentSlot.HEAD;
+                case CHEST -> EquipmentSlot.CHEST;
+                case LEGS -> EquipmentSlot.LEGS;
+                case FEET -> EquipmentSlot.FEET;
+                default -> getArmourSlot(stack);
+            };
+        }
+        return getArmourSlot(stack);
     }
 
     private String getPreviewItemId(ShopEntry entry) {
@@ -1198,42 +1397,6 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         }
     }
 
-    private String getEntryDescription(ShopEntry entry) {
-        if (entry == null) return "";
-
-        try {
-            Method m = entry.getClass().getMethod("description");
-            Object value = m.invoke(entry);
-            if (value instanceof String s) return s;
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            Method m = entry.getClass().getMethod("getDescription");
-            Object value = m.invoke(entry);
-            if (value instanceof String s) return s;
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            Field f = entry.getClass().getDeclaredField("description");
-            f.setAccessible(true);
-            Object value = f.get(entry);
-            if (value instanceof String s) return s;
-        } catch (Throwable ignored) {
-        }
-
-        try {
-            Field f = entry.getClass().getDeclaredField("desc");
-            f.setAccessible(true);
-            Object value = f.get(entry);
-            if (value instanceof String s) return s;
-        } catch (Throwable ignored) {
-        }
-
-        return "";
-    }
-
     private List<String> wrapText(String text, int maxWidth, int maxLines) {
         List<String> lines = new ArrayList<>();
         if (text == null) return lines;
@@ -1245,12 +1408,12 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
         StringBuilder current = new StringBuilder();
 
         for (String word : words) {
-            String test = current.isEmpty() ? word : current + " " + word;
+            String test = current.length() == 0 ? word : current + " " + word;
             if (this.textRenderer.getWidth(test) <= maxWidth) {
                 current.setLength(0);
                 current.append(test);
             } else {
-                if (!current.isEmpty()) {
+                if (current.length() > 0) {
                     lines.add(current.toString());
                     if (lines.size() >= maxLines) {
                         return lines;
@@ -1261,11 +1424,28 @@ public final class DabloonsMachineScreen extends HandledScreen<ScreenHandler> {
             }
         }
 
-        if (!current.isEmpty() && lines.size() < maxLines) {
+        if (current.length() > 0 && lines.size() < maxLines) {
             lines.add(current.toString());
         }
 
         return lines;
+    }
+
+    private float getTimeTicks(float delta) {
+        return (client == null || client.world == null) ? 0f : (client.world.getTime() + delta);
+    }
+
+    private int applyAlpha(int color, float alphaFactor) {
+        alphaFactor = MathHelper.clamp(alphaFactor, 0.0f, 1.0f);
+        int a = (color >>> 24) & 0xFF;
+        int rgb = color & 0x00FFFFFF;
+        int newA = MathHelper.clamp(Math.round(a * alphaFactor), 0, 255);
+        return (newA << 24) | rgb;
+    }
+
+    private float easeOutCubic(float t) {
+        t = MathHelper.clamp(t, 0.0f, 1.0f);
+        return 1.0f - (float) Math.pow(1.0f - t, 3.0);
     }
 
     private double round1(double value) {

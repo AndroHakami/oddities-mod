@@ -63,22 +63,31 @@ public final class SplashPower implements Power, HoldReleasePower {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Toggle: Bubbles. 10-block aura ring that buffs nearby creatures based on your mode. Drains a shared meter. Suspends you in-air while casting.";
+                    "Provide a buff to any entity within your area of effect, buff depends on the current MODE.";
             case "secondary" ->
-                    "Hold: Water Hose. Water beam that applies Froggy Time + healing to any creature hit. Drains the shared meter faster. Suspends you in-air while casting.";
+                    "Fire an empowering beam that heals and provides every single mode effect at once.";
             case "third" ->
-                    "Mode Switch: Cycle Leap / Sharp-Tongue / Thick-Skin.";
+                    "Change your current MODE.";
             default -> "Splash";
         };
     }
-
     @Override
     public String longDescription() {
-        return "Splash: Support power. Toggle Primary for a bubble aura that buffs nearby creatures based on mode. "
-                + "Hold Secondary for a water hose beam that applies Froggy Time + healing. "
-                + "Both share one resource meter (hose drains more). "
-                + "Casting suspends you in the air. HUD is visible while Splash is equipped.";
+        return "Support your allies with your bubbles, and leap high with your passive speed and jump!";
     }
+
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "BUBBLES";
+            case "secondary" -> "WATER-RAY";
+            case "third" -> "MODE SWITCH";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+
+
 
     /** Call once from common init: SplashPower.init(); */
     private static boolean INITED = false;

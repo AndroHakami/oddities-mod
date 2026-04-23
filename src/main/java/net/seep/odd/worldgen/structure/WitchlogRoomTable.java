@@ -11,10 +11,9 @@ import java.util.Map;
 
 public final class WitchlogRoomTable {
     /**
-     * Increase this if you want more sockets to stay empty.
-     * Lower it if you want rooms to appear more often.
+     * 0 means no socket is allowed to stay empty.
      */
-    public static final int EMPTY_SOCKET_WEIGHT = 4;
+    public static final int EMPTY_SOCKET_WEIGHT = 0;
 
     private final List<RoomDefinition> rooms;
 
@@ -23,25 +22,8 @@ public final class WitchlogRoomTable {
     }
 
     /**
-     * Edit this method when you add future rooms.
-     *
-     * weight:
-     * - higher = more common
-     * - 0 = never picked randomly
-     *
-     * requiredCount:
-     * - how many copies MUST appear if enough sockets exist
-     *
-     * maxCopies:
-     * - -1 = unlimited
-     * - otherwise caps how many copies of that room can be placed
-     *
-     * enabled:
-     * - quick on/off toggle
-     *
-     * authoringRotationOffset:
-     * - extra rotation applied because the room NBT was authored facing differently
-     * - NONE = already authored in the expected default direction
+     * Uses the user's current hand-fixed anchors/rotations,
+     * but allows repeats so every room socket can be populated.
      */
     public static WitchlogRoomTable createDefault() {
         List<RoomDefinition> rooms = new ArrayList<>();
@@ -50,48 +32,72 @@ public final class WitchlogRoomTable {
                 "experiment_room",
                 new Identifier("odd", "witchlog/experiment_room"),
                 SocketType.MEDIUM,
-                10,                         // weight
-                1,                          // requiredCount
-                2,                          // maxCopies
-                true,                       // enabled
-                new BlockPos(17, 0, 8),     // doorway anchor inside the template
-                BlockRotation.COUNTERCLOCKWISE_90          // authoringRotationOffset
+                10,
+                1,
+                -1,
+                true,
+                new BlockPos(16, 2, 10),
+                BlockRotation.COUNTERCLOCKWISE_90
         ));
+
         rooms.add(new RoomDefinition(
                 "titan_room",
                 new Identifier("odd", "witchlog/titan_room"),
                 SocketType.MEDIUM,
-                10,                         // weight
-                1,                          // requiredCount
-                1,                          // maxCopies
-                true,                       // enabled
-                new BlockPos(17, 0, 8),     // doorway anchor inside the template
-                BlockRotation.COUNTERCLOCKWISE_90          // authoringRotationOffset
+                10,
+                1,
+                -1,
+                true,
+                new BlockPos(16, 2, 14),
+                BlockRotation.COUNTERCLOCKWISE_90
         ));
+
+        rooms.add(new RoomDefinition(
+                "sleep_room",
+                new Identifier("odd", "witchlog/sleep_room"),
+                SocketType.MEDIUM,
+                10,
+                1,
+                -1,
+                true,
+                new BlockPos(16, 0, 14),
+                BlockRotation.COUNTERCLOCKWISE_90
+        ));
+
+        rooms.add(new RoomDefinition(
+                "study_room",
+                new Identifier("odd", "witchlog/study_room"),
+                SocketType.MEDIUM,
+                10,
+                1,
+                -1,
+                true,
+                new BlockPos(14, 0, 14),
+                BlockRotation.COUNTERCLOCKWISE_90
+        ));
+
         rooms.add(new RoomDefinition(
                 "titan_room_2",
                 new Identifier("odd", "witchlog/titan_room_2"),
                 SocketType.MEDIUM,
-                10,                         // weight
-                1,                          // requiredCount
-                2,                          // maxCopies
-                true,                       // enabled
-                new BlockPos(17, 0, 8),     // doorway anchor inside the template
-                BlockRotation.COUNTERCLOCKWISE_90          // authoringRotationOffset
+                10,
+                1,
+                -1,
+                true,
+                new BlockPos(16, 2, 14),
+                BlockRotation.COUNTERCLOCKWISE_90
         ));
-
-
 
         rooms.add(new RoomDefinition(
                 "brew_room",
                 new Identifier("odd", "witchlog/brew_room"),
                 SocketType.MEDIUM,
-                8,                          // weight
-                1,                          // requiredCount
-                2,                          // maxCopies
-                true,                       // enabled
-                new BlockPos(10, 0, 14),     // doorway anchor inside the template
-                BlockRotation.CLOCKWISE_180  // authoringRotationOffset
+                8,
+                1,
+                -1,
+                true,
+                new BlockPos(11, 1, -6),
+                BlockRotation.CLOCKWISE_180
         ));
 
         return new WitchlogRoomTable(rooms);

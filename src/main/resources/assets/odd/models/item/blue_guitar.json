@@ -1,0 +1,129 @@
+{
+  "credit": "Made with Blockbench",
+  "parent": "builtin/entity",
+  "texture_size": [
+    64,
+    64
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [
+        -170.30999999999995,
+        -78.4699999999998,
+        179.17000000000007
+      ],
+      "translation": [
+        -1.25,
+        -27.25,
+        -2.75
+      ]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [
+        -170.30999999999995,
+        -78.4699999999998,
+        179.17000000000007
+      ],
+      "translation": [
+        -1.25,
+        -27.25,
+        -2.75
+      ]
+    },
+    "firstperson_righthand": {
+      "rotation": [
+        170.86000000000013,
+        4.289999999999964,
+        42.679999999999836
+      ],
+      "translation": [
+        11,
+        13,
+        -5.5
+      ],
+      "scale": [
+        0.79,
+        0.79,
+        0.79
+      ]
+    },
+    "firstperson_lefthand": {
+      "rotation": [
+        170.86000000000013,
+        4.289999999999964,
+        42.679999999999836
+      ],
+      "translation": [
+        11,
+        13,
+        -5.5
+      ],
+      "scale": [
+        0.79,
+        0.79,
+        0.79
+      ]
+    },
+    "ground": {
+      "translation": [
+        0,
+        -5.25,
+        0
+      ]
+    },
+    "gui": {
+      "rotation": [
+        0,
+        -180,
+        45.5
+      ],
+      "translation": [
+        -9.75,
+        -10,
+        0
+      ],
+      "scale": [
+        0.71,
+        0.71,
+        0.71
+      ]
+    },
+    "fixed": {
+      "rotation": [
+        0,
+        0,
+        45.5
+      ],
+      "translation": [
+        10,
+        -10,
+        0
+      ],
+      "scale": [
+        0.71,
+        0.71,
+        0.71
+      ]
+    },
+    "on_shelf": {
+      "rotation": [
+        0,
+        0,
+        45.5
+      ],
+      "translation": [
+        10,
+        -10,
+        0
+      ],
+      "scale": [
+        0.71,
+        0.71,
+        0.71
+      ]
+    }
+  },
+  "textures": {
+    "particle": "odd:item/blue_guitar"
+  }
+}

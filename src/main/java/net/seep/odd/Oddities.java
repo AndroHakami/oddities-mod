@@ -39,7 +39,9 @@ import net.seep.odd.abilities.buddymorph.client.BuddymorphScreen;
 import net.seep.odd.abilities.chef.net.ChefNet;
 import net.seep.odd.abilities.climber.net.ClimberClimbNetworking;
 import net.seep.odd.abilities.conquer.entity.DarkHorseEntity;
+import net.seep.odd.abilities.core.CoreNet;
 import net.seep.odd.abilities.cosmic.CosmicNet;
+import net.seep.odd.abilities.darkknight.DarkKnightRuntime;
 import net.seep.odd.abilities.druid.DruidNet;
 import net.seep.odd.abilities.effect.ModEffects;
 import net.seep.odd.abilities.fairy.client.ManageFlowersScreen;
@@ -62,8 +64,8 @@ import net.seep.odd.abilities.owl.client.OwlSonarClient;
 import net.seep.odd.abilities.owl.net.OwlNetworking;
 import net.seep.odd.abilities.possession.PossessionManager;
 import net.seep.odd.abilities.power.*;
-import net.seep.odd.abilities.rat.PehkuiUtil;
 import net.seep.odd.abilities.rider.RiderNet;
+import net.seep.odd.abilities.shift.ShiftNet;
 import net.seep.odd.abilities.spectral.SpectralNet;
 import net.seep.odd.abilities.spectral.SpectralPhaseHooks;
 import net.seep.odd.abilities.spectral.SpectralRenderState;
@@ -83,18 +85,25 @@ import net.seep.odd.block.combiner.recipe.ModCombinerRecipes;
 import net.seep.odd.block.falseflower.FalseFlowerTracker;
 import net.seep.odd.block.gate.DimensionalGateBlockEntity;
 import net.seep.odd.block.gate.GateCommands;
+import net.seep.odd.block.gate.GateTeleportQueue;
+import net.seep.odd.block.gate.GateTeleportSystem;
 import net.seep.odd.block.grandanvil.ModScreens;
 import net.seep.odd.block.grandanvil.net.GrandAnvilNet;
 import net.seep.odd.block.grandanvil.recipe.ModGrandAnvilRecipes;
 
 import net.seep.odd.block.rps_machine.screen.RpsMachineScreenHandlers;
 import net.seep.odd.commands.OddCooldownCommand;
+import net.seep.odd.device.guild.GuildNetworking;
+import net.seep.odd.device.info.InfoNetworking;
 import net.seep.odd.device.social.SocialNetworking;
+import net.seep.odd.device.store.DabloonStoreNetworking;
+import net.seep.odd.device.store.screen.StoreScreenHandlers;
 import net.seep.odd.enchant.ItalianStompersHandler;
 import net.seep.odd.enchant.ModEnchantments;
 
 import net.seep.odd.entity.ModBoats;
 import net.seep.odd.entity.ModEntities;
+
 import net.seep.odd.entity.car.RiderCarEntity;
 import net.seep.odd.entity.car.radio.RadioTracksInit;
 import net.seep.odd.entity.creepy.CreepyEntity;
@@ -108,18 +117,23 @@ import net.seep.odd.entity.ufo.UfoSaucerEntity;
 import net.seep.odd.entity.umbra.UmbraEntities;
 import net.seep.odd.entity.zerosuit.client.AnnihilationFx;
 import net.seep.odd.expeditions.Expeditions;
+import net.seep.odd.expeditions.atheneum.granny.GrannyEventManager;
 import net.seep.odd.expeditions.rottenroots.RottenRootsCommands;
 
 import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.item.ModItemGroups;
 import net.seep.odd.item.ModItems;
 
+import net.seep.odd.item.custom.StarSwordController;
+import net.seep.odd.item.outerblaster.OuterBlasterFxNet;
 import net.seep.odd.lore.RottenRootsLoreCommand;
 import net.seep.odd.particles.OddParticles;
+import net.seep.odd.quest.ModQuests;
 import net.seep.odd.shader.ModShaders;
 import net.seep.odd.shop.screen.ModScreenHandlers;
 import net.seep.odd.sky.CelestialCommands;
 
+import net.seep.odd.sky.day.BiomeDayProfileSystem;
 import net.seep.odd.sound.ModSounds;
 
 import net.seep.odd.status.ModStatusEffects;
@@ -144,7 +158,6 @@ public final class Oddities implements ModInitializer {
 		ModSounds.registerSounds();
 		ModStatusEffects.init();
 		net.seep.odd.recipe.ModRecipeSerializers.register();
-		ModShaders.init();
 		PowerNetworking.initServer();
 		net.seep.odd.recipe.ModRecipes.init();
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -154,12 +167,24 @@ public final class Oddities implements ModInitializer {
 
 		net.seep.odd.worldgen.ModStructures.init();
 		WitchlogDebugCommand.register();
+		BiomeDayProfileSystem.init();
+
+
+		ModQuests.init();
 
 
 		// DEVICE
 		SocialNetworking.init();
 		net.seep.odd.device.notes.NotesNetworking.init();
 		net.seep.odd.device.bank.DabloonBankNetworking.init();
+		StoreScreenHandlers.register();
+		DabloonStoreNetworking.init();
+		GuildNetworking.init();
+		InfoNetworking.init();
+		// granny
+		GrannyEventManager.init();
+		ModEnchantments.register();
+		ModEnchantments.registerTicker();
 
 
 
@@ -265,6 +290,9 @@ public final class Oddities implements ModInitializer {
 		Powers.register(new SniperPower());
 		Powers.register(new WizardPower());
 		Powers.register(new SunPower());
+		Powers.register(new CorePower());
+		Powers.register(new DarkKnightPower());
+		Powers.register(new ShiftPower());
 
 		// ---- Commands ----
 		PowerCommands.register();
@@ -274,11 +302,11 @@ public final class Oddities implements ModInitializer {
 
 		// ---- Forger (common/server) ----
 		ModScreens.register(); // screen HANDLERS (server-safe)
-		ModEnchantments.register();
+
 		ModGrandAnvilRecipes.register();
 		GrandAnvilNet.registerServer();
 		ItalianStompersHandler.register();
-		ModEnchantments.registerTicker();
+
 
 
 		ModCombinerRecipes.register();
@@ -417,11 +445,14 @@ public final class Oddities implements ModInitializer {
 
 		// Ghostlings
 		net.seep.odd.abilities.power.GhostlingsPower.registerCommonHooks();
-		GhostPackets.registerC2S();
-
 		net.seep.odd.abilities.ghostlings.GhostPackets.registerC2S();
-		GhostCargoScreenHandler.TYPE = net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry.registerSimple(
-				new Identifier("odd","ghost_cargo"), GhostCargoScreenHandler::new);
+		net.seep.odd.abilities.ghostlings.registry.GhostRegistries.registerAll();
+
+		GhostCargoScreenHandler.TYPE =
+				net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry.registerSimple(
+						new Identifier("odd", "ghost_cargo"),
+						GhostCargoScreenHandler::new
+				);
 
 		// Ice Witch
 		IceWitchPackets.registerServer();
@@ -434,6 +465,9 @@ public final class Oddities implements ModInitializer {
 		// Zero Gravity
 
 		net.seep.odd.abilities.zerosuit.ZeroSuitNet.initCommon();
+
+		// Outerblaster
+
 
 
 
@@ -492,7 +526,7 @@ public final class Oddities implements ModInitializer {
 		SplashPower.init();
 
 
-		ShaderEffectManager.getInstance().manage(new Identifier(Oddities.MOD_ID, "shaders/post/annihilation.json"));
+
 
 		// Climber
 		net.seep.odd.abilities.climber.ClimberBootstrap.initCommon();
@@ -520,8 +554,13 @@ public final class Oddities implements ModInitializer {
 		//Chef
 
 		// Diomensinal Gate
-		net.seep.odd.block.gate.GateTeleportSystem.init();
-		net.seep.odd.block.gate.GateTeleportQueue.init();
+
+		GateTeleportQueue.init();
+		GateTeleportSystem.init();
+
+		// Star Sword
+		StarSwordController.init();
+
 
 		// Sniper
 		SniperPower.init();
@@ -536,6 +575,18 @@ public final class Oddities implements ModInitializer {
 
 		// EVENT (ALIEN INVASION)
 		net.seep.odd.event.alien.AlienInvasionInit.init();
+
+		// Core
+
+		CoreNet.registerServer();
+
+		// Dark Knight
+
+
+		// Shift
+		ShiftNet.registerServer();
+
+
 
 
 

@@ -37,6 +37,7 @@ import net.seep.odd.fluid.ModFluids;
 import net.seep.odd.item.custom.*;
 import net.seep.odd.item.ghost.GhostHandItem;
 import net.seep.odd.item.necromancer.NecromancerStaffItem;
+import net.seep.odd.item.outerblaster.OuterBlasterItem;
 import net.seep.odd.item.wizard.WalkingStickItem;
 import net.seep.odd.sound.ModSounds;
 
@@ -47,6 +48,10 @@ public class ModItems {
     public static final Item COAL_BRIQUETTE = registerItem("coal_briquette", new Item(new FabricItemSettings()));
     public static final Item METAL_DETECTOR = registerItem("metal_detector", new MetalDetectorItem(new FabricItemSettings().maxDamage(64)));
     public static final Item RUBY_STAFF = registerItem("ruby_staff", new Item(new FabricItemSettings().maxCount(1)));
+    public static final Item BONE_BOW = registerItem(
+            "bone_bow",
+            new BoneBowItem(new Item.Settings().maxDamage(384))
+    );
     public static final Item TAME_BALL = registerItem("tame_ball", new TameBallItem(new FabricItemSettings().maxCount(16)));
     public static final Item GHOST_HAND = registerItem("ghost_hand", new GhostHandItem(new FabricItemSettings().maxCount(1)));
     public static final Item OCEAN_CHAKRAM = registerItem(
@@ -58,10 +63,36 @@ public class ModItems {
                     new FabricItemSettings().maxCount(1)
             )
     );
+    public static final Item STAR_SWORD = Registry.register(
+            Registries.ITEM,
+            new Identifier("odd", "star_sword"),
+            new StarSwordItem()
+    );
     // in ModItems.java
     public static final Item TRUMPET_AXE = registerItem(
             "trumpet_axe",
             new TrumpetAxeItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
+    );
+    public static final Item TRUMPET_AXE_PINK = registerItem(
+            "trumpet_axe_pink",
+            new PinkTrumpetAxeItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
+    );
+    public static final Item TRUMPET_AXE_BLUE = registerItem(
+            "trumpet_axe_blue",
+            new BlueTrumpetAxeItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
+    );
+
+    public static final Item MECHANICAL_FIST = registerItem(
+            "mechanical_fist",
+            new MechanicalFistItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
+    );
+    public static final Item MECHANICAL_FIST_GREEN = registerItem(
+            "mechanical_fist_green",
+            new MechanicalFistGreenItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
+    );
+    public static final Item MECHANICAL_FIST_BLUE = registerItem(
+            "mechanical_fist_blue",
+            new MechanicalFistBlueItem(new FabricItemSettings().maxCount(1).maxDamage(1561))
     );
     public static final Item GHAST_SHOES = registerItem("ghast_shoes",
             new GhastShoesItem(ArmorMaterials.NETHERITE,
@@ -97,9 +128,18 @@ public class ModItems {
     public static final Item COSMIC_KATANA = registerItem("cosmic_katana", new CosmicKatanaItem(new FabricItemSettings().maxCount(1).maxDamage(1561)));
     public static final Item GUITAR = registerItem("guitar",
             new GuitarItem(new FabricItemSettings()));
+    public static final Item GUITAR_BLUE = registerItem("blue_guitar",
+            new BlueGuitarItem(new FabricItemSettings()));
+    public static final Item GUITAR_ENDER = registerItem("ender_guitar",
+            new EnderGuitarItem(new FabricItemSettings()));
     public static final Item RAT_HAT = registerItem("rat_hat",
             new RatHatItem(ArmorMaterials.NETHERITE,
                     new FabricItemSettings().maxCount(1).fireproof()));
+    public static final Item OUTER_BLASTER = registerItem(
+            "outer_blaster",
+            new OuterBlasterItem(new FabricItemSettings().maxCount(1).maxDamage(650), ModEntities.BLASTER_PROJECTILE)
+    );
+
 
     public static final Item LUNAR_DRILL = Registry.register(Registries.ITEM, new Identifier(Oddities.MOD_ID, "lunar_drill"), new LunarDrillItem(new Item.Settings().maxCount(1)));
     public static final Item FIRE_SWORD = Registry.register(Registries.ITEM, new Identifier("odd", "fire_sword"),

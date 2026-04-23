@@ -10,6 +10,10 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.seep.odd.Oddities;
+import net.seep.odd.client.device.guild.DeviceGuildScreen;
+import net.seep.odd.client.device.info.DeviceInfoScreen;
+import net.seep.odd.client.device.notes.DeviceNotesScreen;
+import net.seep.odd.client.device.social.DeviceSocialScreen;
 
 public final class DeviceHomeScreen extends Screen {
     public static final int GUI_W = 240;
@@ -129,10 +133,12 @@ public final class DeviceHomeScreen extends Screen {
                 playClickSound();
                 if (this.client != null) {
                     switch (app) {
-                        case SOCIAL -> this.client.setScreen(new net.seep.odd.client.device.social.DeviceSocialScreen());
-                        case NOTES -> this.client.setScreen(new net.seep.odd.client.device.notes.DeviceNotesScreen());
+                        case SOCIAL -> this.client.setScreen(new DeviceSocialScreen());
+                        case NOTES -> this.client.setScreen(new DeviceNotesScreen());
                         case DABLOON_BANK -> this.client.setScreen(new net.seep.odd.client.device.bank.DeviceBankScreen());
-                        default -> this.client.setScreen(new DevicePlaceholderScreen(app));
+                        case STORE -> DeviceStoreAppLauncher.open();
+                        case INFO -> this.client.setScreen(new DeviceInfoScreen());
+                        case GUILD -> this.client.setScreen(new DeviceGuildScreen());
                     }
                 }
                 return true;

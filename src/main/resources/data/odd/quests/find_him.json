@@ -1,0 +1,15 @@
+{
+  "id": "find_him",
+  "title": "Find Him",
+  "description": "Track Him down, survive the shifting mazes five times, then return to the librarian.",
+  "icon": "odd:textures/gui/quest_icons/default.png",
+  "unlockLevel": 0,
+  "questXp": 2,
+  "music": "odd:quest_him",
+  "objective": {
+    "type": "find_him",
+    "entity": "odd:him",
+    "count": 5
+  },
+  "rewards": []
+}

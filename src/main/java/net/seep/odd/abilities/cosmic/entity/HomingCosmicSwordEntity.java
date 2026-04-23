@@ -48,7 +48,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 public class HomingCosmicSwordEntity extends ProjectileEntity implements GeoEntity {
     private static final double SPEED     = 0.9;   // blocks/tick
     private static final double TURN_RATE = 0.35;  // steering strength
-    private static final float  DAMAGE    = 12.0f;
+    private static final float  DAMAGE    = 4.0f;
     private static final int    LIFE_MAX  = 320;   // ~16s
     private static final String GLOW_TEAM = "odd_cosmic_glow_black";
 

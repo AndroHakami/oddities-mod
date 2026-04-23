@@ -39,20 +39,35 @@ import net.seep.odd.entity.cultist.CentipedeEntity;
 import net.seep.odd.entity.cultist.ShyGuyEntity;
 import net.seep.odd.entity.cultist.SightseerEntity;
 import net.seep.odd.entity.cultist.WeepingAngelEntity;
+import net.seep.odd.entity.darkknight.DarkShieldEntity;
+import net.seep.odd.entity.dragoness.DragonessEntity;
+import net.seep.odd.entity.dragoness.UfoProtectorEntity;
 import net.seep.odd.entity.eggasaur.EggasaurEntity;
 import net.seep.odd.entity.firefly.FireflyEntity;
 import net.seep.odd.entity.flyingwitch.FlyingWitchEntity;
 import net.seep.odd.entity.flyingwitch.HexProjectileEntity;
+import net.seep.odd.entity.granny.GrannyEntity;
+import net.seep.odd.entity.him.HimEntity;
+import net.seep.odd.entity.rake.RakeEntity;
+import net.seep.odd.entity.librarian.LibrarianEntity;
 import net.seep.odd.entity.misty.MistyBubbleEntity;
+import net.seep.odd.entity.outerblaster.BlasterProjectileEntity;
 import net.seep.odd.entity.outerman.OuterManEntity;
+import net.seep.odd.entity.outerman.OuterManGunnerEntity;
+import net.seep.odd.entity.race_rascal.RaceRascalEntity;
+import net.seep.odd.entity.rascal.RascalEntity;
+import net.seep.odd.entity.robo_rascal.RoboRascalEntity;
+import net.seep.odd.entity.scared_rascal.ScaredRascalEntity;
 import net.seep.odd.entity.rotten_roots.ElderShroomEntity;
 import net.seep.odd.entity.rotten_roots.ShroomEntity;
 import net.seep.odd.entity.rotten_roots.SporeMushroomProjectileEntity;
+import net.seep.odd.entity.scared_rascal_fight.ScaredRascalFightEntity;
 import net.seep.odd.entity.seal.SealEntity;
 import net.seep.odd.entity.skitter.SkitterEntity;
 import net.seep.odd.entity.skull_bird.SkullBirdEntity;
+import net.seep.odd.entity.star_ride.StarRideEntity;
 import net.seep.odd.entity.sun.PocketSunEntity;
-import net.seep.odd.entity.ufo.UfoSaucerEntity;
+import net.seep.odd.entity.ufo.*;
 import net.seep.odd.abilities.cosmic.entity.HomingCosmicSwordEntity;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
 import net.seep.odd.entity.spotted.PhantomBuddyEntity;
@@ -65,6 +80,7 @@ import net.seep.odd.abilities.fallingsnow.BigSnowballEntity;
 import net.seep.odd.entity.whiskers.WhiskersEntity;
 import net.seep.odd.entity.windwitch.TornadoProjectileEntity;
 import net.seep.odd.entity.windwitch.WindWitchEntity;
+import net.seep.odd.entity.zerosuit.ZeroGrenadeEntity;
 import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
 
 // ===== NEW: Necromancer corpses =====
@@ -74,8 +90,7 @@ import net.seep.odd.entity.necromancer.SkeletonCorpseEntity;
 // ===== NEW: Sniper grapple =====
 import net.seep.odd.abilities.sniper.entity.SniperGrappleAnchorEntity;
 import net.seep.odd.abilities.sniper.entity.SniperGrappleShotEntity;
-import net.seep.odd.expeditions.rottenroots.boggy.BoggyBoatEntity;
-import net.seep.odd.expeditions.rottenroots.boggy.BoggyChestBoatEntity;
+import net.seep.odd.abilities.shift.entity.DecoyEntity;
 
 public final class ModEntities {
     private ModEntities() {}
@@ -88,7 +103,10 @@ public final class ModEntities {
     public static final Identifier BREW_BOTTLE_ID        = new Identifier(Oddities.MOD_ID, "brew_bottle");
 
     public static final Identifier UFO_SAUCER_ID         = new Identifier(Oddities.MOD_ID, "ufo_saucer");
+    public static final Identifier UFO_SLICER_ID         = new Identifier(Oddities.MOD_ID, "ufo_slicer");
+    public static final Identifier UFO_PROTECTOR_ID         = new Identifier(Oddities.MOD_ID, "ufo_protector");
     public static final Identifier OUTERMAN_ID           = new Identifier(Oddities.MOD_ID, "outerman");
+    public static final Identifier OUTERMAN_GUNNER_ID           = new Identifier(Oddities.MOD_ID, "outerman_gunner");
 
     public static final Identifier RIDER_CAR_ID          = new Identifier(Oddities.MOD_ID, "rider_car");
 
@@ -102,6 +120,7 @@ public final class ModEntities {
     public static final Identifier PHANTOM_BUDDY_ID      = new Identifier(Oddities.MOD_ID, "phantom_buddy");
 
     public static final Identifier ZERO_BEAM_ID          = new Identifier(Oddities.MOD_ID, "zero_beam");
+    public static final Identifier ZERO_GRENADE_ID       = new Identifier(Oddities.MOD_ID, "zero_grenade");
     public static final Identifier ZERO_SUIT_MISSILE_ID  = new Identifier(Oddities.MOD_ID, "zero_suit_missile");
 
     public static final Identifier HEALING_SNOWBALL_ID   = new Identifier(Oddities.MOD_ID, "healing_snowball");
@@ -147,6 +166,15 @@ public final class ModEntities {
 
     // Atheneum
     public static final Identifier BOOKLET_ID = new Identifier(Oddities.MOD_ID, "booklet");
+    public static final Identifier RASCAL_ID = new Identifier(Oddities.MOD_ID, "rascal");
+    public static final Identifier RACE_RASCAL_ID = new Identifier(Oddities.MOD_ID, "race_rascal");
+    public static final Identifier ROBO_RASCAL_ID = new Identifier(Oddities.MOD_ID, "robo_rascal");
+    public static final Identifier STAR_RIDE_ID = new Identifier(Oddities.MOD_ID, "star_ride");
+    public static final Identifier HIM_ID = new Identifier(Oddities.MOD_ID, "him");
+    public static final Identifier SCARED_RASCAL_ID = new Identifier(Oddities.MOD_ID, "scared_rascal");
+    public static final Identifier SCARED_RASCAL_FIGHT_ID = new Identifier(Oddities.MOD_ID, "scared_rascal_fight");
+    public static final Identifier RAKE_ID = new Identifier(Oddities.MOD_ID, "rake");
+    public static final Identifier DRAGONESS_ID = new Identifier(Oddities.MOD_ID, "dragoness");
 
     // Wizard
     public static final Identifier WIZARD_FIRE_PROJECTILE_ID   = new Identifier(Oddities.MOD_ID, "wizard_fire_projectile");
@@ -164,6 +192,11 @@ public final class ModEntities {
     // Ice Statue
     public static final Identifier ICE_STATUE_ID = new Identifier(Oddities.MOD_ID, "ice_statue");
 
+    // librarian
+    public static final Identifier LIBRARIAN_ID = new Identifier(Oddities.MOD_ID, "librarian");
+    public static final Identifier DARK_SHIELD_ID = new Identifier(Oddities.MOD_ID, "dark_shield");
+    public static final Identifier DECOY_ID = new Identifier(Oddities.MOD_ID, "decoy");
+
     // Rotten Roots
     // Rotten Roots: Shrooms
     public static final Identifier SHROOM_ID       = new Identifier(Oddities.MOD_ID, "shroom");
@@ -179,6 +212,10 @@ public final class ModEntities {
     public static final Identifier BOSS_WITCH_SNARE_ID = new Identifier(Oddities.MOD_ID, "boss_witch_snare");
     public static final Identifier BOSS_GOLEM_ID = new Identifier(Oddities.MOD_ID, "boss_golem");
     public static final Identifier SKULL_BIRD_ID = new Identifier(Oddities.MOD_ID, "skull_bird");
+    public static final Identifier ALIEN_BOMB_ID    = new Identifier(Oddities.MOD_ID, "alien_bomb");
+    public static final Identifier UFO_BOMBER_ID    = new Identifier(Oddities.MOD_ID, "ufo_bomber");
+    public static final Identifier OUTER_MECH_ID    = new Identifier(Oddities.MOD_ID, "outer_mech");
+    public static final Identifier ALIEN_MISSILE_ID    = new Identifier(Oddities.MOD_ID, "alien_missile");
 
 
 
@@ -190,6 +227,113 @@ public final class ModEntities {
        ========================================================= */
 
     // ADD TO ModEntities
+
+    public static final EntityType<GrannyEntity> GRANNY = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier("odd", "granny"),
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, GrannyEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.8f, 2.1f))
+                    .trackRangeChunks(10)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    // Dark Knight: Dark Shield
+    public static final EntityType<DarkShieldEntity> DARK_SHIELD = Registry.register(
+            Registries.ENTITY_TYPE,
+            DARK_SHIELD_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MISC,
+                            (EntityType<DarkShieldEntity> type, World world) -> new DarkShieldEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.0f, 0.0f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    public static final EntityType<RascalEntity> RASCAL = Registry.register(
+            Registries.ENTITY_TYPE,
+            RASCAL_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, RascalEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.45f, 1.45f))
+                    .trackRangeBlocks(94)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    public static final EntityType<RaceRascalEntity> RACE_RASCAL = Registry.register(
+            Registries.ENTITY_TYPE,
+            RACE_RASCAL_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, RaceRascalEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.15f, 1.15f))
+                    .trackRangeBlocks(94)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<StarRideEntity> STAR_RIDE = Registry.register(
+            Registries.ENTITY_TYPE,
+            STAR_RIDE_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, StarRideEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.6f, 0.4f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<HimEntity> HIM = Registry.register(
+            Registries.ENTITY_TYPE,
+            HIM_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, HimEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.72f, 1.92f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<ScaredRascalEntity> SCARED_RASCAL = Registry.register(
+            Registries.ENTITY_TYPE,
+            SCARED_RASCAL_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ScaredRascalEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.45f, 1.45f))
+                    .trackRangeBlocks(94)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    public static final EntityType<ScaredRascalFightEntity> SCARED_RASCAL_FIGHT = Registry.register(
+            Registries.ENTITY_TYPE,
+            SCARED_RASCAL_FIGHT_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, ScaredRascalFightEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.45f, 1.45f))
+                    .trackRangeBlocks(94)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+    public static final EntityType<RakeEntity> RAKE = Registry.register(
+            Registries.ENTITY_TYPE,
+            RAKE_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, RakeEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.95f, 2.35f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<RoboRascalEntity> ROBO_RASCAL = Registry.register(
+            Registries.ENTITY_TYPE,
+            ROBO_RASCAL_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, RoboRascalEntity::new)
+                    .dimensions(EntityDimensions.fixed(1.35f, 1.35f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
+    public static final EntityType<DragonessEntity> DRAGONESS = Registry.register(
+            Registries.ENTITY_TYPE,
+            DRAGONESS_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MONSTER, DragonessEntity::new)
+                    .dimensions(EntityDimensions.fixed(3.2f, 5.6f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
     public static final EntityType<SkullBirdEntity> SKULL_BIRD = Registry.register(
             Registries.ENTITY_TYPE,
             new Identifier(Oddities.MOD_ID, "skull_bird"),
@@ -209,6 +353,15 @@ public final class ModEntities {
                     .trackedUpdateRate(2)
                     .build()
     );
+    public static final EntityType<OuterMechEntity> OUTER_MECH = Registry.register(
+            Registries.ENTITY_TYPE,
+            OUTER_MECH_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, OuterMechEntity::new)
+                    .dimensions(EntityDimensions.fixed(4.6f, 5.2f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
     public static final EntityType<BossWitchEntity> BOSS_WITCH = Registry.register(
             Registries.ENTITY_TYPE,
             BOSS_WITCH_ID,
@@ -218,6 +371,7 @@ public final class ModEntities {
                     .trackedUpdateRate(2)
                     .build()
     );
+
 
     public static final EntityType<FlamingSkullEntity> FLAMING_SKULL = Registry.register(
             Registries.ENTITY_TYPE,
@@ -229,7 +383,26 @@ public final class ModEntities {
                     .forceTrackedVelocityUpdates(true)
                     .build()
     );
-
+    public static final EntityType<AlienBombEntity> ALIEN_BOMB = Registry.register(
+            Registries.ENTITY_TYPE,
+            ALIEN_BOMB_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, AlienBombEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.85f, 1.45f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+    public static final EntityType<AlienMissileEntity> ALIEN_MISSILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            ALIEN_MISSILE_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, AlienMissileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.65f, 0.65f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
     public static final EntityType<RottenSpikeEntity> ROTTEN_SPIKE = Registry.register(
             Registries.ENTITY_TYPE,
             ROTTEN_SPIKE_ID,
@@ -296,6 +469,15 @@ public final class ModEntities {
             new Identifier(Oddities.MOD_ID, "hex_projectile"),
             FabricEntityTypeBuilder.create(SpawnGroup.MISC, HexProjectileEntity::new)
                     .dimensions(EntityDimensions.fixed(0.50f, 0.50f))
+                    .trackRangeBlocks(80)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<BlasterProjectileEntity> BLASTER_PROJECTILE = Registry.register(
+            Registries.ENTITY_TYPE,
+            new Identifier(Oddities.MOD_ID, "blaster_projectile"),
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, BlasterProjectileEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.70f, 0.70f))
                     .trackRangeBlocks(80)
                     .trackedUpdateRate(1)
                     .build()
@@ -684,6 +866,18 @@ public final class ModEntities {
                     .build()
     );
 
+    // Zero Suit: Frag grenade
+    public static final EntityType<ZeroGrenadeEntity> ZERO_GRENADE = Registry.register(
+            Registries.ENTITY_TYPE,
+            ZERO_GRENADE_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.MISC, ZeroGrenadeEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.5f, 0.5f))
+                    .trackRangeBlocks(128)
+                    .trackedUpdateRate(1)
+                    .forceTrackedVelocityUpdates(true)
+                    .build()
+    );
+
     // Zero Suit: Missile
     public static final EntityType<ZeroSuitMissileEntity> ZERO_SUIT_MISSILE = Registry.register(
             Registries.ENTITY_TYPE,
@@ -855,6 +1049,44 @@ public final class ModEntities {
                     .trackedUpdateRate(1)
                     .build()
     );
+    public static final EntityType<UfoBomberEntity> UFO_BOMBER = Registry.register(
+            Registries.ENTITY_TYPE,
+            UFO_BOMBER_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MISC,
+                            (EntityType<UfoBomberEntity> type, World world) -> new UfoBomberEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(5.8f, 2.2f))
+                    .trackRangeBlocks(166)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    // UFO SLICER
+    public static final EntityType<UfoSlicerEntity> UFO_SLICER = Registry.register(
+            Registries.ENTITY_TYPE,
+            UFO_SLICER_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MISC,
+                            (EntityType<UfoSlicerEntity> type, World world) -> new UfoSlicerEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(3.8f, 2.2f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<UfoProtectorEntity> UFO_PROTECTOR = Registry.register(
+            Registries.ENTITY_TYPE,
+            UFO_PROTECTOR_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MISC,
+                            (EntityType<UfoProtectorEntity> type, World world) -> new UfoProtectorEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(3.8f, 2.2f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+
 
     // Outerman
     public static final EntityType<OuterManEntity> OUTERMAN = Registry.register(
@@ -864,7 +1096,19 @@ public final class ModEntities {
                             SpawnGroup.MONSTER,
                             (EntityType<OuterManEntity> type, World world) -> new OuterManEntity(type, world)
                     )
-                    .dimensions(EntityDimensions.fixed(0.6f, 1.25f))
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.75f))
+                    .trackRangeBlocks(64)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<OuterManGunnerEntity> OUTERMAN_GUNNER = Registry.register(
+            Registries.ENTITY_TYPE,
+            OUTERMAN_GUNNER_ID,
+            FabricEntityTypeBuilder.create(
+                            SpawnGroup.MONSTER,
+                            (EntityType<OuterManGunnerEntity> type, World world) -> new OuterManGunnerEntity(type, world)
+                    )
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.75f))
                     .trackRangeBlocks(64)
                     .trackedUpdateRate(1)
                     .build()
@@ -963,6 +1207,15 @@ public final class ModEntities {
                             net.seep.odd.entity.falsefrog.FalseFrogEntity.HEIGHT
                     ))
                     .trackRangeBlocks(96)
+                    .trackedUpdateRate(1)
+                    .build()
+    );
+    public static final EntityType<LibrarianEntity> LIBRARIAN = Registry.register(
+            Registries.ENTITY_TYPE,
+            LIBRARIAN_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, LibrarianEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.95f))
+                    .trackRangeBlocks(64)
                     .trackedUpdateRate(2)
                     .build()
     );
@@ -988,7 +1241,7 @@ public final class ModEntities {
             FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, DarkHorseEntity::new)
                     .dimensions(EntityDimensions.fixed(1.95507816F, 2.24F))
                     .trackRangeBlocks(96)
-                    .trackedUpdateRate(3)
+                    .trackedUpdateRate(2)
                     .build()
     );
 
@@ -1041,6 +1294,16 @@ public final class ModEntities {
                     .build()
     );
 
+    public static final EntityType<DecoyEntity> DECOY = Registry.register(
+            Registries.ENTITY_TYPE,
+            DECOY_ID,
+            FabricEntityTypeBuilder.create(SpawnGroup.CREATURE, DecoyEntity::new)
+                    .dimensions(EntityDimensions.fixed(0.6f, 1.9f))
+                    .trackRangeBlocks(96)
+                    .trackedUpdateRate(2)
+                    .build()
+    );
+
     /**
      * Call this once in mod init (you already do).
      * EntityTypes are already registered above; this is only for attribute registration.
@@ -1050,10 +1313,16 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(GHOSTLING, GhostlingEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(RIDER_CAR, RiderCarEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(UFO_SAUCER, UfoSaucerEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(UFO_SLICER, UfoSlicerEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(OUTERMAN, OuterManEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(UFO_PROTECTOR, UfoProtectorEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(OUTERMAN_GUNNER, OuterManGunnerEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(OUTER_MECH, OuterMechEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(PHANTOM_BUDDY, PhantomBuddyEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(FALSE_FROG, net.seep.odd.entity.falsefrog.FalseFrogEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(FIREFLY, FireflyEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(UFO_BOMBER, UfoBomberEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(DARK_SHIELD, DarkShieldEntity.createAttributes());
 
         // Conquer
         FabricDefaultAttributeRegistry.register(DARK_HORSE, DarkHorseEntity.createDarkHorseAttributes());
@@ -1067,6 +1336,7 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(CENTIPEDE, CentipedeEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(BOSS_WITCH, BossWitchEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(FLAMING_SKULL, FlamingSkullEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(STAR_RIDE, StarRideEntity.createAttributes());
 
         // Rise
         FabricDefaultAttributeRegistry.register(RISEN_ZOMBIE,
@@ -1083,8 +1353,19 @@ public final class ModEntities {
         FabricDefaultAttributeRegistry.register(FLYING_WITCH, FlyingWitchEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(WIND_WITCH, WindWitchEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(BOSS_GOLEM, BossGolemEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(LIBRARIAN, LibrarianEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(SKULL_BIRD, SkullBirdEntity.createSkullBirdAttributes());
+        FabricDefaultAttributeRegistry.register(RASCAL, RascalEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(RACE_RASCAL, RaceRascalEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(ROBO_RASCAL, RoboRascalEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(SCARED_RASCAL_FIGHT, ScaredRascalFightEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(HIM, HimEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(SCARED_RASCAL, ScaredRascalEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(RAKE, RakeEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(ModEntities.GRANNY, GrannyEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(DRAGONESS, DragonessEntity.createAttributes());
         FabricDefaultAttributeRegistry.register(ModEntities.FAT_WITCH, net.seep.odd.entity.fatwitch.FatWitchEntity.createAttributes());
+        FabricDefaultAttributeRegistry.register(DECOY, DecoyEntity.createAttributes());
 
 
 

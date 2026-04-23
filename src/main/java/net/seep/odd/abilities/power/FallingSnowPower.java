@@ -61,16 +61,24 @@ public final class FallingSnowPower implements Power, ChargedPower, HoldReleaseP
     }
 
     @Override public String longDescription() {
-        return "Blink a short distance (2 charges). Tap to toss a healing snowball, or charge to launch a heavy snowball that knocks back and slows enemies.";
+        return "The snowflakes gather around you, use snow to teleport, heal allies or knock enemies away!";
     }
 
     @Override public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary"   -> "Blink ~6 blocks. Landing on a target deals damage. Two charges that refill over time.";
-            case "secondary" -> "Hold to charge. Tap: heal allies (+2♥). Charged: 5♥ damage, Slowness, strong knockback.";
+            case "primary"   -> "Teleport in the direction you are looking, teleporting into an entity directly will deal damage to it!";
+            case "secondary" -> "Shoot a healing snowball, alternatively hold to charge up a powerful snowball that does high damage and knockback.";
             default -> "";
         };
     }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "FREEZING TELEPORT";
+            case "secondary" -> "DOUBLE SIDED SNOWBALL";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
 
     @Override public Identifier portraitTexture() { return new Identifier(Oddities.MOD_ID, "textures/gui/overview/fallingsnow.png"); }
 

@@ -1,0 +1,6 @@
+{
+  "parent": "item/bow",
+  "textures": {
+    "layer0": "odd:item/bone_bow_pulling_1"
+  }
+}

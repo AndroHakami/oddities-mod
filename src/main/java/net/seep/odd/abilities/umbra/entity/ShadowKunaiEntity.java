@@ -24,6 +24,8 @@ import net.seep.odd.sound.ModSounds;
 
 import org.joml.Vector3f;
 
+import java.util.Set;
+
 public class ShadowKunaiEntity extends ThrownItemEntity {
 
     private int maxLifeTicks = 40;
@@ -88,33 +90,59 @@ public class ShadowKunaiEntity extends ThrownItemEntity {
 
     @Override
     protected void onBlockHit(BlockHitResult hit) {
-        if (this.getWorld().isClient) return;
+        super.onBlockHit(hit);
 
-        Entity owner = this.getOwner();
-        if (!(owner instanceof ServerPlayerEntity sp)) {
-            burstRedDust(false);
-            poofRedSmoke();
+        if (this.getWorld().isClient()) return;
+        if (!(this.getOwner() instanceof ServerPlayerEntity player)) {
+            this.discard();
+            return;
+        }
+        if (!(player.getWorld() instanceof ServerWorld sw)) {
             this.discard();
             return;
         }
 
-        ServerWorld sw = (ServerWorld) this.getWorld();
-
-        Vec3d target = hit.getPos();
-        Vec3d safe = findSafeStandPos(sw, target);
-        if (safe != null) {
-            teleportPlayer(sw, sp, safe);
-
-            // ✅ TP sound (custom)
-            sw.playSound(null, BlockPos.ofFloored(safe), ModSounds.SHADOW_KUNAI_TP,
-                    SoundCategory.PLAYERS, 1.0f, 1.0f);
-        }
-
-        // ✅ tiny dust burst on block hit
-        burstRedDust(false);
-
-        poofRedSmoke();
+        teleportOwnerToBlockFace(player, sw, hit);
         this.discard();
+    }
+
+
+
+    private void teleportOwnerToBlockFace(ServerPlayerEntity player, ServerWorld sw, BlockHitResult hit) {
+        Direction side = hit.getSide();
+
+        // move the player slightly OUT from the wall face so they don’t get stuck in the block
+        Vec3d offset = Vec3d.of(side.getVector()).multiply(0.65);
+        Vec3d dest = hit.getPos().add(offset);
+
+        player.teleport(sw, dest.x, dest.y, dest.z, Set.of(), player.getYaw(), player.getPitch());
+        player.fallDistance = 0.0F;
+    }
+
+    private void teleportOwnerNearEntity(ServerPlayerEntity player, ServerWorld sw, EntityHitResult hit) {
+        Vec3d impact = hit.getPos();
+
+        player.teleport(sw, impact.x, impact.y, impact.z, Set.of(), player.getYaw(), player.getPitch());
+        player.fallDistance = 0.0F;
+    }
+
+    private void swapPositions(ServerPlayerEntity player, LivingEntity target, ServerWorld sw) {
+        Vec3d playerPos = player.getPos();
+        Vec3d targetPos = target.getPos();
+
+        float playerYaw = player.getYaw();
+        float playerPitch = player.getPitch();
+
+        float targetYaw = target.getYaw();
+        float targetPitch = target.getPitch();
+
+        player.teleport(sw, targetPos.x, targetPos.y, targetPos.z, Set.of(), playerYaw, playerPitch);
+        player.fallDistance = 0.0F;
+
+        target.requestTeleport(playerPos.x, playerPos.y, playerPos.z);
+        target.setYaw(targetYaw);
+        target.setPitch(targetPitch);
+        target.fallDistance = 0.0F;
     }
 
     @Override

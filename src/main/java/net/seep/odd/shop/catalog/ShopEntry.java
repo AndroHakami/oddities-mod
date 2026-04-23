@@ -6,7 +6,16 @@ public final class ShopEntry {
 
     public enum PreviewType {
         @SerializedName("item") ITEM,
-        @SerializedName("entity") ENTITY
+        @SerializedName("entity") ENTITY,
+        @SerializedName("armour") ARMOUR
+    }
+
+    public enum PreviewArmourSlot {
+        @SerializedName("auto") AUTO,
+        @SerializedName("head") HEAD,
+        @SerializedName("chest") CHEST,
+        @SerializedName("legs") LEGS,
+        @SerializedName("feet") FEET
     }
 
     public enum Category {
@@ -30,16 +39,15 @@ public final class ShopEntry {
     public int sortOrder = 0;
     public boolean pet = false;
 
-    // what the player actually gets after purchase
     public GrantType grantType = GrantType.ITEM;
     public String giveItemId = "minecraft:stone";
     public int giveCount = 1;
     public String grantCommand = "";
 
-    // preview info
     public PreviewType previewType = PreviewType.ITEM;
     public String previewItemId = "";
     public String previewEntityType = "";
+    public PreviewArmourSlot previewArmourSlot = PreviewArmourSlot.AUTO;
 
     public ShopEntry() {}
 }

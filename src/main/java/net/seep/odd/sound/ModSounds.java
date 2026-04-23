@@ -48,7 +48,34 @@ public class ModSounds {
     public static final SoundEvent SHADOW_KUNAI_SWAP  = registerSoundEvent("shadow_kunai_swap");
     public static final SoundEvent UMBRA_SHADOW_SHIFT  = registerSoundEvent("umbra_shadow_shift");
     public static final SoundEvent WITCH_BOSS = registerSoundEvent("witch_boss");
+    public static final SoundEvent BLOCKADE_STOMP = registerSoundEvent("blockade_stomp");
     public static final SoundEvent WITCH_BOSS_2 = registerSoundEvent("witch_boss_2");
+    public static final SoundEvent HIM = registerSoundEvent("him");
+
+    // shift
+    public static final SoundEvent SHIFT_CLAP = registerSoundEvent("shift_clap");
+
+
+    // Atheneum Quests
+    public static final SoundEvent QUEST_SCREEN = registerSoundEvent("quest_screen");
+    public static final SoundEvent QUEST_FIGHT = registerSoundEvent("quest_fight");
+    public static final SoundEvent QUEST_SILLY = registerSoundEvent("quest_silly");
+    public static final SoundEvent QUEST_HIM = registerSoundEvent("quest_him");
+    public static final SoundEvent QUEST_RUN = registerSoundEvent("quest_run");
+    public static final SoundEvent COUNTDOWN = registerSoundEvent("countdown");
+
+    // Core
+
+    public static final SoundEvent CORE_TICK = registerSoundEvent("core_tick");
+    public static final SoundEvent CORE_FAST_TICK = registerSoundEvent("core_fast_tick");
+    public static final SoundEvent PACT_LINK = registerSoundEvent("pact_link");
+    public static final SoundEvent PACT_TELEPORT = registerSoundEvent("pact_teleport");
+
+
+    // Mechanical Fist
+    public static final SoundEvent FIST_PUNCH = registerSoundEvent("fist_punch");
+    public static final SoundEvent FIST_PUNCH_STRONG = registerSoundEvent("fist_punch_strong");
+    public static final SoundEvent FIST_PUNCH_STRONG_CHARGE = registerSoundEvent("fist_punch_strong_charge");
 
 
     // UFO SHIT
@@ -60,6 +87,33 @@ public class ModSounds {
     public static final SoundEvent SAUCER_DEATH = registerSoundEvent("saucer_death");
     public static final SoundEvent JETPACK_ACTIVATE = registerSoundEvent("jetpack_activate");
     public static final SoundEvent JETPACK_FLYING = registerSoundEvent("jetpack_flying");
+    public static final SoundEvent UFO_SLICE = registerSoundEvent("ufo_slice");
+    public static final SoundEvent ALIEN_BOMB_FALLING = registerSoundEvent("alien_bomb_falling");
+    public static final SoundEvent ALIEN_BOMB_EXPLOSION = registerSoundEvent("alien_bomb_explosion");
+
+    // MECH STUFF
+    public static final SoundEvent MECH_WALK = registerSoundEvent("mech_walk");
+    public static final SoundEvent MECH_RUN = registerSoundEvent("mech_run");
+    public static final SoundEvent MECH_SPAWN = registerSoundEvent("mech_spawn");
+    public static final SoundEvent MECH_EXTENDER_OUT = registerSoundEvent("mech_extender_out");
+    public static final SoundEvent MECH_LASER_CHARGE = registerSoundEvent("mech_laser_charge");
+    public static final SoundEvent MECH_LASER_LOOP = registerSoundEvent("mech_laser_loop");
+    public static final SoundEvent MECH_LEFT_CANNON_FIRE = registerSoundEvent("mech_left_cannon_fire");
+    public static final SoundEvent MECH_RIGHT_CANNON_FIRE = registerSoundEvent("mech_right_cannon_fire");
+
+    // OuterBlaster
+    public static final SoundEvent OUTER_BLASTER_OVERHEAT = registerSoundEvent("outer_blaster_overheat");
+    public static final SoundEvent OUTER_BLASTER_FIRE = registerSoundEvent("outer_blaster_fire");
+    public static final SoundEvent OUTER_BLASTER_EXPLOSION = registerSoundEvent("outer_blaster_explosion");
+
+    // Granny
+    public static final SoundEvent GRANNY = registerSoundEvent("granny");
+    public static final SoundEvent GRANNY_THEME = registerSoundEvent("granny_theme");
+    public static final SoundEvent GRANNY_ALERT = registerSoundEvent("granny_alert");
+    public static final SoundEvent GRANNY_CAUGHT = registerSoundEvent("granny_caught");
+    public static final SoundEvent BELL_RING = registerSoundEvent("bell_ring");
+
+
 
 
     // Rider Car
@@ -81,6 +135,8 @@ public class ModSounds {
     // Zero Suit
     public static final SoundEvent ZERO_CHARGE = registerSoundEvent("zero_charge");
     public static final SoundEvent ZERO_BLAST = registerSoundEvent("zero_blast");
+    public static final SoundEvent ZERO_BOUNCE = registerSoundEvent("zero_bounce");
+    public static final SoundEvent ZERO_TICK = registerSoundEvent("zero_tick");
     public static final SoundEvent GRAVITY = registerSoundEvent("gravity");
     public static final SoundEvent GRAVITY_SWITCH = registerSoundEvent("gravity_switch");
 
@@ -145,6 +201,9 @@ public class ModSounds {
 
     // Invasion
     public static final SoundEvent ALIEN_INVASION = registerSoundEvent("alien_invasion");
+    public static final SoundEvent ALIEN_INVASION_2 = registerSoundEvent("alien_invasion_2");
+    public static final SoundEvent ALIEN_INVASION_3 = registerSoundEvent("alien_invasion_3");
+    public static final SoundEvent ALIEN_INVASION_BOSS = registerSoundEvent("alien_invasion_boss");
 
     // Guitar Item
     public static final SoundEvent GUITAR_HIT = registerSoundEvent("guitar_hit");

@@ -1,0 +1,27 @@
+
+{
+  "id": "kill_3_skitter",
+  "title": "Skitter Cleanup",
+  "description": "The Atheneum's halls have a skitter problem. Hunt down 3 Skitters, then return to the librarian to claim your reward.",
+  "icon": "odd:textures/gui/quest_icons/kill_3_skitter.png",
+  "unlockLevel": 0,
+  "questXp": 1,
+  "music": "odd:quest_fight",
+  "objective": {
+    "type": "kill",
+    "entity": "odd:skitter",
+    "count": 3
+  },
+  "rewards": [
+    {
+      "type": "item",
+      "item": "minecraft:diamond",
+      "count": 1
+    },
+    {
+      "type": "item",
+      "item": "odd:dabloon",
+      "count": 20
+    }
+  ]
+}

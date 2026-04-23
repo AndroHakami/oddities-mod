@@ -80,13 +80,13 @@ public final class AccelerateWorldBurstFx {
                     continue;
                 }
 
-                float t = age / (float) LIFE_TICKS;   // 0..1
+                float t = age / (float) LIFE_TICKS;
                 float inv = 1f - t;
                 float intensity = inv * inv;
 
                 double radius = 0.15 + 2.10 * t;
 
-                // red lightning bolts
+                // emerald lightning bolts
                 int bolts = 10;
                 for (int k = 0; k < bolts; k++) {
                     int seed = b.seed ^ (k * 0x9E3779B9);
@@ -99,7 +99,7 @@ public final class AccelerateWorldBurstFx {
                     drawCrackBolt(matrices, vc, camPos, start, end, seed, intensity);
                 }
 
-                // golden core starburst
+                // mint core starburst
                 int rays = 18;
                 for (int rI = 0; rI < rays; rI++) {
                     int seed = b.seed + 1337 + rI * 41;
@@ -119,7 +119,7 @@ public final class AccelerateWorldBurstFx {
     }
 
     private static void drawRay(MatrixStack matrices, VertexConsumer vc, Vec3d camPos, Vec3d a, Vec3d b, float intensity) {
-        float rr = 1.00f, gg = 0.92f, bb = 0.20f;
+        float rr = 0.72f, gg = 1.00f, bb = 0.82f;
         float aa = 0.55f * intensity;
         addLine(vc, matrices.peek(), camPos, a, b, rr, gg, bb, aa);
     }
@@ -140,10 +140,10 @@ public final class AccelerateWorldBurstFx {
 
             Vec3d p = base.add(ox, oy, oz);
 
-            // gold -> red
-            float rr = 1.00f;
-            float gg = MathHelper.lerp(t, 0.95f, 0.18f);
-            float bb = MathHelper.lerp(t, 0.20f, 0.10f);
+            // mint -> deep green
+            float rr = MathHelper.lerp(t, 0.82f, 0.12f);
+            float gg = MathHelper.lerp(t, 1.00f, 0.92f);
+            float bb = MathHelper.lerp(t, 0.84f, 0.24f);
             float aa = (0.35f + 0.55f * (1.0f - t)) * intensity;
 
             addLine(vc, matrices.peek(), camPos, prev, p, rr, gg, bb, aa);

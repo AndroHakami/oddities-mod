@@ -7,13 +7,11 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -31,37 +29,40 @@ import net.seep.odd.abilities.zerosuit.ZeroSuitCPM;
 import net.seep.odd.abilities.zerosuit.ZeroSuitNet;
 import net.seep.odd.entity.ModEntities;
 import net.seep.odd.entity.zerosuit.ZeroBeamEntity;
-import net.seep.odd.entity.zerosuit.ZeroSuitMissileEntity;
+import net.seep.odd.entity.zerosuit.ZeroGrenadeEntity;
 import net.seep.odd.sound.ModSounds;
 import net.seep.odd.status.ModStatusEffects;
 
 import java.util.*;
 
-public final class ZeroSuitPower implements Power {
+public final class ZeroSuitPower implements Power, ChargedPower {
 
-    /* ======================= PRIMARY: simple missile ======================= */
-    private static final int   MISSILE_COOLDOWN_T = 16;     // 0.8s
-    private static final float MISSILE_SPEED      = 1.65f;  // blocks/tick (fast)
-    private static final float MISSILE_VOL        = 1.0f;
+    /* ======================= PRIMARY: frag grenade ======================= */
+    private static final int   GRENADE_MAX_CHARGES      = 2;
+    private static final int   GRENADE_RECHARGE_T       = 20 * 6;
+    private static final float GRENADE_THROW_SPEED      = 1.05f;
+    private static final float GRENADE_THROW_UP_BIAS    = 0.18f;
+    private static final float GRENADE_THROW_SOUND_VOL  = 1.0f;
+
 
     /* ======================= SECONDARY: blast ======================= */
-    private static final int   BLAST_CHARGE_MAX_T  = 20 * 8;
-    private static final float BLAST_MAX_DAMAGE    = 3.0f;
-    private static final int   BLAST_RANGE_BLOCKS  = 48;
-    private static final int   BLAST_VIS_TICKS     = 12;
+    private static final int   BLAST_CHARGE_MAX_T  = 20 * 4;
+    private static final float BLAST_MAX_DAMAGE    = 12.0f;
+    private static final int   BLAST_RANGE_BLOCKS  = 68;
+    private static final int   BLAST_VIS_TICKS     = 18;
 
-    private static final double BLAST_RADIUS_MIN    = 0.25;
-    private static final double BLAST_RADIUS_MAX    = 1.40;
+    private static final double BLAST_RADIUS_MIN    = 0.65;
+    private static final double BLAST_RADIUS_MAX    = 2.40;
     private static final double BLAST_CORE_FRACTION = 0.55;
 
-    private static final double BLAST_KB_BASE       = 0.55;
-    private static final double BLAST_KB_MAX_ADD    = 6.25;
+    private static final double BLAST_KB_BASE       = 1.55;
+    private static final double BLAST_KB_MAX_ADD    = 7.25;
     private static final double BLAST_KB_CORE_MULT  = 1.35;
     private static final double BLAST_KB_UP_BASE    = 0.06;
     private static final double BLAST_KB_UP_MAX_ADD = 0.16;
 
-    private static final double SELF_RECOIL_BASE    = 0.18;
-    private static final double SELF_RECOIL_MAX_ADD = 0.65;
+    private static final double SELF_RECOIL_BASE    = 0.28;
+    private static final double SELF_RECOIL_MAX_ADD = 0.95;
 
     /**
      * ✅ Now used as: "how long after getting blasted you are immune to FALL damage"
@@ -71,9 +72,9 @@ public final class ZeroSuitPower implements Power {
 
     private static final int HUD_SYNC_EVERY   = 2;
 
-    /* ======================= THIRD: jetpack ======================= */
-    private static final int JETPACK_FUEL_MAX          = 50;
-    private static final int JETPACK_DRAIN_PER_TICK    = 2;   // while holding space
+    /* ======================= mobility support ======================= */
+    private static final int JETPACK_FUEL_MAX          = 20;
+    private static final int JETPACK_DRAIN_PER_TICK    = 4;   // while holding space
     private static final int JETPACK_RECHARGE_PER_TICK = 1;   // while not thrusting
     private static final double JETPACK_IMPULSE        = 0.12; // velocity add per tick
     private static final double JETPACK_MAX_SPEED      = 1.55; // clamp speed
@@ -103,34 +104,40 @@ public final class ZeroSuitPower implements Power {
 
     @Override
     public boolean hasSlot(String slot) {
-        return "primary".equals(slot) || "secondary".equals(slot) || "third".equals(slot);
+        return "primary".equals(slot) || "secondary".equals(slot);
     }
 
-    @Override public long cooldownTicks() { return 20 * 4; }
+    @Override public long cooldownTicks() { return 0; }
     @Override public long secondaryCooldownTicks() { return 20 * 15 ; }
-    @Override public long thirdCooldownTicks() { return 0; }
+    @Override public boolean usesCharges(String slot) { return "primary".equals(slot); }
+    @Override public int maxCharges(String slot) { return GRENADE_MAX_CHARGES; }
+    @Override public long rechargeTicks(String slot) { return GRENADE_RECHARGE_T; }
 
     @Override
     public Identifier iconTexture(String slot) {
         return switch (slot) {
             case "primary"   -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_gravity.png");
             case "secondary" -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_blast.png");
-            case "third"     -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/zero_nuke.png");
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
     }
 
-    @Override public String longDescription() { return "Simple missile + charge beam + jetpack toggle."; }
+    @Override public String longDescription() { return "Throw sticky frag grenades with a 2-charge primary and unleash a charged blast as your secondary."; }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "ZERO FRAG";
+            case "secondary" -> "ZERO BLAST";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
 
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Missile: Fire a simple missile projectile. No camera, no boost. Reduced damage.";
+                    "Throw a sticky frag grenade with a real arc. It arms on first bounce or on sticking to a target, then explodes 0.75 seconds later.";
             case "secondary" ->
-                    "Blast: Hold to charge (up to 8s). HUD shows %. LMB to fire a piercing beam that launches targets.";
-            case "third" ->
-                    "Jetpack: Toggle on/off. While ON, holding SPACE burns fuel and bursts you in your movement direction.";
+                    "Charge up a powerful laser attack that blasts away anything in its way!";
             default -> "";
         };
     }
@@ -198,8 +205,6 @@ public final class ZeroSuitPower implements Power {
     /* ======================= SERVER STATE ======================= */
 
     private static final class St {
-        int missileCd = 0;
-
         boolean charging;
         int chargeTicks;
         int lastHudCharge = -1;
@@ -233,29 +238,30 @@ public final class ZeroSuitPower implements Power {
         }
     }
 
-    /* ======================= PRIMARY: simple missile ======================= */
+    /* ======================= PRIMARY: frag grenade ======================= */
 
-    private static void fireMissile(ServerPlayerEntity p, St st) {
+    private static void throwGrenade(ServerPlayerEntity p) {
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
-
-        if (st.missileCd > 0) return;
-        st.missileCd = MISSILE_COOLDOWN_T;
 
         Vec3d eye = p.getEyePos();
         Vec3d look = p.getRotationVector().normalize();
-        Vec3d spawnPos = eye.add(look.multiply(1.2));
+        Vec3d spawnPos = eye.add(look.multiply(0.8)).add(0.0, -0.15, 0.0);
 
-        ZeroSuitMissileEntity missile = ModEntities.ZERO_SUIT_MISSILE.create(sw);
-        if (missile == null) return;
+        ZeroGrenadeEntity grenade = ModEntities.ZERO_GRENADE.create(sw);
+        if (grenade == null) return;
 
-        missile.refreshPositionAndAngles(spawnPos.x, spawnPos.y, spawnPos.z, p.getYaw(), p.getPitch());
-        missile.setOwner(p);
-        missile.initFromOwner(p, MISSILE_SPEED);
+        grenade.refreshPositionAndAngles(spawnPos.x, spawnPos.y, spawnPos.z, p.getYaw(), p.getPitch());
+        grenade.setOwner(p);
 
-        sw.spawnEntity(missile);
+        Vec3d launchVel = look.multiply(GRENADE_THROW_SPEED)
+                .add(0.0, GRENADE_THROW_UP_BIAS, 0.0)
+                .add(p.getVelocity().multiply(0.35));
+        grenade.setLaunchVelocity(launchVel);
+
+        sw.spawnEntity(grenade);
 
         sw.playSound(null, p.getX(), p.getY(), p.getZ(),
-                ModSounds.ROCKET_FIRE, SoundCategory.PLAYERS, MISSILE_VOL, 1.0f);
+                ModSounds.SHADOW_KUNAI_THROW, SoundCategory.PLAYERS, GRENADE_THROW_SOUND_VOL, 1.0f);
     }
 
     @Override
@@ -263,8 +269,8 @@ public final class ZeroSuitPower implements Power {
         if (!isCurrent(p)) return;
         if (blockIfPowerless(p)) return;
 
-        St st = S(p);
-        fireMissile(p, st);
+        S(p); // keep state initialized for the rest of the power
+        throwGrenade(p);
     }
 
     /* ======================= SECONDARY: blast ======================= */
@@ -406,23 +412,9 @@ public final class ZeroSuitPower implements Power {
         stopCharge(src, st, true);
     }
 
-    /* ======================= THIRD: jetpack toggle + thrust ======================= */
+    /* ======================= mobility support ======================= */
 
-    @Override
-    public void activateThird(ServerPlayerEntity p) {
-        if (!isCurrent(p)) return;
-        if (blockIfPowerless(p)) return;
 
-        St st = S(p);
-        st.jetpackEnabled = !st.jetpackEnabled;
-
-        float pitch = st.jetpackEnabled ? 1.0f : 0.65f;
-        p.getWorld().playSound(null, p.getX(), p.getY(), p.getZ(),
-                ModSounds.JETPACK_ACTIVATE, SoundCategory.PLAYERS, 1.0f, pitch);
-
-        ZeroSuitNet.sendJetpackHud(p, st.jetpackEnabled, st.jetpackFuel, JETPACK_FUEL_MAX, false);
-        p.sendMessage(Text.literal(st.jetpackEnabled ? "§6JETPACK ON" : "§7Jetpack off"), true);
-    }
 
     /** C2S: called every tick while SPACE is held (client sends movement direction). */
     public static void onClientJetpackThrust(ServerPlayerEntity p, float dx, float dy, float dz) {
@@ -476,7 +468,6 @@ public final class ZeroSuitPower implements Power {
 
         St st = S(p);
 
-        if (st.missileCd > 0) st.missileCd--;
 
         if (isPowerless(p)) {
             if (st.charging) stopCharge(p, st, false);
@@ -493,12 +484,8 @@ public final class ZeroSuitPower implements Power {
                 p.addStatusEffect(new StatusEffectInstance(StatusEffects.SLOWNESS, 30, 0, true, false, false));
             }
 
-            if ((p.age % 10) == 0) {
-                float r = MathHelper.clamp(st.chargeTicks / (float) BLAST_CHARGE_MAX_T, 0f, 1f);
-                float vol = 0.35f + 0.45f * r;
-                float pit = MathHelper.lerp(r, 1.20f, 0.95f);
-                sw.playSound(p, p.getX(), p.getY(), p.getZ(), ModSounds.ZERO_CHARGE, SoundCategory.PLAYERS, vol, pit);
-            }
+            // Remote charge audio is now handled as a tracked client loop via charge_on/charge_off.
+            // Do not spam long world sounds here, or remote listeners can get stuck hearing it after fire/cancel.
 
             if ((p.age % HUD_SYNC_EVERY) == 0) {
                 if (st.lastHudCharge != st.chargeTicks || !st.lastHudActive) {

@@ -6,26 +6,29 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.screen.ScreenHandler;
 import net.seep.odd.abilities.ghostlings.entity.GhostlingEntity;
-import net.seep.odd.abilities.ghostlings.registry.GhostScreens;
+import net.seep.odd.abilities.ghostlings.registry.GhostRegistries;
 
 public class GhostManageScreenHandler extends ScreenHandler {
     public final int ghostEntityId;
-    public final GhostlingEntity.Job ghostJob;   // <-- job from server
+    public final GhostlingEntity.Job ghostJob;
 
     public GhostManageScreenHandler(int syncId, PlayerInventory inv, PacketByteBuf buf) {
         this(syncId, inv, buf.readVarInt(), buf.readEnumConstant(GhostlingEntity.Job.class));
     }
 
     public GhostManageScreenHandler(int syncId, PlayerInventory inv, int ghostEntityId, GhostlingEntity.Job ghostJob) {
-        super(GhostScreens.GHOST_MANAGE_HANDLER, syncId);
+        super(GhostRegistries.GHOST_MANAGE_HANDLER, syncId);
         this.ghostEntityId = ghostEntityId;
         this.ghostJob = ghostJob;
     }
 
     @Override
     public ItemStack quickMove(PlayerEntity player, int slot) {
-        return null;
+        return ItemStack.EMPTY;
     }
 
-    @Override public boolean canUse(PlayerEntity player) { return true; }
+    @Override
+    public boolean canUse(PlayerEntity player) {
+        return true;
+    }
 }

@@ -32,8 +32,24 @@ public final class ForgerPower implements Power {
 
     @Override
     public String longDescription() {
-        return "Summon a Combiner. Feed it a gear + armor trim template to forge a unique secret enchant through a timing minigame.";
+        return "Upgrade tools to unlock their true potential, as the enhancer you alone can unlock the final upgrade of every tool and armour!";
     }
+    @Override public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary"   -> "Summon the enhancer, a powerful block that takes in magic from armour trims to enchant various tools";
+            default          -> "Forger";
+        };
+    }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "THE ENHANCER";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+
+
 
     private static boolean isPowerless(ServerPlayerEntity p) {
         return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);

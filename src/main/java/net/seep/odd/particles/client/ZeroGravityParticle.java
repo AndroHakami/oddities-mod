@@ -1,24 +1,31 @@
 package net.seep.odd.particles.client;
 
-import net.minecraft.client.particle.*;
+import net.minecraft.client.particle.Particle;
+import net.minecraft.client.particle.ParticleFactory;
+import net.minecraft.client.particle.ParticleTextureSheet;
+import net.minecraft.client.particle.SpriteBillboardParticle;
+import net.minecraft.client.particle.SpriteProvider;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.math.Box;
-import net.minecraft.util.math.MathHelper;
-import net.seep.odd.status.ModStatusEffects; // <-- your registry that exposes ZERO_GRAVITY
+import net.seep.odd.status.ModStatusEffects;
 
 public class ZeroGravityParticle extends SpriteBillboardParticle {
     private final SpriteProvider sprites;
 
-    // anchor
     private int targetId = -1;
-    private int anchorSearchTicks = 12; // keep trying to find the entity for a short while
-    private double yOffset = 0.0;
+    private int anchorSearchTicks = 6;
 
-    // visuals
-    private final float baseScale;       // bigger than before
-    private final float pulseAmp = 0.10f; // gentle size pulse
-    private final float pulseSpd = 0.20f;
+    private final float baseScale;
+    private final float startAlpha;
+
+    private double orbitRadius;
+    private double orbitAngle;
+    private double orbitSpeed;
+    private double yOffset;
+    private double bobSpeed;
+    private double bobAmount;
 
     protected ZeroGravityParticle(ClientWorld world, double x, double y, double z,
                                   double vx, double vy, double vz,
@@ -26,88 +33,122 @@ public class ZeroGravityParticle extends SpriteBillboardParticle {
         super(world, x, y, z, vx, vy, vz);
         this.sprites = sprites;
 
-        // we render one persistent ring; no gravity, no collisions, no motion
         this.gravityStrength = 0f;
         this.collidesWithWorld = false;
-        this.velocityX = this.velocityY = this.velocityZ = 0;
+        this.velocityX = this.velocityY = this.velocityZ = 0.0;
 
-        // BIGGER default size
-        this.baseScale = 0.85f + this.random.nextFloat() * 0.25f; // ~0.85–1.10
-        this.scale = baseScale;
+        // a bit bigger / more noticeable
+        this.baseScale = 0.30f + this.random.nextFloat() * 0.18f; // ~0.30 - 0.48
+        this.scale = this.baseScale;
 
-        // long lifetime; we’ll self-destroy when the status ends or entity disappears
-        this.maxAge = 500; // safety cap; usually removed sooner
+        // longer life than before, but still not super long
+        this.maxAge = 16 + this.random.nextInt(7); // 16-22 ticks
 
-        // glowing orange
-        this.setColor(1.00f, 0.62f, 0.20f);
-        this.alpha = 0.95f;
+        // more visible
+        this.setColor(1.00f, 0.68f, 0.25f);
+        this.startAlpha = 0.72f + this.random.nextFloat() * 0.14f; // ~0.72 - 0.86
+        this.alpha = this.startAlpha;
 
-        // atlas-animated sprite (use your .mcmeta); do NOT call setSpriteForAge
         this.setSprite(this.sprites);
     }
 
     @Override
     public void tick() {
-        // die if we somehow hang around too long
-        if (this.age++ >= this.maxAge) { this.markDead(); return; }
+        this.prevPosX = this.x;
+        this.prevPosY = this.y;
+        this.prevPosZ = this.z;
 
-        // find & cache the target entity once (or for a short window)
+        if (this.age++ >= this.maxAge) {
+            this.markDead();
+            return;
+        }
+
         LivingEntity target = null;
-        if (targetId >= 0) {
-            var e = this.world.getEntityById(targetId);
-            if (e instanceof LivingEntity le) target = le;
-        } else if (anchorSearchTicks-- > 0) {
-            // look for the nearest living entity with ZERO_GRAVITY status around spawn point
-            double r = 1.25;
+
+        if (this.targetId >= 0) {
+            Entity e = this.world.getEntityById(this.targetId);
+            if (e instanceof LivingEntity le && le.isAlive() && le.hasStatusEffect(ModStatusEffects.GRAVITY_SUSPEND)) {
+                target = le;
+            } else {
+                this.markDead();
+                return;
+            }
+        } else if (this.anchorSearchTicks-- > 0) {
+            double r = 1.75;
             var list = this.world.getEntitiesByClass(
                     LivingEntity.class,
                     new Box(this.x - r, this.y - r, this.z - r, this.x + r, this.y + r, this.z + r),
                     le -> le.isAlive() && le.hasStatusEffect(ModStatusEffects.GRAVITY_SUSPEND)
             );
+
             if (!list.isEmpty()) {
                 target = list.get(0);
                 this.targetId = target.getId();
-                // anchor slightly above torso
-                this.yOffset = target.getHeight() * 0.52;
-            }
-        }
 
-        // if anchored, follow; if effect is gone, remove
-        if (target != null) {
-            if (!target.isAlive() || !target.hasStatusEffect(ModStatusEffects.GRAVITY_SUSPEND)) {
+                this.orbitRadius = 0.26D + this.random.nextDouble() * 0.20D;
+                this.orbitAngle = this.random.nextDouble() * (Math.PI * 2.0D);
+                this.orbitSpeed = 0.11D + this.random.nextDouble() * 0.10D;
+
+                // chest / torso area
+                this.yOffset = target.getHeight() * (0.32D + this.random.nextDouble() * 0.30D);
+
+                this.bobSpeed = 0.16D + this.random.nextDouble() * 0.10D;
+                this.bobAmount = 0.035D + this.random.nextDouble() * 0.03D;
+            } else {
                 this.markDead();
                 return;
             }
-            // snap onto target each tick (no interpolation drift)
-            this.prevPosX = this.x = target.getX();
-            this.prevPosY = this.y = target.getY() + this.yOffset;
-            this.prevPosZ = this.z = target.getZ();
+        } else {
+            this.markDead();
+            return;
         }
 
-        // subtle breathing/pulse in size
-        float t = this.age * pulseSpd + (targetId * 0.1f);
-        float pulse = 1.0f + pulseAmp * MathHelper.sin(t);
-        this.scale = baseScale * pulse;
+        this.orbitAngle += this.orbitSpeed;
 
-        // keep full bright
-        // alpha stays constant so your ring stays crisp
+        double cx = target.getX();
+        double cy = target.getY() + this.yOffset;
+        double cz = target.getZ();
+
+        this.x = cx + Math.cos(this.orbitAngle) * this.orbitRadius;
+        this.z = cz + Math.sin(this.orbitAngle) * this.orbitRadius;
+        this.y = cy + Math.sin(this.age * this.bobSpeed + this.orbitAngle) * this.bobAmount;
+
+        float life = (float) this.age / (float) this.maxAge;
+
+        // stays visible for most of its life, then fades near the end
+        if (life < 0.7f) {
+            this.alpha = this.startAlpha;
+        } else {
+            float fade = 1.0f - ((life - 0.7f) / 0.3f);
+            this.alpha = this.startAlpha * Math.max(0.0f, fade);
+        }
+
+        // slight shrink near the end only
+        this.scale = this.baseScale * (1.0f - life * 0.18f);
     }
 
-    // glow
-    @Override public int getBrightness(float tint) { return 0xF000F0; }
+    @Override
+    public int getBrightness(float tint) {
+        return 0xF000F0;
+    }
 
-    // additive or translucent both work; additive pops more for rings
-    @Override public ParticleTextureSheet getType() { return ParticleTextureSheet.PARTICLE_SHEET_LIT; }
+    @Override
+    public ParticleTextureSheet getType() {
+        return ParticleTextureSheet.PARTICLE_SHEET_LIT;
+    }
 
     public static class Factory implements ParticleFactory<net.minecraft.particle.DefaultParticleType> {
         private final SpriteProvider sprites;
-        public Factory(SpriteProvider sprites) { this.sprites = sprites; }
+
+        public Factory(SpriteProvider sprites) {
+            this.sprites = sprites;
+        }
 
         @Override
         public Particle createParticle(net.minecraft.particle.DefaultParticleType type, ClientWorld w,
                                        double x, double y, double z, double vx, double vy, double vz) {
-            ZeroGravityParticle p = new ZeroGravityParticle(w, x, y, z, vx, vy, vz, sprites);
-            p.setSprite(sprites);
+            ZeroGravityParticle p = new ZeroGravityParticle(w, x, y, z, vx, vy, vz, this.sprites);
+            p.setSprite(this.sprites);
             return p;
         }
     }

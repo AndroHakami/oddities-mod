@@ -1,0 +1,15 @@
+{
+  "blend": { "func": "add", "srcrgb": "srcalpha", "dstrgb": "1-srcalpha" },
+  "vertex": "odd:overworld_dream_sky",
+  "fragment": "odd:overworld_dream_sky",
+  "attributes": [ "Position" ],
+  "uniforms": [
+    { "name": "iTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "NightAmount", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Rain", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Thunder", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "InvProjMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "InvViewMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] },
+    { "name": "SkyInvRotMat", "type": "matrix4x4", "count": 16, "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ] }
+  ]
+}

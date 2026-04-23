@@ -1,0 +1,15 @@
+{
+  "targets": [ "outer_mech_bullets" ],
+  "passes": [
+    {
+      "name": "odd:outer_mech_bullets",
+      "intarget": "minecraft:main",
+      "outtarget": "outer_mech_bullets"
+    },
+    {
+      "name": "blit",
+      "intarget": "outer_mech_bullets",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -24,6 +24,9 @@ public final class FairyManaHudClient {
     private static int ticksSinceSync = 9999;
     private static final int SHOW_TIMEOUT_TICKS = 40; // ~2s (sync is every 5 ticks)
 
+    // lifted up so it sits above vanilla armor/health rows instead of on top of them
+    private static final int BAR_BOTTOM_OFFSET = 69;
+
     /** Call once from client init. */
     public static void init() {
         if (inited) return;
@@ -62,7 +65,7 @@ public final class FairyManaHudClient {
             int barW = 120;
             int barH = 8;
             int x = (sw - barW) / 2;
-            int y = sh - 49;
+            int y = sh - BAR_BOTTOM_OFFSET;
 
             float frac = (max <= 0f) ? 0f : MathHelper.clamp(mana / max, 0f, 1f);
             int fillW = (int) (barW * frac);

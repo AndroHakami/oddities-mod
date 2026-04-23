@@ -1,0 +1,26 @@
+{
+  "credit": "Made with Blockbench",
+  "parent": "builtin/entity",
+  "display": {
+    "ground": {
+      "translation": [0, -1.75, 0]
+    },
+    "gui": {
+      "rotation": [-80.2, -37.6, -83.98],
+      "translation": [-7.5, -5, -0.75],
+      "scale": [0.87, 0.87, 0.87]
+    },
+    "fixed": {
+      "rotation": [-80.2, -37.6, -83.98],
+      "translation": [-7.5, -5, -0.75],
+      "scale": [0.87, 0.87, 0.87]
+    },
+    "on_shelf": {
+      "rotation": [0, -82.25, 0],
+      "translation": [-0.5, -10.25, -0.75]
+    }
+  },
+  "textures": {
+    "particle": "odd:item/trumpet_axe_pink"
+  }
+}

@@ -20,16 +20,10 @@ public abstract class ServerPlayerEntityClimberPassiveMixin {
     private void odd$climberPassiveServerTick(CallbackInfo ci) {
         ServerPlayerEntity sp = (ServerPlayerEntity)(Object)this;
 
-        if (!ClimberPower.hasClimber(sp)) return;
-
         // ✅ always run cleanup + detach-on-powerless
         ClimberPower.serverTick(sp);
 
-        // ✅ POWERLESS: cannot wall climb
-        if (ClimberPower.isPowerless(sp)) return;
-
-        // Don’t fight rope physics
-        if (ClimberPower.isPrimaryEngaged(sp)) return;
+        if (!ClimberPower.canUsePassiveClimb(sp)) return;
 
         // Don’t interfere with other movement modes
         if (sp.isFallFlying() || sp.isSwimming() || sp.hasVehicle()) return;

@@ -1,0 +1,7 @@
+{
+  "targets": [ "star_ride_trail" ],
+  "passes": [
+    { "name": "odd:star_ride_trail", "intarget": "minecraft:main", "outtarget": "star_ride_trail" },
+    { "name": "blit", "intarget": "star_ride_trail", "outtarget": "minecraft:main" }
+  ]
+}

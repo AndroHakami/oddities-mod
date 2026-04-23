@@ -175,6 +175,15 @@ public class DimensionalGateBlock extends BlockWithEntity {
         return isController(state) ? new DimensionalGateBlockEntity(pos, state) : null;
     }
 
+    @Override
+    public <T extends BlockEntity> @Nullable BlockEntityTicker<T> getTicker(World world, BlockState state, BlockEntityType<T> type) {
+        if (world.isClient) return null;
+        if (!isController(state)) return null;
+        if (type != ModBlocks.DIMENSIONAL_GATE_BE) return null;
+
+        return (w, p, s, be) -> DimensionalGateBlockEntity.serverTick(w, p, s, (DimensionalGateBlockEntity) be);
+    }
+
 
 
 

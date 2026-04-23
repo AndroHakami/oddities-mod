@@ -52,7 +52,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 public class ArtificerVacuumItem extends Item implements GeoItem {
 
     // ✅ durability (tune to taste)
-    private static final int MAX_DURABILITY = 512;
+    private static final int MAX_DURABILITY = 1012;
 
     // ✅ Only Artificer power can use this item
     private static final String REQUIRED_POWER_ID = "artificer";

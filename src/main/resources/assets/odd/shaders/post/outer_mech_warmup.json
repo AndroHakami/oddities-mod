@@ -1,0 +1,15 @@
+{
+  "targets": [ "outer_mech_warmup" ],
+  "passes": [
+    {
+      "name": "odd:outer_mech_warmup",
+      "intarget": "minecraft:main",
+      "outtarget": "outer_mech_warmup"
+    },
+    {
+      "name": "blit",
+      "intarget": "outer_mech_warmup",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

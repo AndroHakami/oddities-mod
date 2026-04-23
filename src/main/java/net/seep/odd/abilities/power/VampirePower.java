@@ -62,6 +62,32 @@ public final class VampirePower implements Power {
             default          -> new Identifier(Oddities.MOD_ID, "textures/gui/abilities/ability_default.png");
         };
     }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "FEAST";
+            case "secondary" -> "CRYSTAL BLOOD";
+            case "third" -> "VAMPIRIC FRENZY";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+    @Override
+    public String longDescription() {
+        return """
+               Feast on your enemies, and utlize your own blood to its fullest potential, you fear nothing but the sun.
+
+               """;
+    }
+
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Grab an entity to feast on it, recharging your blood bar.";
+            case "secondary" -> "Throw a crystalized blood projectile that provides haste on entity hit, alternatively create a crystal blood wall on impact with a block.";
+            case "third" -> "Enter a rage state where you move faster and deal higher damage, draining your blood bar rapidly until full depletion.";
+            default -> "";
+        };
+    }
 
     /* ---------------- Blood gauge values ---------------- */
 

@@ -50,7 +50,7 @@ public abstract class ClimberWallClimbMixin extends Entity {
         // Server truth: ONLY climber power can climb
         boolean allowed;
         if (!player.getWorld().isClient) {
-            allowed = (player instanceof net.minecraft.server.network.ServerPlayerEntity sp) && ClimberPower.hasClimber(sp);
+            allowed = (player instanceof net.minecraft.server.network.ServerPlayerEntity sp) && ClimberPower.canUsePassiveClimb(sp);
         } else {
             // Client sim: use server-synced flag (mirrors how ladder-like mods do it)
             allowed = ClimberClimbNetworking.canClimbAnySide(player.getUuid());
@@ -59,12 +59,6 @@ public abstract class ClimberWallClimbMixin extends Entity {
 
         // Must be touching a wall
         if (!odd$isTouchingWall(player)) return;
-
-        // Client: require intent so it doesn't feel sticky.
-        // Server: DO NOT require intent, otherwise server often never agrees.
-        if (player.getWorld().isClient) {
-            if (!odd$hasClimbIntentClient(player)) return;
-        }
 
         cir.setReturnValue(true);
     }
@@ -90,14 +84,6 @@ public abstract class ClimberWallClimbMixin extends Entity {
         return hitXPos || hitXNeg || hitZPos || hitZNeg;
     }
 
-    /** Client-side intent: prevents sticky walls. */
-    private boolean odd$hasClimbIntentClient(PlayerEntity player) {
-        // Moving or jumping or sneaking means intent.
-        return this.jumping
-                || player.isSneaking()
-                || Math.abs(this.forwardSpeed) > 0.01f
-                || Math.abs(this.sidewaysSpeed) > 0.01f;
-    }
 
     /**
      * Faster, snappier climb feel (client mainly).
@@ -116,7 +102,7 @@ public abstract class ClimberWallClimbMixin extends Entity {
         // Only players allowed to climb
         boolean allowed;
         if (!player.getWorld().isClient) {
-            allowed = (player instanceof net.minecraft.server.network.ServerPlayerEntity sp) && ClimberPower.hasClimber(sp);
+            allowed = (player instanceof net.minecraft.server.network.ServerPlayerEntity sp) && ClimberPower.canUsePassiveClimb(sp);
         } else {
             allowed = ClimberClimbNetworking.canClimbAnySide(player.getUuid());
         }

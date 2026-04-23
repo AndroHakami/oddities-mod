@@ -1,0 +1,15 @@
+{
+  "targets": [ "mechanical_fist_impact" ],
+  "passes": [
+    {
+      "name": "odd:mechanical_fist_impact",
+      "intarget": "minecraft:main",
+      "outtarget": "mechanical_fist_impact"
+    },
+    {
+      "name": "blit",
+      "intarget": "mechanical_fist_impact",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

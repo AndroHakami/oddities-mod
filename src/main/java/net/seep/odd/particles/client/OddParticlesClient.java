@@ -30,6 +30,10 @@ public final class OddParticlesClient {
         ParticleFactoryRegistry.getInstance().register(OddParticles.SPLASH_BUBBLE_AQUA,  AquaBubbleParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(OddParticles.SPLASH_BUBBLE_PINK,  PinkBubbleParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(OddParticles.FAIRY_SPARKLES, FairySparklesParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(
+                OddParticles.STAR_SIGIL,
+                (FabricSpriteProvider sp) -> new StarSigilParticle.Factory(sp)
+        );
 
         ParticleFactoryRegistry.getInstance().register(
                 OddParticles.POISON,

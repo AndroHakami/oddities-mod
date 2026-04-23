@@ -7,12 +7,11 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.world.World;
 import net.seep.odd.abilities.power.SuperChargePower;
-
-import java.util.concurrent.ThreadLocalRandom;
 
 public class SuperThrownItemEntity extends ThrownItemEntity {
 
@@ -27,7 +26,10 @@ public class SuperThrownItemEntity extends ThrownItemEntity {
         this.setItem(stack.copyWithCount(1));
     }
 
-    @Override protected Item getDefaultItem() { return Items.SNOWBALL; }
+    @Override
+    protected Item getDefaultItem() {
+        return Items.SNOWBALL;
+    }
 
     @Override
     public void tick() {
@@ -45,6 +47,7 @@ public class SuperThrownItemEntity extends ThrownItemEntity {
 
                 sw.spawnParticles(ParticleTypes.WAX_ON, getX(), getY(), getZ(),
                         1, 0.01, 0.01, 0.01, 0.001);
+
                 // thin line feel
                 if ((this.age & 1) == 0) {
                     sw.spawnParticles(ParticleTypes.WAX_ON, getX(), getY(), getZ(),
@@ -57,17 +60,23 @@ public class SuperThrownItemEntity extends ThrownItemEntity {
     @Override
     protected void onCollision(HitResult hit) {
         super.onCollision(hit);
+
         if (!getWorld().isClient) {
             ItemStack thrown = this.getStack();
             float power = SuperChargePower.explosionPowerFor(thrown);
             boolean breakBlocks = SuperChargePower.breaksBlocksFor(thrown);
+
+            if (getOwner() instanceof ServerPlayerEntity sp) {
+                SuperChargePower.grantSelfBlastImmunity(sp, 2);
+            }
+
             getWorld().createExplosion(
                     this,
                     getX(), getY(), getZ(),
                     power,
-                    breakBlocks ? World.ExplosionSourceType.TNT
-                            : World.ExplosionSourceType.NONE
+                    breakBlocks ? World.ExplosionSourceType.TNT : World.ExplosionSourceType.NONE
             );
+
             discard();
         }
     }

@@ -1,0 +1,15 @@
+{
+  "targets": [ "alien_bomb_explosion" ],
+  "passes": [
+    {
+      "name": "odd:alien_bomb_explosion",
+      "intarget": "minecraft:main",
+      "outtarget": "alien_bomb_explosion"
+    },
+    {
+      "name": "blit",
+      "intarget": "alien_bomb_explosion",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

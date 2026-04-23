@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "odd:block/dabloon_store", "y": 180 },
+    "facing=south": { "model": "odd:block/dabloon_store" },
+    "facing=west": { "model": "odd:block/dabloon_store", "y": 90 },
+    "facing=east": { "model": "odd:block/dabloon_store", "y": 270 }
+  }
+}

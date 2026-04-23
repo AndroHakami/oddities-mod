@@ -1,0 +1,15 @@
+{
+  "targets": [ "dragoness_sky_laser" ],
+  "passes": [
+    {
+      "name": "odd:dragoness_sky_laser",
+      "intarget": "minecraft:main",
+      "outtarget": "dragoness_sky_laser"
+    },
+    {
+      "name": "blit",
+      "intarget": "dragoness_sky_laser",
+      "outtarget": "minecraft:main"
+    }
+  ]
+}

@@ -72,9 +72,7 @@ public final class GhostlingsPower implements Power {
     @Override
     public String longDescription() {
         return """
-            Build the ritual (Carved Pumpkin atop two White Wool).
-            Then, while using Ghostlings power, press Primary while aiming at it to summon.
-            Primary also manages a Ghostling you are aiming at; Secondary opens the dashboard.
+            Summon spectral ghosts that work for you!... as long as you pay them and care nicely! Ghostlings defend their owner, dig mines, farm lands, and deliver 24/7 at your door step!
         """;
     }
 

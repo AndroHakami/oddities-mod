@@ -3,6 +3,7 @@ package net.seep.odd.abilities.power;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
@@ -16,6 +17,7 @@ import net.minecraft.item.Items;
 import net.minecraft.network.packet.s2c.play.PlaySoundFromEntityS2CPacket;
 import net.minecraft.network.packet.s2c.play.StopSoundS2CPacket;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.DamageTypeTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -44,7 +46,7 @@ public final class SuperChargePower implements Power {
     private static final float THROW_MIN_SPEED         = 0.80f;
     private static final float THROW_MAX_SPEED         = 1.90f;
 
-    private static final float BASE_EXPLOSION_POWER    = 2.8f;
+    private static final float BASE_EXPLOSION_POWER    = 3.8f;
     private static final float TNT_EXPLOSION_POWER     = 6.0f;
     private static final boolean TNT_DESTROYS_BLOCKS   = true;
     private static final boolean DEFAULT_BREAK_BLOCKS  = false;
@@ -65,24 +67,51 @@ public final class SuperChargePower implements Power {
 
     @Override
     public String longDescription() {
-        return "Charge the held item for 1s; supercharged items glow orange and can be thrown by holding right-click like a trident, exploding on impact.";
+        return "Explode your path forward! turn any item into a deadly explosive weapon.";
     }
 
-    @Override public String slotLongDescription(String slot) { return "Primary: begin/abort super-charging the held item."; }
-    @Override public Identifier portraitTexture() { return new Identifier(Oddities.MOD_ID, "textures/gui/overview/super_charge.png"); }
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "CHARGE IT UP!";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Charge an item on your hand to turn it into an explosive projectile.";
+            default -> "";
+        };
+    }
+
+    @Override
+    public Identifier portraitTexture() {
+        return new Identifier(Oddities.MOD_ID, "textures/gui/overview/super_charge.png");
+    }
 
     /* ======================= state ======================= */
     private static final class St {
-        boolean charging; int chargeTicks;
+        boolean charging;
+        int chargeTicks;
         ItemStack snapshot = ItemStack.EMPTY;
         boolean fxShown;
 
-        boolean throwHolding; int throwTicks; Hand throwHand = Hand.MAIN_HAND;
+        boolean throwHolding;
+        int throwTicks;
+        Hand throwHand = Hand.MAIN_HAND;
 
         boolean holdLoopPlaying;
     }
+
     private static final Map<UUID, St> DATA = new Object2ObjectOpenHashMap<>();
-    private static St S(ServerPlayerEntity p) { return DATA.computeIfAbsent(p.getUuid(), u -> new St()); }
+    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
+    private static final Object2LongOpenHashMap<UUID> SELF_BLAST_IMMUNE_UNTIL = new Object2LongOpenHashMap<>();
+
+    private static St S(ServerPlayerEntity p) {
+        return DATA.computeIfAbsent(p.getUuid(), u -> new St());
+    }
 
     private static boolean isCurrent(ServerPlayerEntity p) {
         var pow = Powers.get(PowerAPI.get(p));
@@ -90,7 +119,6 @@ public final class SuperChargePower implements Power {
     }
 
     /* =================== POWERLESS override (FireSword-style) =================== */
-    private static final Object2LongOpenHashMap<UUID> WARN_UNTIL = new Object2LongOpenHashMap<>();
 
     private static boolean isPowerless(ServerPlayerEntity p) {
         return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
@@ -108,6 +136,24 @@ public final class SuperChargePower implements Power {
     public void forceDisable(ServerPlayerEntity player) {
         St st = DATA.get(player.getUuid());
         if (st != null) stopAll(player, st, false);
+        SELF_BLAST_IMMUNE_UNTIL.removeLong(player.getUuid());
+    }
+
+    /* ======================= self-blast immunity ======================= */
+
+    public static void grantSelfBlastImmunity(ServerPlayerEntity p, int ticks) {
+        if (p == null || ticks <= 0) return;
+
+        long until = p.getWorld().getTime() + ticks;
+        long current = SELF_BLAST_IMMUNE_UNTIL.getOrDefault(p.getUuid(), 0L);
+        if (until > current) {
+            SELF_BLAST_IMMUNE_UNTIL.put(p.getUuid(), until);
+        }
+    }
+
+    private static boolean hasSelfBlastImmunity(ServerPlayerEntity p) {
+        if (p == null) return false;
+        return p.getWorld().getTime() <= SELF_BLAST_IMMUNE_UNTIL.getOrDefault(p.getUuid(), 0L);
     }
 
     /* ======================= sound helpers ======================= */
@@ -157,7 +203,6 @@ public final class SuperChargePower implements Power {
             if (eq.isEmpty()) continue;
             if (!isSupercharged(eq)) continue;
 
-            // remove from equipment first (prevents dupes)
             ItemStack toMove = eq.copy();
             p.equipStack(slot, ItemStack.EMPTY);
 
@@ -173,6 +218,7 @@ public final class SuperChargePower implements Power {
     }
 
     /* ======================= bootstrap ======================= */
+
     public static void bootstrap() {
 
         UseItemCallback.EVENT.register((player, world, hand) -> {
@@ -223,16 +269,24 @@ public final class SuperChargePower implements Power {
             return ActionResult.CONSUME;
         });
 
+        ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> {
+            if (!(entity instanceof ServerPlayerEntity sp)) return true;
+            if (!source.isIn(DamageTypeTags.IS_EXPLOSION)) return true;
+            return !hasSelfBlastImmunity(sp);
+        });
+
         ServerTickEvents.END_SERVER_TICK.register(SuperChargePower::tickAll);
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             ServerPlayerEntity p = handler.player;
             DATA.remove(p.getUuid());
             WARN_UNTIL.removeLong(p.getUuid());
+            SELF_BLAST_IMMUNE_UNTIL.removeLong(p.getUuid());
         });
     }
 
     /* ======================= input: primary = supercharge ======================= */
+
     @Override
     public void activate(ServerPlayerEntity p) {
         if (!isCurrent(p)) return;
@@ -244,7 +298,10 @@ public final class SuperChargePower implements Power {
             return;
         }
 
-        if (st.charging) { stopCharge(p, st, false); return; }
+        if (st.charging) {
+            stopCharge(p, st, false);
+            return;
+        }
 
         if (hasAnySupercharged(p)) {
             p.sendMessage(Text.literal("You already have a supercharged item."), true);
@@ -252,7 +309,6 @@ public final class SuperChargePower implements Power {
         }
 
         ItemStack held = p.getMainHandStack();
-
 
         st.charging = true;
         st.chargeTicks = 0;
@@ -270,11 +326,16 @@ public final class SuperChargePower implements Power {
     @Override public void activateThird(ServerPlayerEntity p) { }
 
     /* ======================= tick loop ======================= */
+
     private static void tickAll(MinecraftServer server) {
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
 
-            // ✅ always enforce (even if power swapped off)
             enforceNoSuperchargedArmor(p);
+
+            long immuneUntil = SELF_BLAST_IMMUNE_UNTIL.getOrDefault(p.getUuid(), 0L);
+            if (immuneUntil != 0L && p.getWorld().getTime() > immuneUntil) {
+                SELF_BLAST_IMMUNE_UNTIL.removeLong(p.getUuid());
+            }
 
             if (!isCurrent(p)) {
                 St s = DATA.get(p.getUuid());
@@ -296,6 +357,7 @@ public final class SuperChargePower implements Power {
 
             if (!p.isAlive() || isPowerless(p)) {
                 stopAll(p, st, false);
+                SELF_BLAST_IMMUNE_UNTIL.removeLong(p.getUuid());
                 continue;
             }
 
@@ -313,7 +375,6 @@ public final class SuperChargePower implements Power {
                         finishChargeOneItem(p, cur);
 
                         playOnPlayer(p, ModSounds.SUPERCHARGE_READY, 0.95f, 1.15f);
-
 
                         stopCharge(p, st, true);
                     }

@@ -20,7 +20,7 @@ public final class RegenEffect implements FalseFlowerSpellEffect {
         for (LivingEntity e : w.getEntitiesByClass(LivingEntity.class, box, Entity::isAlive)) {
             if (!FalseFlowerSpellUtil.insideSphere(e.getPos(), c, R)) continue;
 
-            e.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 40, 0, true, true));
+            e.addStatusEffect(new StatusEffectInstance(StatusEffects.REGENERATION, 50, 1, true, true));
 
             if (t % 4 == 0) {
                 double ang = (t % 360) * (Math.PI / 180.0);

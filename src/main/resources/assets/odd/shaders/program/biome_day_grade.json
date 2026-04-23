@@ -1,0 +1,36 @@
+{
+  "vertex": "odd:biome_day_grade",
+  "fragment": "odd:biome_day_grade",
+  "attributes": [ "Position" ],
+  "samplers": [
+    { "name": "DiffuseSampler" }
+  ],
+  "uniforms": [
+    {
+      "name": "ProjMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ]
+    },
+    {
+      "name": "ModelViewMat",
+      "type": "matrix4x4",
+      "count": 16,
+      "values": [ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 ]
+    },
+    {
+      "name": "OutSize",
+      "type": "float",
+      "count": 2,
+      "values": [ 1.0, 1.0 ]
+    },
+
+    { "name": "iTime", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Intensity", "type": "float", "count": 1, "values": [ 0.0 ] },
+
+    { "name": "SkyTint", "type": "float", "count": 3, "values": [ 0.55, 0.72, 1.00 ] },
+    { "name": "FogTint", "type": "float", "count": 3, "values": [ 0.82, 0.88, 0.96 ] },
+    { "name": "HorizonTint", "type": "float", "count": 3, "values": [ 0.88, 0.92, 1.00 ] },
+    { "name": "CloudTint", "type": "float", "count": 3, "values": [ 0.92, 0.94, 0.98 ] }
+  ]
+}

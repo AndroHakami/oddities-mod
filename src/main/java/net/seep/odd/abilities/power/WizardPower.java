@@ -68,17 +68,27 @@ public final class WizardPower implements Power {
     @Override
     public String slotLongDescription(String slot) {
         return switch (slot) {
-            case "primary" -> "Element Selection: choose Fire / Water / Air / Earth.";
-            case "secondary" -> "Magic Combo: choose one of 6 combo spells.";
-            case "third" -> "Capybara Familiar: send to orbit a target and buff it, or recall.";
+            case "primary" -> "Select an Element to empower your capy with!";
+            case "secondary" -> "Cast a powerful magical spell.";
+            case "third" -> "Deploy your capy forward to assist any entity.";
             default -> "Wizard";
+        };
+
+    }
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "ELEMENTS";
+            case "secondary" -> "WAYS OF THE WIZARD";
+            case "third" -> "CAPYBARA CARE";
+            default -> Power.super.slotTitle(slot);
         };
     }
 
     @Override
     public String longDescription() {
-        return "A staff-wielding caster using four elements + combo magic, powered by mana. "
-                + "Swing casts basic element; right-click charges a big cast that auto-releases when ready.";
+        return "With his trusty Capybara and his walking stick, " +
+                "nothing stops the wizard from conjuring chaos across the isles!";
+
     }
 
     /* ---------------- Network IDs ---------------- */

@@ -1,8 +1,6 @@
 package net.seep.odd.item.custom;
 
 import net.minecraft.item.ArmorMaterial;
-import software.bernie.geckolib.renderer.GeoArmorRenderer;
-import net.seep.odd.item.custom.client.WarioHatRenderer;
 
 public class WarioHatItem extends AbstractBounceHatItem {
     public WarioHatItem(ArmorMaterial material, Settings settings) {
@@ -10,7 +8,7 @@ public class WarioHatItem extends AbstractBounceHatItem {
     }
 
     @Override
-    protected GeoArmorRenderer<?> createArmorRenderer() {
-        return new WarioHatRenderer();
+    protected String getArmorRendererClassName() {
+        return "net.seep.odd.item.custom.client.WarioHatRenderer";
     }
 }

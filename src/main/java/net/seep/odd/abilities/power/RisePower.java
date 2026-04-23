@@ -84,6 +84,26 @@ public final class RisePower implements Power {
     private static boolean isPowerless(ServerPlayerEntity p) {
         return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
     }
+    @Override
+    public String longDescription() {
+        return "Bring the dead back to life, and they shall be forever grateful to you.";
+    }
+
+    @Override
+    public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "REBIRTH";
+            default -> Power.super.slotTitle(slot);
+        };
+    }
+
+    @Override
+    public String slotLongDescription(String slot) {
+        return switch (slot) {
+            case "primary" -> "Channel a spell on a recently deceased mob to bring them back from the dead.";
+            default -> "Rise";
+        };
+    }
 
     private static void warnPowerlessOncePerSec(ServerPlayerEntity p) {
         if (p == null) return;
@@ -122,19 +142,6 @@ public final class RisePower implements Power {
         };
     }
 
-    @Override
-    public String slotLongDescription(String slot) {
-        return "Necromancy: after you kill a weak monster, its soul lingers for 10s as green wisps (only you can see). "
-                + "Activate near the corpse position to raise a Risen Zombie minion that follows and defends you. "
-                + "The minion visually matches the slain monster with a dark-green overlay. (Max 10.)";
-    }
-
-    @Override
-    public String longDescription() {
-        return "Rise (Necromancy): kills on weak monsters create a 10-second revive window (shown as green wisps only you can see). "
-                + "Activate near it to raise a loyal Risen Zombie that follows and defends you, visually mimicking the slain monster. "
-                + "Max 10 active risen.";
-    }
 
     public static boolean hasRise(net.minecraft.entity.player.PlayerEntity player) {
         if (!(player instanceof ServerPlayerEntity sp)) return false;

@@ -45,6 +45,15 @@ public final class GambleRevolverClient {
                 final int handOrd = buf.readVarInt();
                 client.execute(() -> GambleRevolverItem.clientStartReloadAnim(handOrd));
             });
+
+            ClientPlayNetworking.registerGlobalReceiver(GamblePower.PKT_SYNC_MODE, (client, handler, buf, response) -> {
+                final GambleMode mode = GamblePower.modeByOrdinal(buf.readVarInt());
+                client.execute(() -> {
+                    if (client.player != null) {
+                        GamblePower.setMode(client.player, mode);
+                    }
+                });
+            });
         }
 
         Hud.initOnce();
@@ -204,7 +213,7 @@ public final class GambleRevolverClient {
                 int usableW = Math.max(0, textRight - textLeft);
                 int usableH = BG_H - PAD_TOP - PAD_BOTTOM;
 
-                GambleMode mode = GamblePower.getMode(mc.player);
+                GambleMode mode = readHudMode(stack, mc.player);
                 String modeStr = switch (mode) {
                     case BUFF   -> "Buff";
                     case DEBUFF -> "Debuff";
@@ -247,6 +256,18 @@ public final class GambleRevolverClient {
             if (w <= 0) return desired;
             float maxScale = maxPx / (float) w;
             return Math.max(SCALE_MIN, Math.min(desired, maxScale));
+        }
+
+        private static GambleMode readHudMode(ItemStack stack, net.minecraft.entity.player.PlayerEntity player) {
+            if (stack.hasNbt()) {
+                String raw = stack.getNbt().getString("gamble_mode");
+                if (!raw.isEmpty()) {
+                    try {
+                        return GambleMode.valueOf(raw);
+                    } catch (IllegalArgumentException ignored) {}
+                }
+            }
+            return GamblePower.getMode(player);
         }
 
         private static void drawScaledText(DrawContext ctx, MinecraftClient mc,

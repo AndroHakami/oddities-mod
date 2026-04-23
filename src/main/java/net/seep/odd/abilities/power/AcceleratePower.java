@@ -9,6 +9,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -29,6 +30,7 @@ import net.minecraft.client.util.math.MatrixStack;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
@@ -66,6 +68,7 @@ import net.seep.odd.status.ModStatusEffects;
 import org.joml.Vector3f;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -77,13 +80,13 @@ import java.util.UUID;
 /**
  * Accelerate (updated):
  *  1) POWERLESS override: blocks activation + forces OFF while active (does not clear power assignment)
- *  2) Main "speed overlay" is now SATIN post FX (slipstream w/ crackly lightning), intensity scales with speed
+ *  2) Main "speed overlay" is now SATIN post FX (green slipstream), intensity scales with speed
  *  3) Recall:
  *     - SCREEN FX (Satin) lightning rushes toward edges quickly
- *     - IN-WORLD FX: golden burst + red lightning at BOTH recall start & destination
+ *     - IN-WORLD FX: emerald burst at BOTH recall start & destination
+ *     - cannot be used for 10 seconds after death
  *  4) Meter regen delay: must be OFF for 2 seconds before regen starts
- *
- * Afterimages / trail rendering: unchanged.
+ *  5) While Accelerating, Pehkui step height is raised so 1-block ledges feel walkable
  */
 public final class AcceleratePower implements Power {
 
@@ -99,7 +102,7 @@ public final class AcceleratePower implements Power {
     }
 
     @Override public long cooldownTicks() { return 0; }
-    @Override public long secondaryCooldownTicks() { return 0; }
+    @Override public long secondaryCooldownTicks() { return 20 * 18; }
 
     /* =================== UI =================== */
 
@@ -120,11 +123,12 @@ public final class AcceleratePower implements Power {
             default -> Power.super.slotTitle(slot);
         };
     }
+
     @Override
     public String longDescription() {
         return """
-               Electricity coarses through your veins, accelerate forward and strike your opponents at a flashing pace!
-              
+               Electricity courses through your veins, accelerate forward and strike your opponents at a flashing pace!
+
                """;
     }
 
@@ -132,8 +136,7 @@ public final class AcceleratePower implements Power {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" -> "Enter an energized state where you move extremely fast ";
-            case "secondary" ->
-                    "Travel back in local time and mend recent injuries.";
+            case "secondary" -> "Travel back in local time and mend recent injuries.";
             default -> "Accelerate";
         };
     }
@@ -150,7 +153,7 @@ public final class AcceleratePower implements Power {
     private static final float ENERGY_DRAIN_PER_TICK = 4.15f;
     private static final float ENERGY_REGEN_PER_TICK = 3.95f;
 
-    // NEW: regen delay after turning OFF
+    // regen delay after turning OFF
     private static final int REGEN_DELAY_TICKS = 40; // 2 seconds
 
     // Speed 40 => amplifier 39
@@ -167,6 +170,9 @@ public final class AcceleratePower implements Power {
     private static final UUID GRAVITY_MOD_UUID = UUID.fromString("b50d0e57-3f5f-4b0e-8a7f-5d1632e8b6b9");
     private static final double GRAVITY_MULT = 1.5; // total gravity *= 1.5
 
+    // pehkui step height
+    private static final float STEP_HEIGHT_SCALE_ACTIVE = 1.85f;
+
     // auto step assist
     private static final double STEP_MIN_HSPEED = 0.18;
     private static final double STEP_JUMP_VY = 0.64;
@@ -180,16 +186,17 @@ public final class AcceleratePower implements Power {
 
     // recall
     private static final int RECALL_TICKS = 20 * 7;
+    private static final int RECALL_DEATH_LOCK_TICKS = 20 * 10;
 
     // HUD snapshot rate
     private static final int HUD_SEND_EVERY = 2;
 
-    // sparks (server particles) — keep
-    private static final double RED_SPARK_MIN_SPEED = 0.55;
-    private static final int RED_SPARK_EVERY_TICKS = 2;
-    private static final int RED_SPARK_COUNT = 10;
-    private static final DustParticleEffect RED_SPARK =
-            new DustParticleEffect(new Vector3f(1.0f, 0.05f, 0.05f), 1.15f);
+    // sparks (server particles)
+    private static final double GREEN_SPARK_MIN_SPEED = 0.55;
+    private static final int GREEN_SPARK_EVERY_TICKS = 2;
+    private static final int GREEN_SPARK_COUNT = 10;
+    private static final DustParticleEffect GREEN_SPARK =
+            new DustParticleEffect(new Vector3f(0.18f, 1.0f, 0.38f), 1.15f);
 
     // trail networking / capture
     private static final int TRAIL_FRAMES = 8;
@@ -206,10 +213,7 @@ public final class AcceleratePower implements Power {
     private static final Identifier S2C_TRAIL_STOP  = new Identifier("odd", "accelerate_trail_stop");
     private static final Identifier S2C_TRAIL_CLEAR = new Identifier("odd", "accelerate_trail_clear");
 
-    // NEW: recall screen flash (player-only)
     private static final Identifier S2C_RECALL_FLASH = new Identifier("odd", "accelerate_recall_flash");
-
-    // NEW: in-world burst (broadcast)
     private static final Identifier S2C_RECALL_WORLD_BURST = new Identifier("odd", "accelerate_recall_world_burst");
 
     /* =================== state =================== */
@@ -226,16 +230,17 @@ public final class AcceleratePower implements Power {
         float lastSentEnergy = -9999f;
 
         // sparks rate limit
-        int redSparkCd = 0;
+        int greenSparkCd = 0;
 
-        // gravity modifier applied (server-side book-keeping)
+        // attribute / scale book-keeping
         boolean gravityApplied = false;
+        boolean stepHeightApplied = false;
 
         // trail sync
         int trailSendCd = 0;
         boolean sentIdleClear = false;
 
-        // NEW: regen delay timer
+        // regen delay timer
         int regenDelay = 0;
     }
 
@@ -275,6 +280,7 @@ public final class AcceleratePower implements Power {
     private static final Map<UUID, SpeedState> SPEED = new Object2ObjectOpenHashMap<>();
     private static final Map<UUID, Float> ENERGY = new Object2ObjectOpenHashMap<>();
     private static final Map<UUID, RecallBuffer> RECALL = new Object2ObjectOpenHashMap<>();
+    private static final Map<UUID, Integer> RECALL_LOCK = new Object2ObjectOpenHashMap<>();
 
     private static SpeedState S(ServerPlayerEntity p) { return SPEED.computeIfAbsent(p.getUuid(), u -> new SpeedState()); }
     private static RecallBuffer R(ServerPlayerEntity p) { return RECALL.computeIfAbsent(p.getUuid(), u -> new RecallBuffer()); }
@@ -283,11 +289,12 @@ public final class AcceleratePower implements Power {
         Power pow = Powers.get(PowerAPI.get(p));
         return pow instanceof AcceleratePower;
     }
+
     private static void playRecallSound(ServerWorld world, Vec3d pos) {
         if (world == null || pos == null) return;
 
         world.playSound(
-                null, // null = audible to everyone around
+                null,
                 pos.x, pos.y, pos.z,
                 ModSounds.FLASH_RECALL,
                 SoundCategory.PLAYERS,
@@ -295,7 +302,6 @@ public final class AcceleratePower implements Power {
                 1.0f
         );
     }
-
 
     private static boolean isPowerless(ServerPlayerEntity p) {
         return p != null && p.hasStatusEffect(ModStatusEffects.POWERLESS);
@@ -308,20 +314,54 @@ public final class AcceleratePower implements Power {
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             trySetGravity(handler.player, false);
+            trySetPehkuiStepHeight(handler.player, false);
             broadcastTrailStop(handler.player);
 
             UUID id = handler.player.getUuid();
             SPEED.remove(id);
             ENERGY.remove(id);
             RECALL.remove(id);
+            RECALL_LOCK.remove(id);
+        });
+
+        ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) -> {
+            UUID id = newPlayer.getUuid();
+
+            trySetGravity(oldPlayer, false);
+            trySetPehkuiStepHeight(oldPlayer, false);
+            trySetGravity(newPlayer, false);
+            trySetPehkuiStepHeight(newPlayer, false);
+
+            broadcastTrailStop(oldPlayer);
+            broadcastTrailClear(newPlayer);
+
+            SpeedState st = SPEED.computeIfAbsent(id, u -> new SpeedState());
+            st.active = false;
+            st.momentum = Vec3d.ZERO;
+            st.stepCooldown = 0;
+            st.hudSendCooldown = 0;
+            st.lastSentEnergy = -9999f;
+            st.greenSparkCd = 0;
+            st.gravityApplied = false;
+            st.stepHeightApplied = false;
+            st.trailSendCd = 0;
+            st.sentIdleClear = false;
+            st.regenDelay = REGEN_DELAY_TICKS;
+
+            RECALL.put(id, new RecallBuffer());
+            RECALL_LOCK.put(id, RECALL_DEATH_LOCK_TICKS);
+
+            sendHud(newPlayer, false, getEnergy(newPlayer), ENERGY_MAX);
         });
     }
 
     @Override
     public void onAssigned(ServerPlayerEntity player) {
         trySetGravity(player, false);
+        trySetPehkuiStepHeight(player, false);
 
         ENERGY.put(player.getUuid(), ENERGY_MAX);
+        RECALL_LOCK.remove(player.getUuid());
         sendHud(player, false, ENERGY_MAX, ENERGY_MAX);
 
         R(player);
@@ -334,7 +374,6 @@ public final class AcceleratePower implements Power {
     public void activate(ServerPlayerEntity player) {
         if (!isCurrent(player)) return;
 
-        // POWERLESS: block toggle on, force off if needed
         if (isPowerless(player)) {
             forceOff(player, S(player), true);
             player.sendMessage(Text.literal("You are POWERLESS."), true);
@@ -350,7 +389,6 @@ public final class AcceleratePower implements Power {
 
         float e = getEnergy(player);
         if (e <= 2.0f) {
-
             sendHud(player, false, e, ENERGY_MAX);
             return;
         }
@@ -360,15 +398,16 @@ public final class AcceleratePower implements Power {
         st.stepCooldown = 0;
         st.hudSendCooldown = 0;
         st.lastSentEnergy = -9999f;
-        st.redSparkCd = 0;
-
+        st.greenSparkCd = 0;
         st.trailSendCd = 0;
         st.sentIdleClear = false;
-
-        st.regenDelay = 0; // NEW: clear regen delay on start
+        st.regenDelay = 0;
 
         trySetGravity(player, true);
         st.gravityApplied = true;
+
+        trySetPehkuiStepHeight(player, true);
+        st.stepHeightApplied = true;
 
         sendHud(player, true, e, ENERGY_MAX);
 
@@ -379,18 +418,21 @@ public final class AcceleratePower implements Power {
     private static void forceOff(ServerPlayerEntity player, SpeedState st, boolean playSfx) {
         if (st == null) return;
 
-        boolean wasDoingAnything = st.active || st.gravityApplied;
+        boolean wasDoingAnything = st.active || st.gravityApplied || st.stepHeightApplied;
         if (!wasDoingAnything) return;
 
         st.active = false;
         st.momentum = Vec3d.ZERO;
-
-        // NEW: regen delay whenever you turn off (manual, exhausted, powerless)
         st.regenDelay = REGEN_DELAY_TICKS;
 
         if (st.gravityApplied) {
             trySetGravity(player, false);
             st.gravityApplied = false;
+        }
+
+        if (st.stepHeightApplied) {
+            trySetPehkuiStepHeight(player, false);
+            st.stepHeightApplied = false;
         }
 
         sendHud(player, false, getEnergy(player), ENERGY_MAX);
@@ -411,9 +453,15 @@ public final class AcceleratePower implements Power {
             return;
         }
 
+        int deathLock = RECALL_LOCK.getOrDefault(player.getUuid(), 0);
+        if (deathLock > 0) {
+            int secs = MathHelper.ceil(deathLock / 20.0f);
+            player.sendMessage(Text.literal("Recall stabilizes " + secs + "s after death."), true);
+            return;
+        }
+
         RecallSnapshot snap = R(player).getSevenSecondsAgoOrOldest();
         if (snap == null) {
-
             return;
         }
 
@@ -422,43 +470,34 @@ public final class AcceleratePower implements Power {
 
         ServerWorld targetWorld = server.getWorld(snap.dim);
         if (targetWorld == null) {
-
             return;
         }
 
         if (player.getWorld().getRegistryKey() != snap.dim) {
-
             return;
         }
 
-        // SCREEN + IN-WORLD burst at trigger
         sendRecallFlash(player, 1.0f);
 
         Vec3d fromPos = player.getPos();
         if (player.getWorld() instanceof ServerWorld fromWorld) {
             broadcastRecallWorldBurst(fromWorld, fromPos, player.getRandom().nextInt());
-            playRecallSound(fromWorld, fromPos); // NEW
+            playRecallSound(fromWorld, fromPos);
         }
 
-        // teleport
         player.teleport(targetWorld, snap.pos.x, snap.pos.y, snap.pos.z, snap.yaw, snap.pitch);
         player.setVelocity(Vec3d.ZERO);
         player.velocityModified = true;
         player.fallDistance = 0.0f;
 
-        // SCREEN + IN-WORLD burst at destination
-// SCREEN + IN-WORLD burst at destination
         sendRecallFlash(player, 1.0f);
         broadcastRecallWorldBurst(targetWorld, snap.pos, player.getRandom().nextInt());
-        playRecallSound(targetWorld, snap.pos); // NEW
+        playRecallSound(targetWorld, snap.pos);
 
-
-        // heal (never lowers HP)
         float current = player.getHealth();
         float want = MathHelper.clamp(snap.health, 0.0f, player.getMaxHealth());
         if (want > current) player.setHealth(want);
 
-        // cleanse harmful effects
         List<StatusEffectInstance> effects = new ArrayList<>(player.getStatusEffects());
         for (StatusEffectInstance inst : effects) {
             if (inst != null && inst.getEffectType() != null &&
@@ -498,22 +537,28 @@ public final class AcceleratePower implements Power {
         for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
             UUID uuid = p.getUuid();
 
+            tickRecallLock(p);
+
             if (!isCurrent(p)) {
                 trySetGravity(p, false);
+                trySetPehkuiStepHeight(p, false);
 
                 SpeedState old = SPEED.get(uuid);
-                if (old != null) broadcastTrailStop(p);
+                if (old != null) {
+                    old.gravityApplied = false;
+                    old.stepHeightApplied = false;
+                    old.active = false;
+                    broadcastTrailStop(p);
+                }
 
                 SPEED.remove(uuid);
                 continue;
             }
 
-            // always record recall history
             trackRecall(p);
 
             SpeedState st = S(p);
 
-            // POWERLESS override: if active -> force OFF immediately, block abilities
             if (isPowerless(p)) {
                 forceOff(p, st, false);
                 tickRegen(p, st);
@@ -525,17 +570,23 @@ public final class AcceleratePower implements Power {
                     trySetGravity(p, false);
                     st.gravityApplied = false;
                 }
+                if (st.stepHeightApplied) {
+                    trySetPehkuiStepHeight(p, false);
+                    st.stepHeightApplied = false;
+                }
                 tickRegen(p, st);
                 continue;
             }
 
-            // ensure gravity
             if (!st.gravityApplied) {
                 trySetGravity(p, true);
                 st.gravityApplied = true;
             }
+            if (!st.stepHeightApplied) {
+                trySetPehkuiStepHeight(p, true);
+                st.stepHeightApplied = true;
+            }
 
-            // drain energy
             float e = getEnergy(p);
             e -= ENERGY_DRAIN_PER_TICK;
             setEnergy(p, e);
@@ -547,25 +598,14 @@ public final class AcceleratePower implements Power {
                 continue;
             }
 
-            // ALWAYS Speed 40
             p.addStatusEffect(new StatusEffectInstance(StatusEffects.SPEED, SPEED_REFRESH_TICKS, SPEED_AMP, false, false, false));
-
-            // jump boost
             p.addStatusEffect(new StatusEffectInstance(StatusEffects.JUMP_BOOST, JUMP_REFRESH_TICKS, JUMP_AMP, false, false, false));
 
-            // momentum slip
             applySlip(p, st);
-
-            // step assist
             autoStepJumpTick(p, st);
-
-            // sparks
-            spawnRedSparks(p, st);
-
-            // trail sync
+            spawnGreenSparks(p, st);
             syncTrail(p, st);
 
-            // HUD send
             st.hudSendCooldown--;
             if (st.hudSendCooldown <= 0) {
                 st.hudSendCooldown = HUD_SEND_EVERY;
@@ -577,6 +617,16 @@ public final class AcceleratePower implements Power {
         }
     }
 
+    private static void tickRecallLock(ServerPlayerEntity p) {
+        UUID id = p.getUuid();
+        int ticks = RECALL_LOCK.getOrDefault(id, 0);
+        if (ticks <= 0) return;
+
+        ticks--;
+        if (ticks <= 0) RECALL_LOCK.remove(id);
+        else RECALL_LOCK.put(id, ticks);
+    }
+
     private static void tickRegen(ServerPlayerEntity p, SpeedState st) {
         if (st != null && st.regenDelay > 0) {
             st.regenDelay--;
@@ -586,7 +636,7 @@ public final class AcceleratePower implements Power {
         if (e < ENERGY_MAX) setEnergy(p, e + ENERGY_REGEN_PER_TICK);
     }
 
-    /* =================== trail sync (unchanged) =================== */
+    /* =================== trail sync =================== */
 
     private static void syncTrail(ServerPlayerEntity p, SpeedState st) {
         Vec3d v = p.getVelocity();
@@ -653,7 +703,7 @@ public final class AcceleratePower implements Power {
         }
     }
 
-    /* =================== gravity attribute (unchanged; version tolerant) =================== */
+    /* =================== gravity attribute =================== */
 
     private static void trySetGravity(ServerPlayerEntity p, boolean enable) {
         try {
@@ -729,17 +779,62 @@ public final class AcceleratePower implements Power {
         } catch (NoSuchMethodException ignored) { }
     }
 
+    /* =================== pehkui step height =================== */
+
+    private static void trySetPehkuiStepHeight(ServerPlayerEntity p, boolean enable) {
+        if (p == null) return;
+
+        float scale = enable ? STEP_HEIGHT_SCALE_ACTIVE : 1.0f;
+
+        try {
+            Class<?> scaleTypesClass = Class.forName("virtuoel.pehkui.api.ScaleTypes");
+            Object stepHeightType = getStaticFieldIfExists(scaleTypesClass, "STEP_HEIGHT");
+            if (stepHeightType == null) {
+                stepHeightType = getStaticFieldIfExists(scaleTypesClass, "STEP_HEIGHT_SCALE");
+            }
+            if (stepHeightType == null) return;
+
+            Method getScaleData = stepHeightType.getClass().getMethod("getScaleData", Entity.class);
+            Object scaleData = getScaleData.invoke(stepHeightType, p);
+            if (scaleData == null) return;
+
+            invokeIfPresent(scaleData, "setScaleTickDelay", new Class<?>[]{int.class}, 0);
+            invokeIfPresent(scaleData, "setTargetScale", new Class<?>[]{float.class}, scale);
+            invokeIfPresent(scaleData, "setScale", new Class<?>[]{float.class}, scale);
+            invokeIfPresent(scaleData, "markForSync", new Class<?>[]{boolean.class}, true);
+            invokeIfPresent(scaleData, "onUpdate", new Class<?>[]{});
+        } catch (Throwable ignored) { }
+    }
+
+    private static Object getStaticFieldIfExists(Class<?> owner, String name) {
+        try {
+            Field f = owner.getField(name);
+            f.setAccessible(true);
+            return f.get(null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static void invokeIfPresent(Object owner, String name, Class<?>[] sig, Object... args) {
+        try {
+            Method m = owner.getClass().getMethod(name, sig);
+            m.setAccessible(true);
+            m.invoke(owner, args);
+        } catch (Throwable ignored) { }
+    }
+
     /* =================== sparks =================== */
 
-    private static void spawnRedSparks(ServerPlayerEntity p, SpeedState st) {
+    private static void spawnGreenSparks(ServerPlayerEntity p, SpeedState st) {
         if (!(p.getWorld() instanceof ServerWorld sw)) return;
 
-        if (st.redSparkCd > 0) { st.redSparkCd--; return; }
-        st.redSparkCd = RED_SPARK_EVERY_TICKS;
+        if (st.greenSparkCd > 0) { st.greenSparkCd--; return; }
+        st.greenSparkCd = GREEN_SPARK_EVERY_TICKS;
 
         Vec3d v = p.getVelocity();
         double hs = Math.sqrt(v.x * v.x + v.z * v.z);
-        if (hs < RED_SPARK_MIN_SPEED) return;
+        if (hs < GREEN_SPARK_MIN_SPEED) return;
 
         Vec3d dir = new Vec3d(v.x, 0.0, v.z);
         if (dir.lengthSquared() < 1e-6) dir = p.getRotationVec(1.0f);
@@ -750,9 +845,9 @@ public final class AcceleratePower implements Power {
         double bz = p.getZ() - dir.z * 0.45;
 
         sw.spawnParticles(
-                RED_SPARK,
+                GREEN_SPARK,
                 bx, by, bz,
-                RED_SPARK_COUNT,
+                GREEN_SPARK_COUNT,
                 0.35, 0.35, 0.35,
                 0.22
         );
@@ -775,7 +870,6 @@ public final class AcceleratePower implements Power {
     private static void applySlip(ServerPlayerEntity p, SpeedState st) {
         Vec3d v = p.getVelocity();
 
-        // when rising/jumping, never fight motion
         if (v.y > 0.10) {
             st.momentum = st.momentum.multiply(MOMENTUM_DECAY);
             return;
@@ -890,7 +984,7 @@ public final class AcceleratePower implements Power {
         );
     }
 
-    /* =================== client: HUD + Satin + afterimages (afterimages untouched) =================== */
+    /* =================== client: HUD + Satin + afterimages =================== */
 
     @Environment(EnvType.CLIENT)
     public static final class Client {
@@ -898,15 +992,12 @@ public final class AcceleratePower implements Power {
         private static float energy = 0.0f;
         private static float max = 1.0f;
 
-        // LOCAL intensity scales with movement speed + build-up charge (for Satin + FOV)
         private static float intensity01 = 0.0f;
         private static float charge01 = 0.0f;
 
-        // Solid yellow afterimage: render model with white texture + vertex tint
         private static final Identifier WHITE_TEX = new Identifier("minecraft", "textures/misc/white.png");
         private static final RenderLayer AFTERIMAGE_LAYER = RenderLayer.getEntityTranslucentEmissive(WHITE_TEX);
 
-        // Always lag afterimages by this much (blocks) in the facing direction
         private static final double AFTERIMAGE_LAG_BLOCKS = 0.30;
 
         private static final class Frame {
@@ -931,12 +1022,12 @@ public final class AcceleratePower implements Power {
 
         // Afterimage look
         private static final float AFTERIMAGE_ALPHA = 0.40f;
-        private static final float Y_R = 1.0f, Y_G = 1.0f, Y_B = 0.0f;
+        private static final float AFTERIMAGE_R = 0.30f;
+        private static final float AFTERIMAGE_G = 1.00f;
+        private static final float AFTERIMAGE_B = 0.34f;
 
         public static void init() {
-            // Satin post FX
             net.seep.odd.abilities.accelerate.client.AccelerateFx.init();
-            // In-world recall burst FX
             net.seep.odd.abilities.accelerate.client.AccelerateWorldBurstFx.init();
 
             ClientPlayNetworking.registerGlobalReceiver(S2C_SPEED_HUD, (client, handler, buf, responder) -> {
@@ -950,13 +1041,11 @@ public final class AcceleratePower implements Power {
                 });
             });
 
-            // Recall screen flash (player-only)
             ClientPlayNetworking.registerGlobalReceiver(S2C_RECALL_FLASH, (client, handler, buf, responder) -> {
                 float strength = buf.readFloat();
                 client.execute(() -> net.seep.odd.abilities.accelerate.client.AccelerateFx.triggerRecallFlash(strength));
             });
 
-            // Afterimage trail packets
             ClientPlayNetworking.registerGlobalReceiver(S2C_TRAIL_FRAME, (client, handler, buf, responder) -> {
                 UUID id = buf.readUuid();
                 double x = buf.readDouble();
@@ -994,11 +1083,9 @@ public final class AcceleratePower implements Power {
                 });
             });
 
-            // local intensity/charge for Satin + FOV
             ClientTickEvents.END_CLIENT_TICK.register(client -> {
                 if (client == null || client.player == null) return;
 
-                // tick recall flash animation
                 net.seep.odd.abilities.accelerate.client.AccelerateFx.clientTick();
 
                 if (!speedActive) {
@@ -1017,11 +1104,9 @@ public final class AcceleratePower implements Power {
                 float target = MathHelper.clamp(raw * 0.70f + charge01 * 0.70f, 0.0f, 1.0f);
                 intensity01 = MathHelper.lerp(0.20f, intensity01, target);
 
-                // drive Satin overlay (more intense as you move faster)
                 net.seep.odd.abilities.accelerate.client.AccelerateFx.setSpeedTarget(intensity01);
             });
 
-            // per-player intensity + decay + cleanup (unchanged)
             ClientTickEvents.END_CLIENT_TICK.register(client -> {
                 if (client == null || client.world == null) return;
 
@@ -1059,7 +1144,6 @@ public final class AcceleratePower implements Power {
                 }
             });
 
-            // HUD: energy bar only (screen overlay removed; Satin handles it)
             HudRenderCallback.EVENT.register((DrawContext ctx, float tickDelta) -> {
                 MinecraftClient mc = MinecraftClient.getInstance();
                 if (mc == null || mc.player == null) return;
@@ -1079,12 +1163,11 @@ public final class AcceleratePower implements Power {
                 float pct = MathHelper.clamp(energy / max, 0.0f, 1.0f);
                 int fillW = (int) (barW * pct);
 
-                int yellow = 0xFFFFC800;
-                ctx.fill(x, y, x + fillW, y + barH, yellow);
+                int green = 0xFF30FF64;
+                ctx.fill(x, y, x + fillW, y + barH, green);
                 ctx.fill(x, y, x + fillW, y + 1, 0x66FFFFFF);
             });
 
-            // Render subtle lightning + afterimages (UNTOUCHED)
             WorldRenderEvents.BEFORE_ENTITIES.register(ctx -> {
                 MinecraftClient mc = MinecraftClient.getInstance();
                 if (mc == null || mc.player == null || mc.world == null) return;
@@ -1112,10 +1195,8 @@ public final class AcceleratePower implements Power {
                     if (!st.active && st.decayTicks > 0) decayMul = (st.decayTicks / (float) TRAIL_DECAY_MAX);
                     if (decayMul <= 0.001f) continue;
 
-                    // subtle + rare lightning
                     renderSubtleLightning(matrices, consumers, camPos, tickDelta, pe, st.intensity01, decayMul, id.hashCode());
 
-                    // afterimages
                     var er = dispatcher.getRenderer(pe);
                     if (!(er instanceof PlayerEntityRenderer pr)) continue;
 
@@ -1140,7 +1221,7 @@ public final class AcceleratePower implements Power {
 
                     int i = 0;
                     for (Frame f : frames) {
-                        if (i == 0) { i++; continue; } // skip newest
+                        if (i == 0) { i++; continue; }
 
                         Vec3d lag = backOffsetFromYaw(f.yaw, AFTERIMAGE_LAG_BLOCKS);
 
@@ -1158,7 +1239,8 @@ public final class AcceleratePower implements Power {
                         matrices.scale(-1.0f, -1.0f, 1.0f);
                         matrices.translate(0.0, -1.501, 0.0);
 
-                        model.render(matrices, vc, 0xF000F0, OverlayTexture.DEFAULT_UV, Y_R, Y_G, Y_B, a);
+                        model.render(matrices, vc, 0xF000F0, OverlayTexture.DEFAULT_UV,
+                                AFTERIMAGE_R, AFTERIMAGE_G, AFTERIMAGE_B, a);
 
                         matrices.pop();
 
@@ -1171,7 +1253,6 @@ public final class AcceleratePower implements Power {
             });
         }
 
-        /** Use in your FOV mixin: baseFov *= AcceleratePower.Client.fovMultiplier(); */
         public static double fovMultiplier() {
             MinecraftClient mc = MinecraftClient.getInstance();
             float t = (mc.player != null) ? (mc.player.age * 0.24f) : 0.0f;
@@ -1181,16 +1262,12 @@ public final class AcceleratePower implements Power {
 
         public static double zoomMultiplier() { return fovMultiplier(); }
 
-        /* ===== afterimage lag offset ===== */
-
         private static Vec3d backOffsetFromYaw(float yawDeg, double dist) {
             float yawRad = yawDeg * ((float)Math.PI / 180.0f);
             double fx = -MathHelper.sin(yawRad);
             double fz =  MathHelper.cos(yawRad);
             return new Vec3d(-fx * dist, 0.0, -fz * dist);
         }
-
-        /* ===== subtle lightning (rare + low alpha) ===== */
 
         private static void renderSubtleLightning(MatrixStack matrices,
                                                   VertexConsumerProvider consumers,
@@ -1358,14 +1435,14 @@ public final class AcceleratePower implements Power {
         }
 
         private static Color coreColor(float t) {
-            float r0 = 1.00f, g0 = 1.00f, b0 = 0.70f;
-            float r1 = 1.00f, g1 = 0.68f, b1 = 0.14f;
+            float r0 = 0.90f, g0 = 1.00f, b0 = 0.86f;
+            float r1 = 0.18f, g1 = 1.00f, b1 = 0.36f;
             return new Color(lerp(r0, r1, t), lerp(g0, g1, t), lerp(b0, b1, t));
         }
 
         private static Color glowColor(float t) {
-            float r0 = 1.00f, g0 = 0.86f, b0 = 0.22f;
-            float r1 = 1.00f, g1 = 0.48f, b1 = 0.08f;
+            float r0 = 0.50f, g0 = 1.00f, b0 = 0.62f;
+            float r1 = 0.12f, g1 = 0.86f, b1 = 0.28f;
             return new Color(lerp(r0, r1, t), lerp(g0, g1, t), lerp(b0, b1, t));
         }
 

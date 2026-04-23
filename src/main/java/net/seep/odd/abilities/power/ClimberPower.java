@@ -7,7 +7,6 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
@@ -27,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ClimberPower implements Power {
 
     public static final Identifier CLIMBER_CTRL_C2S = new Identifier(Oddities.MOD_ID, "climber_ctrl_c2s");
+    public static final Identifier CLIMBER_TOGGLE_C2S = new Identifier(Oddities.MOD_ID, "climber_toggle_c2s");
 
     // Input flags (client -> server)
     public static final byte IN_FORWARD = 1 << 0;
@@ -38,6 +38,9 @@ public final class ClimberPower implements Power {
 
     // per-player last input flags
     private static final Object2ByteOpenHashMap<UUID> INPUT = new Object2ByteOpenHashMap<>();
+
+    // per-player passive wall-climb toggle (defaults to true if never set)
+    private static final it.unimi.dsi.fastutil.objects.Object2BooleanOpenHashMap<UUID> CLIMB_TOGGLE = new it.unimi.dsi.fastutil.objects.Object2BooleanOpenHashMap<>();
 
     // per-player active anchor UUID
     private static final Object2ObjectOpenHashMap<UUID, UUID> ACTIVE_ANCHOR = new Object2ObjectOpenHashMap<>();
@@ -71,18 +74,24 @@ public final class ClimberPower implements Power {
     public String slotLongDescription(String slot) {
         return switch (slot) {
             case "primary" ->
-                    "Throw forward a rope ";
+                    "Throw forward a long reaching swingy rope.";
             case "secondary" ->
-                    "Throw a pull-rope. If it hits a living target with max HP <= 50, it tethers + pulls them to you, applies Nausea (2s) + Slowness III (1s).";
+                    "Yank an enemy with a rope, causing a minor stun effect on the target hit.";
             default -> "Climber";
+        };
+    }
+
+    @Override public String slotTitle(String slot) {
+        return switch (slot) {
+            case "primary" -> "ANCHOR POINT";
+            case "secondary" -> "HOOK EM!";
+            default -> Power.super.slotTitle(slot);
         };
     }
 
     @Override
     public String longDescription() {
-        return "Climber: passive wall climbing on any surface (Space up / Shift down while against a wall). "
-                + "Primary: 30m grappling hook with swing physics + adjustable rope length; tap again mid-air retracts the hook. "
-                + "Secondary: tether-pull on weaker targets (max HP <= 50).";
+        return "Climb anything and manoeuvre around blocks with ease using your trusty rope!, In addition climb blocks passively.";
     }
 
     /** Power check (server-side) */
@@ -103,9 +112,15 @@ public final class ClimberPower implements Power {
             server.execute(() -> INPUT.put(player.getUuid(), flags));
         });
 
+        ServerPlayNetworking.registerGlobalReceiver(CLIMBER_TOGGLE_C2S, (server, player, handler, buf, responseSender) -> {
+            final boolean enabled = buf.readBoolean();
+            server.execute(() -> CLIMB_TOGGLE.put(player.getUuid(), enabled));
+        });
+
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             UUID id = handler.player.getUuid();
             INPUT.removeByte(id);
+            CLIMB_TOGGLE.removeBoolean(id);
             ACTIVE_ANCHOR.remove(id);
             ACTIVE_PRIMARY_SHOT.remove(id);
             LAST_ENTITY_ID.remove(id);
@@ -138,7 +153,20 @@ public final class ClimberPower implements Power {
 
     /** Your guaranteed server tick can call this (we’ll also call it from the mixin tick). */
     public static void serverTick(ServerPlayerEntity player) {
-        if (!hasClimber(player)) return;
+        if (player == null) return;
+
+        // If the player no longer has climber, aggressively clear any stale
+        // climber-only state so reassigns/login edge cases do not leave the
+        // passive climb blocked behind old rope/input data.
+        if (!hasClimber(player)) {
+            if (ACTIVE_ANCHOR.containsKey(player.getUuid())
+                    || ACTIVE_PRIMARY_SHOT.containsKey(player.getUuid())
+                    || INPUT.containsKey(player.getUuid())) {
+                forceDetach(player);
+            }
+            LAST_ENTITY_ID.remove(player.getUuid());
+            return;
+        }
 
         // --- Respawn fix ---
         // After death, Minecraft creates a NEW ServerPlayerEntity with same UUID.
@@ -300,9 +328,21 @@ public final class ClimberPower implements Power {
         return ACTIVE_ANCHOR.containsKey(id) || ACTIVE_PRIMARY_SHOT.containsKey(id);
     }
 
+    public static boolean isClimbToggleEnabled(ServerPlayerEntity player) {
+        return player != null && CLIMB_TOGGLE.getOrDefault(player.getUuid(), true);
+    }
+
+    public static boolean canUsePassiveClimb(ServerPlayerEntity player) {
+        return player != null
+                && hasClimber(player)
+                && !isPowerless(player)
+                && !isPrimaryEngaged(player)
+                && isClimbToggleEnabled(player);
+    }
+
     public static boolean hasClimberAnySide(PlayerEntity player) {
         if (player instanceof ServerPlayerEntity sp) {
-            return hasClimber(sp);
+            return canUsePassiveClimb(sp);
         }
         return net.seep.odd.abilities.climber.net.ClimberClimbNetworking.canClimbAnySide(player.getUuid());
     }
